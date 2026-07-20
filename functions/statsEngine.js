@@ -3,16 +3,18 @@
 // One rebuild engine, two callers (functions/index.js):
 //   1. recomputeCompetitionStats(competitionId) — scoped, runs on every fixture
 //      finalisation (and the manual button). Rebuilds that ONE competition's
-//      `players` slices (caps/goals/cards) from its final fixtures. Cheap and
-//      immediate so competition views (standings are recompute-on-read; top
-//      scorers + caps come from the slices) reflect a published result at once.
+//      `players` slices (caps/tries/kicks/points/cards) from its final
+//      fixtures. Cheap and immediate so competition views (standings are
+//      recompute-on-read; top scorers + caps come from the slices) reflect a
+//      published result at once.
 //   2. recomputeAllCareerStats() — wholesale, runs once daily at 03:00. Rebuilds
 //      EVERY competition's slices from origin, then re-derives every person's
-//      cross-competition career totals (careerCaps/careerGoals/careerCards) and
-//      competitionIds as the sum / union of their freshly-rebuilt slices.
+//      cross-competition career totals (careerCaps/careerTries/careerPoints/
+//      careerCards) and competitionIds as the sum / union of their
+//      freshly-rebuilt slices.
 //
 // PRINCIPLES
-//   • Source of truth is match history (lineups, goals, cards, competitionId).
+//   • Source of truth is match history (lineups, scoring events, cards, competitionId).
 //     Match documents are NEVER modified — only the derived totals are rebuilt.
 //   • Idempotent: clear-and-recompute with SET writes, never incremental add.
 //     Running once or a hundred times yields identical totals.
@@ -24,55 +26,69 @@
 
 const admin = require('firebase-admin')
 
+// Mirror of src/lib/rugbyScoring.js — point values and stat buckets per score
+// type. Keep in sync (CommonJS can't import the ESM module).
+const SCORE_POINTS = { try: 5, conversion: 2, penalty: 3, drop_goal: 3, penalty_try: 7 }
+// Which slice counter each score type accrues to (besides `points`).
+const SCORE_BUCKET = { try: 'tries', penalty_try: 'tries', conversion: 'conversions', penalty: 'penalties', drop_goal: 'dropGoals' }
+
 // Mirror of src/lib/fixtureResult.js#fixtureContribution — how a fixture's
 // outcome banner flag gates STATS. Keep in sync (CommonJS can't import the ESM).
-//   stats          — count this match's timeline at all?
-//   countsAllGoals — include goals/cards flagged as an abandoned attempt?
+//   stats           — count this match's timeline at all?
+//   countsAllEvents — include events/cards flagged as an abandoned attempt?
 function fixtureContribution(m) {
   const o = m && m.outcome
   if (o && o.kind) {
-    if (o.kind === 'not_played') return { stats: false, countsAllGoals: false }
-    if (o.flag === 'awarded')    return { stats: false, countsAllGoals: false }
-    if (o.flag === 'frozen')     return { stats: false, countsAllGoals: false }
-    if (o.flag === 'final')      return { stats: true,  countsAllGoals: o.kind === 'abandoned' }
+    if (o.kind === 'not_played') return { stats: false, countsAllEvents: false }
+    if (o.flag === 'awarded')    return { stats: false, countsAllEvents: false }
+    if (o.flag === 'frozen')     return { stats: false, countsAllEvents: false }
+    if (o.flag === 'final')      return { stats: true,  countsAllEvents: o.kind === 'abandoned' }
   }
-  return { stats: m.status === 'final', countsAllGoals: false }
+  return { stats: m.status === 'final', countsAllEvents: false }
 }
 
-// Active goals from either schema: the Phase-1D `goals` array (preferred) or the
-// legacy homeScorers/awayScorers arrays. A goal with scorerPersonId is keyed by
-// id; otherwise by scorerName. Mirrors src/lib/adminQueries.js#readGoals.
-// Goals flagged `abandonedAttempt` (scored in a stopped attempt that was later
+// Active scoring events from either schema: the `scores` array (preferred) or
+// the legacy homeScorers/awayScorers arrays (treated as unconverted tries). An
+// event with scorerPersonId is keyed by id; otherwise by scorerName.
+// Events flagged `abandonedAttempt` (scored in a stopped attempt that was later
 // replayed) are excluded unless the abandoned attempt was let-stand.
-function readGoals(m, countsAllGoals = false) {
-  if (Array.isArray(m.goals) && m.goals.length) {
-    return m.goals
-      .filter(g => g.status !== 'reversed' && (countsAllGoals || !g.abandonedAttempt))
-      .map(g => ({
-        name: g.scorerName, side: g.side, personId: g.scorerPersonId ?? null,
-        assistName: g.assistName ?? null, assistPersonId: g.assistPersonId ?? null,
+function readScores(m, countsAllEvents = false) {
+  if (Array.isArray(m.scores) && m.scores.length) {
+    return m.scores
+      .filter(e => e.status !== 'reversed' && (countsAllEvents || !e.abandonedAttempt))
+      .map(e => ({
+        name: e.scorerName, side: e.side, personId: e.scorerPersonId ?? null,
+        scoreType: e.scoreType ?? 'try',
+        points: Number(e.points ?? SCORE_POINTS[e.scoreType] ?? 0),
       }))
   }
   return [
-    ...(m.homeScorers ?? []).map(s => ({ name: s.name, side: 'home', personId: null, assistName: null, assistPersonId: null })),
-    ...(m.awayScorers ?? []).map(s => ({ name: s.name, side: 'away', personId: null, assistName: null, assistPersonId: null })),
+    ...(m.homeScorers ?? []).map(r => ({ name: r.name, side: 'home', personId: null, scoreType: 'try', points: SCORE_POINTS.try })),
+    ...(m.awayScorers ?? []).map(r => ({ name: r.name, side: 'away', personId: null, scoreType: 'try', points: SCORE_POINTS.try })),
   ]
 }
 
 // Active cards (cards carry playerName only — no personId link anywhere in the
 // schema, so card attribution is always a name match against the slice roster).
-function readCards(m, countsAllGoals = false) {
-  return (m.cards ?? []).filter(c => c.status !== 'reversed' && (countsAllGoals || !c.abandonedAttempt))
+function readCards(m, countsAllEvents = false) {
+  return (m.cards ?? []).filter(c => c.status !== 'reversed' && (countsAllEvents || !c.abandonedAttempt))
 }
 
 // PURE derivation. Given a competition's `players` slices and the final matches
-// relevant to them, return { [sliceId]: { caps, goals, green, yellow, red } }.
-// A slice only accumulates from matches its team played in (teamId match), so
-// the caller MUST pass slices and matches from the SAME competition — a teamId
-// can recur across competitions and would otherwise bleed.
+// relevant to them, return
+// { [sliceId]: { caps, tries, conversions, penalties, dropGoals, points, yellow, red } }.
+// `points` is the sum of the point values of every scoring event credited to
+// the player (a try 5, a conversion 2, ...). A slice only accumulates from
+// matches its team played in (teamId match), so the caller MUST pass slices
+// and matches from the SAME competition — a teamId can recur across
+// competitions and would otherwise bleed.
+function mkTotals() {
+  return { caps: 0, tries: 0, conversions: 0, penalties: 0, dropGoals: 0, points: 0, yellow: 0, red: 0 }
+}
+
 function deriveSliceTotals(slices, matches) {
   const acc = {}
-  for (const p of slices) acc[p.id] = { caps: 0, goals: 0, assists: 0, green: 0, yellow: 0, red: 0 }
+  for (const p of slices) acc[p.id] = mkTotals()
 
   for (const m of matches) {
     // Awarded (walkover) / frozen (abandoned, replay pending) / not-played
@@ -92,21 +108,26 @@ function deriveSliceTotals(slices, matches) {
     ])
     const lineupNames     = new Set(lineup.map(e => e.personName).filter(Boolean))
 
-    const goalCountsById = {}, goalCountsByName = {}
-    const assistCountsById = {}, assistCountsByName = {}
-    for (const g of readGoals(m, contrib.countsAllGoals)) {
-      if (g.personId) goalCountsById[g.personId] = (goalCountsById[g.personId] ?? 0) + 1
-      else if (g.name && g.name !== 'Unknown scorer' && g.name !== 'Unknown') {
-        goalCountsByName[g.name] = (goalCountsByName[g.name] ?? 0) + 1
+    // Per-player scoring accumulators for this match, keyed by personId and by
+    // name (a bare name match still credits, mirroring the lineup rule above).
+    const scoreById = {}, scoreByName = {}
+    for (const e of readScores(m, contrib.countsAllEvents)) {
+      const bucket = SCORE_BUCKET[e.scoreType]
+      if (!bucket) continue
+      const addTo = rec => {
+        rec[bucket] = (rec[bucket] ?? 0) + 1
+        rec.points  = (rec.points ?? 0) + e.points
       }
-      if (g.assistPersonId) assistCountsById[g.assistPersonId] = (assistCountsById[g.assistPersonId] ?? 0) + 1
-      else if (g.assistName) assistCountsByName[g.assistName] = (assistCountsByName[g.assistName] ?? 0) + 1
+      if (e.personId) addTo(scoreById[e.personId] ??= {})
+      else if (e.name && e.name !== 'Unknown scorer' && e.name !== 'Unknown') {
+        addTo(scoreByName[e.name] ??= {})
+      }
     }
 
     const cardCounts = {}
-    for (const c of readCards(m, contrib.countsAllGoals)) {
+    for (const c of readCards(m, contrib.countsAllEvents)) {
       if (c.playerName && c.playerName !== 'Unknown' && c.cardType) {
-        const rec = cardCounts[c.playerName] ?? { green: 0, yellow: 0, red: 0 }
+        const rec = cardCounts[c.playerName] ?? { yellow: 0, red: 0 }
         rec[c.cardType] = (rec[c.cardType] ?? 0) + 1
         cardCounts[c.playerName] = rec
       }
@@ -117,15 +138,17 @@ function deriveSliceTotals(slices, matches) {
       const a = acc[p.id]
       const inLineup   = (p.personId && lineupPersonIds.has(p.personId)) ||
                          (p.personName && lineupNames.has(p.personName))
-      const goalsTotal = (p.personId   ? (goalCountsById[p.personId]   ?? 0) : 0) +
-                         (p.personName ? (goalCountsByName[p.personName] ?? 0) : 0)
-      const assistsTotal = (p.personId   ? (assistCountsById[p.personId]   ?? 0) : 0) +
-                           (p.personName ? (assistCountsByName[p.personName] ?? 0) : 0)
       const cc = p.personName ? (cardCounts[p.personName] ?? null) : null
       if (inLineup) a.caps++            // cap = presence in lineup, nothing more
-      a.goals += goalsTotal
-      a.assists += assistsTotal
-      if (cc) { a.green += cc.green ?? 0; a.yellow += cc.yellow ?? 0; a.red += cc.red ?? 0 }
+      for (const rec of [p.personId ? scoreById[p.personId] : null, p.personName ? scoreByName[p.personName] : null]) {
+        if (!rec) continue
+        a.tries       += rec.tries       ?? 0
+        a.conversions += rec.conversions ?? 0
+        a.penalties   += rec.penalties   ?? 0
+        a.dropGoals   += rec.dropGoals   ?? 0
+        a.points      += rec.points      ?? 0
+      }
+      if (cc) { a.yellow += cc.yellow ?? 0; a.red += cc.red ?? 0 }
     }
   }
   return acc
@@ -137,10 +160,11 @@ async function writeSliceTotals(db, slices, totals) {
   for (let i = 0; i < ids.length; i += 400) {
     const batch = db.batch()
     for (const id of ids.slice(i, i + 400)) {
-      const t = totals[id] ?? { caps: 0, goals: 0, assists: 0, green: 0, yellow: 0, red: 0 }
+      const t = totals[id] ?? mkTotals()
       batch.update(db.doc(`players/${id}`), {
-        caps: t.caps, goals: t.goals, assists: t.assists ?? 0,
-        'cards.green': t.green, 'cards.yellow': t.yellow, 'cards.red': t.red,
+        caps: t.caps, tries: t.tries, conversions: t.conversions,
+        penalties: t.penalties, dropGoals: t.dropGoals, points: t.points,
+        'cards.yellow': t.yellow, 'cards.red': t.red,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
     }
@@ -261,7 +285,8 @@ async function ensureSlicesFromLineups(db, matches, slices) {
         season: x.season,
         organizationId: t.organizationId ?? null,
         personSlug: null, shirtNumber: null, position: null, isCaptain: false,
-        caps: 0, goals: 0, assists: 0, cards: { green: 0, yellow: 0, red: 0 },
+        caps: 0, tries: 0, conversions: 0, penalties: 0, dropGoals: 0, points: 0,
+        cards: { yellow: 0, red: 0 },
         competitionName: c.name ?? null,
         competitionSeason: c.season ?? null,
         competitionStatus: c.status ?? null,
@@ -363,10 +388,12 @@ async function recomputeAllCareerStats(db) {
   const personAgg = {}
   for (const p of slices) {
     if (!p.personId) continue
-    const t = sliceTotals[p.id] ?? { caps: 0, goals: 0, assists: 0, green: 0, yellow: 0, red: 0 }
-    const agg = (personAgg[p.personId] ??= { caps: 0, goals: 0, assists: 0, green: 0, yellow: 0, red: 0, comps: new Set() })
-    agg.caps += t.caps; agg.goals += t.goals; agg.assists += t.assists ?? 0
-    agg.green += t.green; agg.yellow += t.yellow; agg.red += t.red
+    const t = sliceTotals[p.id] ?? mkTotals()
+    const agg = (personAgg[p.personId] ??= { ...mkTotals(), comps: new Set() })
+    agg.caps += t.caps; agg.tries += t.tries
+    agg.conversions += t.conversions; agg.penalties += t.penalties; agg.dropGoals += t.dropGoals
+    agg.points += t.points
+    agg.yellow += t.yellow; agg.red += t.red
     if (p.competitionId) agg.comps.add(p.competitionId)
   }
 
@@ -376,8 +403,10 @@ async function recomputeAllCareerStats(db) {
     for (const pid of personIds.slice(i, i + 400)) {
       const a = personAgg[pid]
       batch.set(db.doc(`people/${pid}`), {
-        careerCaps: a.caps, careerGoals: a.goals, careerAssists: a.assists,
-        careerCards: { green: a.green, yellow: a.yellow, red: a.red },
+        careerCaps: a.caps, careerTries: a.tries,
+        careerConversions: a.conversions, careerPenalties: a.penalties, careerDropGoals: a.dropGoals,
+        careerPoints: a.points,
+        careerCards: { yellow: a.yellow, red: a.red },
         competitionIds: [...a.comps],
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true })

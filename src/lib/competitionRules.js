@@ -17,11 +17,11 @@ export const COMPETITION_TYPES = {
   league: {
     value: 'league',
     label: 'League',
-    summary: 'Season-long competition with a cumulative standings table.',
+    summary: 'Season-long competition with a cumulative log table.',
     bestFor: 'Season-long competition',
     features: {
       fixtures: 'Yes', results: 'Yes', standings: 'Full table', rankings: 'Yes',
-      knockouts: 'No', pools: 'No', shootouts: 'Optional', teamSchedules: 'Yes',
+      knockouts: 'No', pools: 'No', bonusPoints: 'Optional', deciders: 'No', teamSchedules: 'Yes',
     },
   },
   tournament: {
@@ -31,7 +31,7 @@ export const COMPETITION_TYPES = {
     bestFor: 'Short competitive event',
     features: {
       fixtures: 'Yes', results: 'Yes', standings: 'Pool standings', rankings: 'Yes',
-      knockouts: 'Yes', pools: 'Yes', shootouts: 'Knockout use', teamSchedules: 'Yes',
+      knockouts: 'Yes', pools: 'Yes', bonusPoints: 'Optional', deciders: 'Knockout use', teamSchedules: 'Yes',
     },
   },
   festival: {
@@ -41,7 +41,7 @@ export const COMPETITION_TYPES = {
     bestFor: 'Showcase event',
     features: {
       fixtures: 'Yes', results: 'Yes', standings: 'Optional stats only', rankings: 'No official ranking',
-      knockouts: 'No', pools: 'No', shootouts: 'No', teamSchedules: 'Yes',
+      knockouts: 'No', pools: 'No', bonusPoints: 'No', deciders: 'No', teamSchedules: 'Yes',
     },
   },
 }
@@ -81,37 +81,59 @@ export function competitionLifecycle(competition, now = Date.now()) {
 }
 
 // ── Points ────────────────────────────────────────────────────────────────────
-export const DEFAULT_POINTS = { win: 3, draw: 1, loss: 0 }
+// Rugby log points: 4 for a win, 2 for a draw, 0 for a loss is the standard
+// across World Rugby, URC, Currie Cup and SA school leagues.
+export const DEFAULT_POINTS = { win: 4, draw: 2, loss: 0 }
 
 export const POINTS_PRESETS = [
-  { label: '3 / 1 / 0', points: { win: 3, draw: 1, loss: 0 } },
-  { label: '2 / 1 / 0', points: { win: 2, draw: 1, loss: 0 } },
+  { label: '4 / 2 / 0 (standard)', points: { win: 4, draw: 2, loss: 0 } },
+  { label: '3 / 1 / 0',            points: { win: 3, draw: 1, loss: 0 } },
+  { label: '2 / 1 / 0',            points: { win: 2, draw: 1, loss: 0 } },
 ]
 
+// ── Bonus points ──────────────────────────────────────────────────────────────
+// The standard rugby bonus-point system, on by default and configurable per
+// competition:
+//   • Try bonus    — 1 log point for scoring `tryBonusThreshold`+ tries
+//                    (either team, win or lose). Default 4 (World Rugby / URC /
+//                    Currie Cup standard; some competitions use a try-margin
+//                    variant, which is not modelled in V1).
+//   • Losing bonus — 1 log point for losing by `losingBonusMargin` or fewer
+//                    match points. Default 7.
+// A try bonus can only be earned when the fixture's try count is KNOWN (live
+// scored, or entered with a submitted result) — an unknown count never counts
+// as zero and never earns a bonus.
+export const DEFAULT_BONUS_POINTS = {
+  tryBonus: true,  tryBonusThreshold: 4,
+  losingBonus: true, losingBonusMargin: 7,
+}
+
 // ── Tie-breakers ──────────────────────────────────────────────────────────────
-// Default recommended hockey order. Alphabetical is intentionally absent — it
+// Default recommended rugby order. Alphabetical is intentionally absent — it
 // may only ever be used for display stability, never to decide an outcome. If
 // the chain is exhausted, callers must surface "Manual placement required"
 // rather than inventing a winner (manualDecision is the explicit terminal step).
 export const DEFAULT_TIE_BREAKERS = [
-  { key: 'points',              label: 'Points',                        direction: 'desc', scope: 'all_fixtures' },
+  { key: 'points',              label: 'Log points',                    direction: 'desc', scope: 'all_fixtures' },
   { key: 'headToHeadMiniTable', label: 'Head-to-head mini-table',       direction: 'desc', scope: 'head_to_head' },
-  { key: 'goalDifference',      label: 'Goal difference',               direction: 'desc', scope: 'all_fixtures' },
-  { key: 'goalsFor',            label: 'Goals for',                      direction: 'desc', scope: 'all_fixtures' },
-  { key: 'goalsAgainst',        label: 'Goals against',                  direction: 'asc',  scope: 'all_fixtures' },
-  { key: 'wins',                label: 'Wins',                           direction: 'desc', scope: 'all_fixtures' },
-  { key: 'fairPlayScore',       label: 'Fair play',                      direction: 'asc',  scope: 'all_fixtures' },
-  { key: 'manualDecision',      label: 'Manual administrator decision',  direction: null,   scope: 'all_fixtures' },
+  { key: 'pointsDifference',    label: 'Points difference',             direction: 'desc', scope: 'all_fixtures' },
+  { key: 'triesFor',            label: 'Tries scored',                  direction: 'desc', scope: 'all_fixtures' },
+  { key: 'pointsFor',           label: 'Points for',                    direction: 'desc', scope: 'all_fixtures' },
+  { key: 'pointsAgainst',       label: 'Points against',                direction: 'asc',  scope: 'all_fixtures' },
+  { key: 'wins',                label: 'Wins',                          direction: 'desc', scope: 'all_fixtures' },
+  { key: 'fairPlayScore',       label: 'Fair play',                     direction: 'asc',  scope: 'all_fixtures' },
+  { key: 'manualDecision',      label: 'Manual administrator decision', direction: null,   scope: 'all_fixtures' },
 ]
 
 // A walkover awards the opposing team a default scoreline; the conceding team
-// records a loss. Values are configurable per competition.
-export const DEFAULT_WALKOVER_SCORE = { concedingTeam: 0, opposingTeam: 5 }
+// records a loss. 28–0 is the World Rugby standard walkover score. Values are
+// configurable per competition.
+export const DEFAULT_WALKOVER_SCORE = { concedingTeam: 0, opposingTeam: 28 }
 
 // Festival informational stats — fixed canonical column order. No position
 // column, no sorting (V1). Off by default.
 export const FESTIVAL_STATS_COLUMNS = [
-  'played', 'won', 'drawn', 'lost', 'goalsFor', 'goalsAgainst', 'goalDifference',
+  'played', 'won', 'drawn', 'lost', 'pointsFor', 'pointsAgainst', 'pointsDifference', 'triesFor',
 ]
 
 // Build the default, fully self-contained rules object for a competition type.
@@ -119,11 +141,16 @@ export const FESTIVAL_STATS_COLUMNS = [
 export function defaultRulesForType(type) {
   const rules = {
     points:        { ...DEFAULT_POINTS },
+    bonusPoints:   { ...DEFAULT_BONUS_POINTS },
     tieBreakers:   DEFAULT_TIE_BREAKERS.map(t => ({ ...t })),
     walkoverScore: { ...DEFAULT_WALKOVER_SCORE },
   }
   if (type === 'tournament') rules.stages = []
-  if (type === 'festival')   rules.statsTable = { enabled: false, columns: [...FESTIVAL_STATS_COLUMNS] }
+  if (type === 'festival') {
+    rules.statsTable  = { enabled: false, columns: [...FESTIVAL_STATS_COLUMNS] }
+    // A festival has no log, so bonus points are meaningless there.
+    rules.bonusPoints = { tryBonus: false, tryBonusThreshold: 4, losingBonus: false, losingBonusMargin: 7 }
+  }
   return rules
 }
 

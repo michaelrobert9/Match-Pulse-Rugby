@@ -57,13 +57,14 @@ function compareByChain(a, b, tieBreakers) {
 
 function statValue(key, row) {
   switch (key) {
-    case 'points':         return row.Pts ?? 0
-    case 'goalDifference': return row.GD ?? 0
-    case 'goalsFor':       return row.GF ?? 0
-    case 'goalsAgainst':   return row.GA ?? 0
-    case 'wins':           return row.W ?? 0
-    case 'fairPlayScore':  return row.fairPlayScore ?? 0
-    default:               return 0
+    case 'points':           return row.Pts ?? 0
+    case 'pointsDifference': return row.PD ?? 0
+    case 'pointsFor':        return row.PF ?? 0
+    case 'pointsAgainst':    return row.PA ?? 0
+    case 'triesFor':         return row.TF ?? 0
+    case 'wins':             return row.W ?? 0
+    case 'fairPlayScore':    return row.fairPlayScore ?? 0
+    default:                 return 0
   }
 }
 
@@ -185,8 +186,9 @@ export function resolveBracket(slots = [], context = {}) {
   return out
 }
 
-// Derive the winner/loser of a final knockout match. In a knockout, a shootout
-// is decisive: the shootout winner advances even though the regulation score is
+// Derive the winner/loser of a final knockout match. In a knockout, a
+// place-kick competition is decisive: its winner advances even though the
+// match score (after any extra time — extra time counts inside the score) is
 // a draw. Returns { winnerTeamId, loserTeamId } or null if not decided.
 export function knockoutResult(match) {
   if (!match || match.status !== 'final') return null
@@ -200,19 +202,19 @@ export function knockoutResult(match) {
   const h = match.homeScore ?? 0, a = match.awayScore ?? 0
   if (h > a) return { winnerTeamId: match.homeTeamId, loserTeamId: match.awayTeamId }
   if (a > h) return { winnerTeamId: match.awayTeamId, loserTeamId: match.homeTeamId }
-  // Drawn after regulation — a shootout decides the knockout.
-  const sh = match.shootoutHome ?? null, sa = match.shootoutAway ?? null
+  // Still level — a place-kick competition decides the knockout.
+  const sh = match.kickCompHome ?? null, sa = match.kickCompAway ?? null
   if (sh != null && sa != null && sh !== sa) {
     return sh > sa
       ? { winnerTeamId: match.homeTeamId, loserTeamId: match.awayTeamId }
       : { winnerTeamId: match.awayTeamId, loserTeamId: match.homeTeamId }
   }
-  return null   // genuine draw, no shootout recorded → undecided
+  return null   // genuine draw, no kick competition recorded → undecided
 }
 
 // Which SIDE won a final knockout match — 'home' | 'away' | null. Unlike
 // knockoutResult (which reads the match's team ids, null on an unstamped holding
-// fixture), this reads only the score/shootout/outcome, so a caller can map the
+// fixture), this reads only the score/kick-competition/outcome, so a caller can map the
 // winning side onto the RESOLVED bracket slot and name the champion even before
 // the fixture has real teams stamped onto it.
 export function knockoutWinnerSide(match) {
@@ -224,7 +226,7 @@ export function knockoutWinnerSide(match) {
   const h = match.homeScore ?? 0, a = match.awayScore ?? 0
   if (h > a) return 'home'
   if (a > h) return 'away'
-  const sh = match.shootoutHome ?? null, sa = match.shootoutAway ?? null
+  const sh = match.kickCompHome ?? null, sa = match.kickCompAway ?? null
   if (sh != null && sa != null && sh !== sa) return sh > sa ? 'home' : 'away'
   return null
 }
@@ -276,12 +278,13 @@ export function bracketPodium({ knockout, resolved, matches, bronzeLabel }) {
   return { first, second: teamOf(fin.lose), third: teamOf(winLose(bronzeGame).win) }
 }
 
-// Format a scoreline including a knockout shootout suffix, e.g. "2–2 (4–3 SO)".
+// Format a scoreline including a knockout kick-competition suffix,
+// e.g. "20–20 (4–3 kicks)".
 export function formatScoreline(match) {
   if (!match) return ''
   const base = `${match.homeScore ?? 0}–${match.awayScore ?? 0}`
-  if (match.shootoutHome != null && match.shootoutAway != null) {
-    return `${base} (${match.shootoutHome}–${match.shootoutAway} SO)`
+  if (match.kickCompHome != null && match.kickCompAway != null) {
+    return `${base} (${match.kickCompHome}–${match.kickCompAway} kicks)`
   }
   return base
 }

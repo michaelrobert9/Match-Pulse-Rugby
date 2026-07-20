@@ -6,7 +6,7 @@ import { configured } from '../../firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   startMatch, pauseMatch, resumeMatch, endPeriod, startPeriod, finalizeMatch,
-  addGoal, enrichGoal, addCard, reverseGoal, reverseCard, recordShootout,
+  addScore, enrichScore, changeScoreType, addCard, reverseScore, reverseCard, recordKickComp,
   addPersonToMatchLineup, removePersonFromMatchLineup, toggleLineupStarter, updateMatchLineupEntry, updateMatch,
   setPlayerOfMatch, syncFixtureMembership, swapFixtureSides, resetMatch,
   setFixtureNotPlayed, setFixtureWalkover, abandonMatch, letAbandonedStand, revertFixtureOutcome,
@@ -17,8 +17,9 @@ import { walkoverScore, outcomeBanner } from '../../lib/fixtureResult'
 import FixtureBanner from '../../components/FixtureBanner'
 import {
   getElapsedMs, formatClock, nextPeriodAction,
-  periodRemainingMs, formatCountdown, gameMinuteLabel, isPastExpectedEnd,
+  periodRemainingMs, periodElapsedMs, gameMinuteLabel, isPastExpectedEnd,
 } from '../../lib/matchClock'
+import { SCORE_LABEL, SCORE_POINTS, isTryEvent } from '../../lib/rugbyScoring'
 import { isLive, isScheduled } from '../../lib/fixtureStatus'
 import { useTeamIdentity } from '../../hooks/useTeamIdentity'
 import { TeamCrest } from '../../components/TeamIdentity'
@@ -67,30 +68,28 @@ function wallTime(iso) {
   return new Date(iso).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })
 }
 
-const GOAL_TYPES = [
-  { key: 'open', label: 'Open Play' },
-  { key: 'sc',   label: 'Short Corner' },
-  { key: 'ps',   label: 'Penalty Stroke' },
-  { key: 'og',   label: 'Own Goal' },
+// The kick types offered behind the KICK button. A conversion is never offered
+// here — it is captured inside the try flow, attached to the try it converts.
+const KICK_TYPES = [
+  { key: 'penalty',   label: `Penalty (+${SCORE_POINTS.penalty})` },
+  { key: 'drop_goal', label: `Drop Goal (+${SCORE_POINTS.drop_goal})` },
 ]
-const GOAL_TYPE_SHORT = { open: 'Open Play', sc: 'Short Corner', ps: 'Penalty Stroke', og: 'Own Goal' }
 const CARD_TYPES = [
-  { key: 'green',  label: 'Green Card',  dot: 'bg-emerald-500' },
   { key: 'yellow', label: 'Yellow Card', dot: 'bg-yellow-400' },
   { key: 'red',    label: 'Red Card',    dot: 'bg-red-500' },
 ]
-const CARD_DOT = { green: 'bg-emerald-400', yellow: 'bg-yellow-400', red: 'bg-red-500' }
-const CARD_LABEL = { green: 'Green Card', yellow: 'Yellow Card', red: 'Red Card' }
-// Sensible hockey defaults when no explicit duration is captured. Red = sent off.
-const CARD_DEFAULT_MIN = { green: 2, yellow: 5, red: null }
-// Selectable suspension lengths for a green card.
-const GREEN_DURATIONS = [1, 2, 3, 5]
+const CARD_DOT = { yellow: 'bg-yellow-400', red: 'bg-red-500' }
+const CARD_LABEL = { yellow: 'Yellow Card', red: 'Red Card' }
+// Yellow = sin-bin: 10 minutes in fifteens, 2 in sevens. Red = sent off.
+const CARD_DEFAULT_MIN = { yellow: 10, red: null }
+// Selectable sin-bin lengths for a yellow card.
+const YELLOW_DURATIONS = [2, 10]
 
 // Timeline duration text: stored duration wins, else the colour's default.
 function cardDurationLabel(ev) {
   if (ev.cardType === 'red') return 'Sent off'
   const min = ev.durationMinutes ?? CARD_DEFAULT_MIN[ev.cardType]
-  return min != null ? `${min} min` : null
+  return min != null ? `${min} min sin-bin` : null
 }
 
 // ── Theme (scoring screen only) ──────────────────────────────────────────────
@@ -198,10 +197,18 @@ export default function ScoreMatch() {
   const [, forceTick]         = useState(0)
   const lineupsLoaded = useRef(false)
 
-  // goalEnrich: { eventId, side, step: 'type'|'attribution' } — two-step enrichment
-  // for an already-recorded goal. Attribution step only reached when the scoring
-  // team has fixture lineup players; otherwise the sheet closes after type selection.
-  const [goalEnrich, setGoalEnrich] = useState(null)
+  // tryEnrich: { eventId, side, step, conversionId } — enrichment flow for a
+  // just-recorded try. Steps: 'kind' (try / penalty try) → 'conversion'
+  // (kicked / missed) → 'scorer' → 'kicker' (only when a conversion was
+  // kicked). Attribution steps are only reached when the scoring team has
+  // fixture lineup players.
+  const [tryEnrich, setTryEnrich] = useState(null)
+  // pendingKick: { side, matchTimestamp } — held locally until the kick type
+  // (penalty / drop goal) is chosen; the type IS the point value, so nothing
+  // is written before the choice.
+  const [pendingKick, setPendingKick] = useState(null)
+  // kickEnrich: { eventId, side } — kicker attribution for a written kick.
+  const [kickEnrich, setKickEnrich] = useState(null)
   // pendingCard: { side, matchTimestamp, playerName } — held locally, not yet written
   const [pendingCard, setPendingCard] = useState(null)
   const [confirmEnd, setConfirmEnd]   = useState(false)
@@ -217,10 +224,11 @@ export default function ScoreMatch() {
   // POTM step: shown between finalization and the full-time screen when there
   // are lineup players to choose from.
   const [potmStep, setPotmStep] = useState(false)
-  // Shootout: optional, only relevant when regulation ends level.
-  const [shootoutEnabled, setShootoutEnabled] = useState(false)
-  const [shootoutHome,    setShootoutHome]    = useState('')
-  const [shootoutAway,    setShootoutAway]    = useState('')
+  // Place-kick competition: optional knockout decider, only relevant when the
+  // match ends level.
+  const [kickCompEnabled, setKickCompEnabled] = useState(false)
+  const [kickCompHome,    setKickCompHome]    = useState('')
+  const [kickCompAway,    setKickCompAway]    = useState('')
 
   // Match lineup management (stored in match.homeLineup / match.awayLineup)
   const [lineupOpen,     setLineupOpen]     = useState(false)
@@ -242,7 +250,7 @@ export default function ScoreMatch() {
   const [outcomeOpen,    setOutcomeOpen]    = useState(false)
   const [outcomeBusy,    setOutcomeBusy]    = useState(false)
   const [outcomeError,   setOutcomeError]   = useState('')
-  const [wkDefault,      setWkDefault]      = useState({ conceding: 0, opposing: 5 })
+  const [wkDefault,      setWkDefault]      = useState({ conceding: 0, opposing: 28 })
   // Edit match details (platform admin only)
   const [editMatchOpen,  setEditMatchOpen]  = useState(false)
   const [editForm,       setEditForm]       = useState({})
@@ -430,20 +438,21 @@ export default function ScoreMatch() {
   const isFinal    = status === 'final'
   const running    = status === 'live'
   const elapsedMs  = getElapsedMs(match)
-  // Countdown from the period length into negative time; red inside 30s.
-  const periodRemaining = periodRemainingMs(match)
-  const clockRed   = !isBreakState && periodRemaining <= 30_000
+  // Count-up clock within the half; red once play runs past the hooter into
+  // added time (periodRemainingMs goes negative — it also drives the hooter).
+  const halfElapsed = periodElapsedMs(match)
+  const clockRed   = !isBreakState && periodRemainingMs(match) <= 0
   const nextAction = nextPeriodAction(match)
 
   // Active events for the live timeline (reversed events hidden).
-  const goals = (match.goals ?? []).filter(g => g.status !== 'reversed')
+  const scores = (match.scores ?? []).filter(e => e.status !== 'reversed')
   const cards = (match.cards ?? []).filter(c => c.status !== 'reversed')
   const LOGGED_PERIOD_TYPES = new Set(['match_start', 'period_start', 'period_end', 'match_end'])
   const periodEvents = (match.controlLog ?? [])
     .filter(e => LOGGED_PERIOD_TYPES.has(e.type))
     .map(e => ({ ...e, kind: 'period' }))
   const timeline = [
-    ...goals.map(g => ({ ...g, kind: 'goal' })),
+    ...scores.map(e => ({ ...e, kind: 'score' })),
     ...cards.map(c => ({ ...c, kind: 'card' })),
     ...periodEvents,
   ].sort((a, b) => (a.matchTimestamp ?? 0) - (b.matchTimestamp ?? 0))
@@ -501,17 +510,18 @@ export default function ScoreMatch() {
     setTimeout(() => setTapLock(cur => (cur === key ? null : cur)), 500)
   }
 
-  // Goal: timestamp + score captured on first tap; strip is pure enrichment.
-  async function handleGoal(side) {
-    const key = `${side}:goal`
+  // Try: timestamp + 5 points captured on first tap; the sheet that follows is
+  // pure enrichment (penalty-try upgrade, conversion, attribution).
+  async function handleTry(side) {
+    const key = `${side}:try`
     if (saving || tapLock === key) return
     lockTap(key)
     const ts = getElapsedMs(match)
     setSaving(true)
     try {
-      const eventId = await addGoal(id, side, { matchTimestamp: ts })
+      const eventId = await addScore(id, side, { matchTimestamp: ts, scoreType: 'try' })
       if (navigator.vibrate) navigator.vibrate(60)
-      setGoalEnrich({ eventId, side, step: 'type' })
+      setTryEnrich({ eventId, side, step: 'kind', conversionId: null })
     } catch (err) {
       setNotice(err?.code === 'permission-denied'
         ? 'Permission denied — your access may have changed.'
@@ -520,7 +530,7 @@ export default function ScoreMatch() {
   }
 
   // Fixture lineup for the scoring side, sorted by shirt number ascending.
-  // Entries without a number sort last. Used only in the goal enrichment sheet.
+  // Entries without a number sort last. Used only in the attribution sheets.
   function fixtureSidePlayers(side) {
     const lineup = side === 'home' ? (match.homeLineup ?? []) : (match.awayLineup ?? [])
     return [...lineup].sort((a, b) => {
@@ -530,47 +540,98 @@ export default function ScoreMatch() {
     })
   }
 
-  // After the type step: advance to attribution if lineup players exist, else close.
-  function advanceFromType() {
-    if (!goalEnrich) return
-    if (fixtureSidePlayers(goalEnrich.side).length > 0) {
-      setGoalEnrich(ge => ge ? { ...ge, step: 'attribution' } : null)
-    } else {
-      setGoalEnrich(null)
+  // Kind step: a normal try continues to the conversion question; a penalty try
+  // (upgraded to 7 points, never converted) skips straight to attribution.
+  async function applyTryKind(kind) {
+    if (!tryEnrich) return
+    const ev = (match.scores ?? []).find(e => e.id === tryEnrich.eventId)
+    if (ev && ev.scoreType !== kind) {
+      await changeScoreType(id, tryEnrich.eventId, kind, match.scores)
     }
+    if (kind === 'penalty_try') advanceToScorer(null)
+    else setTryEnrich(te => te ? { ...te, step: 'conversion' } : null)
   }
 
-  async function applyGoalType(goalType) {
-    if (!goalEnrich) return
-    await enrichGoal(id, goalEnrich.eventId, { goalType }, match.goals)
-    advanceFromType()
+  // Conversion step: kicked writes a linked +2 conversion event; missed / not
+  // taken writes nothing. Either way, move on to try-scorer attribution.
+  async function applyConversion(kicked) {
+    if (!tryEnrich) return
+    let conversionId = null
+    if (kicked) {
+      conversionId = await addScore(id, tryEnrich.side, {
+        matchTimestamp: getElapsedMs(match), scoreType: 'conversion', convertedTryId: tryEnrich.eventId,
+      })
+      if (navigator.vibrate) navigator.vibrate(60)
+    }
+    advanceToScorer(conversionId)
   }
 
-  // Attribution step: write scorer from the fixture lineup, or null for Unassigned.
-  // Advances to the assist step when other lineup players exist to credit.
-  async function applyGoalAttribution(entry) {
-    if (!goalEnrich) return
+  function advanceToScorer(conversionId) {
+    setTryEnrich(te => {
+      if (!te) return null
+      if (fixtureSidePlayers(te.side).length === 0) return null
+      return { ...te, step: 'scorer', conversionId: conversionId ?? te.conversionId ?? null }
+    })
+  }
+
+  // Scorer step: credit the try from the fixture lineup, or null for
+  // Unassigned. Advances to the kicker step when a conversion was kicked.
+  async function applyTryScorer(entry) {
+    if (!tryEnrich) return
     const patch = entry
       ? { scorerName: entry.personName, scorerPersonId: entry.personId }
       : { scorerName: null, scorerPersonId: null }
-    await enrichGoal(id, goalEnrich.eventId, patch, match.goals)
-    const others = fixtureSidePlayers(goalEnrich.side)
-      .filter(p => !entry || p.personId !== entry.personId)
-    if (others.length > 0) {
-      setGoalEnrich(ge => ge ? { ...ge, step: 'assist', scorerPersonId: entry?.personId ?? null } : null)
+    await enrichScore(id, tryEnrich.eventId, patch, match.scores)
+    if (tryEnrich.conversionId) {
+      setTryEnrich(te => te ? { ...te, step: 'kicker' } : null)
     } else {
-      setGoalEnrich(null)
+      setTryEnrich(null)
     }
   }
 
-  // Assist step: credit the assisting player, or null for no assist.
-  async function applyGoalAssist(entry) {
-    if (!goalEnrich) return
+  // Kicker step: credit the conversion, or null for unassigned.
+  async function applyConversionKicker(entry) {
+    if (!tryEnrich?.conversionId) { setTryEnrich(null); return }
     const patch = entry
-      ? { assistName: entry.personName, assistPersonId: entry.personId }
-      : { assistName: null, assistPersonId: null }
-    await enrichGoal(id, goalEnrich.eventId, patch, match.goals)
-    setGoalEnrich(null)
+      ? { scorerName: entry.personName, scorerPersonId: entry.personId }
+      : { scorerName: null, scorerPersonId: null }
+    await enrichScore(id, tryEnrich.conversionId, patch, match.scores)
+    setTryEnrich(null)
+  }
+
+  // Kick (penalty / drop goal): timestamp captured on tap into local state; the
+  // event is written when the type is chosen — the type IS the point value.
+  function handleKickTap(side) {
+    const key = `${side}:kick`
+    if (saving || tapLock === key) return
+    lockTap(key)
+    setPendingKick({ side, matchTimestamp: getElapsedMs(match) })
+  }
+
+  async function applyKickType(scoreType) {
+    if (!pendingKick) return
+    const { side, matchTimestamp } = pendingKick
+    setPendingKick(null)
+    setSaving(true)
+    try {
+      const eventId = await addScore(id, side, { matchTimestamp, scoreType })
+      if (navigator.vibrate) navigator.vibrate(60)
+      if (fixtureSidePlayers(side).length > 0) setKickEnrich({ eventId, side })
+    } catch (err) {
+      setNotice(err?.code === 'permission-denied'
+        ? 'Permission denied — your access may have changed.'
+        : 'Could not save — check your connection and try again.')
+    } finally { setSaving(false) }
+  }
+
+  // Kicker attribution for a penalty / drop goal, or null for unassigned.
+  async function applyKickKicker(entry) {
+    if (!kickEnrich) return
+    const patch = entry
+      ? { scorerName: entry.personName, scorerPersonId: entry.personId }
+      : { scorerName: null, scorerPersonId: null }
+    await enrichScore(id, kickEnrich.eventId, patch, match.scores)
+    setKickEnrich(null)
   }
 
   // Card: timestamp captured on first tap into local state; written on colour select.
@@ -580,12 +641,12 @@ export default function ScoreMatch() {
     lockTap(key)
     setPendingCard({ side, matchTimestamp: getElapsedMs(match), playerName: null, playerPlayerId: null })
   }
-  // Green cards carry a suspension duration — capture it before writing.
-  // Yellow/red are written immediately on colour selection.
+  // Yellow cards carry a sin-bin duration — capture it before writing.
+  // Red is written immediately on colour selection.
   function applyCardColour(cardType) {
     if (!pendingCard) return
-    if (cardType === 'green') {
-      setPendingCard(pc => ({ ...pc, cardType: 'green' }))
+    if (cardType === 'yellow') {
+      setPendingCard(pc => ({ ...pc, cardType: 'yellow' }))
       return
     }
     writeCard(cardType, null)
@@ -601,11 +662,11 @@ export default function ScoreMatch() {
   async function handleReverse(ev) {
     setMenuFor(null)
     await withSaving(async () => {
-      const res = ev.kind === 'goal'
-        ? await reverseGoal(id, ev.id, match.goals)
+      const res = ev.kind === 'score'
+        ? await reverseScore(id, ev.id, match.scores)
         : await reverseCard(id, ev.id, match.cards)
       if (res && res.ok === false && res.reason === 'negative-score') {
-        setNotice('Reversal blocked — the score is already 0 and cannot go negative.')
+        setNotice('Reversal blocked — it would drive the score negative.')
       }
     })
   }
@@ -615,10 +676,10 @@ export default function ScoreMatch() {
     await withSaving(async () => {
       if (configured) {
         await finalizeMatch(id)
-        const sh = parseInt(shootoutHome, 10)
-        const sa = parseInt(shootoutAway, 10)
-        if (shootoutEnabled && !isNaN(sh) && !isNaN(sa)) {
-          await recordShootout(id, sh, sa)
+        const kh = parseInt(kickCompHome, 10)
+        const ka = parseInt(kickCompAway, 10)
+        if (kickCompEnabled && !isNaN(kh) && !isNaN(ka)) {
+          await recordKickComp(id, kh, ka)
         }
       }
       const hasPlayers = (match?.homeLineup?.length ?? 0) + (match?.awayLineup?.length ?? 0) > 0
@@ -733,7 +794,7 @@ export default function ScoreMatch() {
     setEditForm({
       scheduledAt:   dt,
       pitch:         match.pitch         || '',
-      indoor:        match.indoor === true,
+      sevens:        match.sevens === true,
       homeTeamName:  match.homeTeamName  || '',
       awayTeamName:  match.awayTeamName  || '',
       homeOrgId:     match.homeOrgId     || '',
@@ -762,14 +823,14 @@ export default function ScoreMatch() {
 
   async function handleRestart() {
     if (!match) return
-    if (!window.confirm('Restart this match? It returns to “not started” and clears the clock, score, goals and cards. Use this if Start was tapped by mistake.')) return
+    if (!window.confirm('Restart this match? It returns to “not started” and clears the clock, score, tries and cards. Use this if Start was tapped by mistake.')) return
     try { await resetMatch(match.id) }
     catch (e) { window.alert(e.message ?? 'Could not restart the match.') }
   }
 
   async function handleSwapSides() {
     if (!match) return
-    if (!window.confirm('Switch the home and away team? Any score, goals and cards swap with them, and the match URL updates.')) return
+    if (!window.confirm('Switch the home and away team? Any score, tries and cards swap with them, and the match URL updates.')) return
     setEditSaving(true); setEditError('')
     try {
       await swapFixtureSides(match.id)
@@ -785,7 +846,7 @@ export default function ScoreMatch() {
       const patch = {
         ...(editForm.scheduledAt ? { scheduledAt: new Date(editForm.scheduledAt) } : {}),
         pitch:         (editForm.pitch        ?? '').trim(),
-        indoor:        editForm.indoor === true,
+        sevens:        editForm.sevens === true,
         homeTeamName:  (editForm.homeTeamName ?? '').trim(),
         awayTeamName:  (editForm.awayTeamName ?? '').trim(),
         periods:       Number(editForm.periods) || 2,
@@ -888,7 +949,7 @@ export default function ScoreMatch() {
     setEditForm(f => ({ ...f, awayTeamId: teamId, ...(team ? { awayTeamName: team.displayName } : {}) }))
   }
 
-  const enrichGoalEvent = goalEnrich && (match.goals ?? []).find(g => g.id === goalEnrich.eventId)
+  const tryEnrichEvent = tryEnrich && (match.scores ?? []).find(e => e.id === tryEnrich.eventId)
   const pickerSidePlayers = side => side === 'home' ? home : away
 
   return (
@@ -1026,7 +1087,7 @@ export default function ScoreMatch() {
                 ? (breakSecsLeft <= 30 ? 'text-red-500' : t.score)
                 : (clockRed ? 'text-red-500' : t.score)
             }`} style={{ fontSize: 36 }}>
-              {isBreakState ? formatBreak(breakSecsLeft) : formatCountdown(periodRemaining)}
+              {isBreakState ? formatBreak(breakSecsLeft) : formatClock(halfElapsed)}
             </div>
             <div className={`text-[13px] font-bold uppercase tracking-[0.5px] ${
               (isBreakState ? breakSecsLeft <= 30 : clockRed) ? 'text-red-400' : t.muted
@@ -1043,10 +1104,10 @@ export default function ScoreMatch() {
             {nextAction.label} →
           </button>
         </div>
-        {/* The alarm depends on JS running — a locked/dark screen means no
+        {/* The hooter depends on JS running — a locked/dark screen means no
             beep, so the scorer must never rely on sound from a pocketed phone. */}
         <div className={`${t.bar} border-b px-5 py-1.5 text-center text-[10px] font-medium ${t.muted} shrink-0`}>
-          Keep the screen on — the 00:00 alarm only sounds while this screen is awake.
+          Keep the screen on — the hooter only sounds while this screen is awake.
         </div>
         </>
       )}
@@ -1083,27 +1144,30 @@ export default function ScoreMatch() {
               return (
                 <div key={evKey} className={`flex items-center gap-3 py-1.5 ${t.timelineText}`}>
                   <span className={`font-mono text-xs ${t.muted} w-16 shrink-0 tabular-nums`}>{gameMinuteLabel(match, ev.matchTimestamp)}</span>
-                  {ev.kind === 'goal' ? (
+                  {ev.kind === 'score' ? (
                     <span className="w-2.5 h-3 rounded-sm shrink-0" style={{ backgroundColor: teamColor(ev.side) }} />
                   ) : (
                     <span className={`w-2.5 h-3 rounded-sm shrink-0 ${CARD_DOT[ev.cardType] ?? 'bg-slate-400'}`} />
                   )}
                   <span className="text-sm flex-1 min-w-0 truncate">
-                    <span className="font-semibold">{ev.kind === 'goal' ? 'Goal' : (CARD_LABEL[ev.cardType] ?? 'Card')}</span>
+                    <span className="font-semibold">{ev.kind === 'score' ? (SCORE_LABEL[ev.scoreType] ?? 'Score') : (CARD_LABEL[ev.cardType] ?? 'Card')}</span>
+                    {ev.kind === 'score' && <span className="font-mono text-emerald-600"> +{ev.points ?? SCORE_POINTS[ev.scoreType] ?? 0}</span>}
                     {' · '}{teamName(ev.side)}
-                    {ev.kind === 'goal' && <span className={t.muted}> · {GOAL_TYPE_SHORT[ev.goalType] ?? 'Open Play'}</span>}
                     {ev.scorerName && <span className={t.muted}> · {ev.scorerName}</span>}
-                    {ev.kind === 'goal' && ev.assistName && <span className={t.muted}> · A: {ev.assistName}</span>}
                     {ev.kind === 'card' && ev.playerName && <span className={t.muted}> · {ev.playerName}</span>}
                     {ev.kind === 'card' && cardDurationLabel(ev) && <span className={t.muted}> · {cardDurationLabel(ev)}</span>}
                   </span>
                   {!isFinal && (
                     menuFor === ev.id ? (
                       <div className="flex items-center gap-1 shrink-0">
-                        {ev.kind === 'goal' && (ev.goalType ?? 'open') === 'open' && !ev.scorerName && (
-                          <button onClick={() => { setMenuFor(null); setGoalEnrich({ eventId: ev.id, side: ev.side, step: 'type' }) }}
+                        {ev.kind === 'score' && !ev.scorerName && (
+                          <button onClick={() => {
+                            setMenuFor(null)
+                            if (isTryEvent(ev)) setTryEnrich({ eventId: ev.id, side: ev.side, step: 'scorer', conversionId: null })
+                            else setKickEnrich({ eventId: ev.id, side: ev.side })
+                          }}
                             className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 px-2 py-1 rounded">
-                            Enrich
+                            Credit
                           </button>
                         )}
                         <button onClick={() => handleReverse(ev)}
@@ -1130,7 +1194,8 @@ export default function ScoreMatch() {
         <div className={`shrink-0 border-t ${t.header} px-5 pt-4 space-y-4 landscape:space-y-2`}
           style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
           {['home', 'away'].map(side => {
-            const goalAccepted = tapLock === `${side}:goal`
+            const tryAccepted  = tapLock === `${side}:try`
+            const kickAccepted = tapLock === `${side}:kick`
             const cardAccepted = tapLock === `${side}:card`
             return (
               <div key={side}>
@@ -1141,16 +1206,22 @@ export default function ScoreMatch() {
                     {teamName(side)} ({side === 'home' ? 'Home' : 'Away'})
                   </span>
                 </div>
-                {/* 70 / 30 split, 12px gap, 64px min height */}
+                {/* 50 / 30 / 20 split, 12px gap, 64px min height */}
                 <div className="flex gap-3">
-                  <button onClick={() => handleGoal(side)} disabled={saving || goalAccepted}
-                    className={`flex-[7] text-white font-bold text-base rounded-xl transition-colors landscape:h-14 ${
-                      goalAccepted ? 'bg-emerald-600' : 'bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50'
+                  <button onClick={() => handleTry(side)} disabled={saving || tryAccepted}
+                    className={`flex-[5] text-white font-bold text-base rounded-xl transition-colors landscape:h-14 ${
+                      tryAccepted ? 'bg-emerald-600' : 'bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50'
                     }`} style={{ minHeight: 64 }}>
-                    {goalAccepted ? '✓ GOAL' : '+ GOAL'}
+                    {tryAccepted ? '✓ TRY' : '+ TRY'}
+                  </button>
+                  <button onClick={() => handleKickTap(side)} disabled={saving || kickAccepted}
+                    className={`flex-[3] border font-bold text-sm rounded-xl transition-colors landscape:h-14 ${
+                      kickAccepted ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600' : t.neutralBtn
+                    }`} style={{ minHeight: 64 }}>
+                    {kickAccepted ? '✓' : 'KICK'}
                   </button>
                   <button onClick={() => handleCardTap(side)} disabled={saving || cardAccepted}
-                    className={`flex-[3] border font-bold text-sm rounded-xl transition-colors landscape:h-14 ${
+                    className={`flex-[2] border font-bold text-sm rounded-xl transition-colors landscape:h-14 ${
                       cardAccepted ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600' : t.neutralBtn
                     }`} style={{ minHeight: 64 }}>
                     {cardAccepted ? '✓' : 'CARD'}
@@ -1176,55 +1247,75 @@ export default function ScoreMatch() {
       {isFinal && (
         <div className={`shrink-0 border-t ${t.header} px-4 py-4 text-center ${t.muted} text-sm font-bold uppercase tracking-widest`}>
           Full time · {formatClock(elapsedMs)}
-          {match.shootoutHome != null && match.shootoutAway != null && (
+          {match.kickCompHome != null && match.kickCompAway != null && (
             <span className="ml-2 normal-case">
-              ({match.shootoutHome}–{match.shootoutAway} SO)
+              ({match.kickCompHome}–{match.kickCompAway} kicks)
             </span>
           )}
         </div>
       )}
 
-      {/* Goal enrichment — step 1: goal type */}
-      {goalEnrich?.step === 'type' && (
-        <Sheet t={t} title={`Goal · ${teamName(goalEnrich.side)}`}
-          subtitle={`${gameMinuteLabel(match, enrichGoalEvent?.matchTimestamp ?? 0)} · recorded`}
-          color={teamColor(goalEnrich.side)} onClose={() => setGoalEnrich(null)}>
+      {/* Try enrichment — step 1: try or penalty try */}
+      {tryEnrich?.step === 'kind' && (
+        <Sheet t={t} title={`Try · ${teamName(tryEnrich.side)}`}
+          subtitle={`${gameMinuteLabel(match, tryEnrichEvent?.matchTimestamp ?? 0)} · recorded`}
+          color={teamColor(tryEnrich.side)} onClose={() => setTryEnrich(null)}>
           <div className="grid grid-cols-2 gap-2 mb-4">
-            {GOAL_TYPES.map(gt => {
-              const active = (enrichGoalEvent?.goalType ?? 'open') === gt.key
+            {[
+              { key: 'try',         label: `Try (+${SCORE_POINTS.try})` },
+              { key: 'penalty_try', label: `Penalty Try (+${SCORE_POINTS.penalty_try})` },
+            ].map(kt => {
+              const active = (tryEnrichEvent?.scoreType ?? 'try') === kt.key
               return (
-                <button key={gt.key} onClick={() => applyGoalType(gt.key)}
+                <button key={kt.key} onClick={() => applyTryKind(kt.key)}
                   className={`py-3 rounded-xl text-sm font-bold border transition-colors ${
                     active ? 'bg-emerald-500 border-emerald-500 text-white' : t.neutralBtn
                   }`}>
-                  {gt.label}
+                  {kt.label}
                 </button>
               )
             })}
           </div>
-          {/* "Continue →" advances to attribution when lineup players exist;
-              "Done" closes when there are no players to attribute to. */}
-          <button onClick={advanceFromType}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm uppercase tracking-wider rounded-xl py-3">
-            {fixtureSidePlayers(goalEnrich.side).length > 0 ? 'Continue →' : 'Done'}
-          </button>
+          <p className={`text-[11px] ${t.muted}`}>
+            A penalty try is worth 7 and is never converted. A normal try continues to the conversion.
+          </p>
         </Sheet>
       )}
 
-      {/* Goal enrichment — step 2: player attribution (only when lineup players exist) */}
-      {goalEnrich?.step === 'attribution' && (() => {
-        const players = fixtureSidePlayers(goalEnrich.side)
+      {/* Try enrichment — step 2: conversion kicked? */}
+      {tryEnrich?.step === 'conversion' && (
+        <Sheet t={t} title={`Conversion? · ${teamName(tryEnrich.side)}`}
+          subtitle={`${gameMinuteLabel(match, tryEnrichEvent?.matchTimestamp ?? 0)} · try recorded`}
+          color={teamColor(tryEnrich.side)}
+          dismissable={false} closable={false}
+          onClose={() => {}}>
+          <div className="space-y-2">
+            <button onClick={() => applyConversion(true)}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl py-3">
+              Kicked (+{SCORE_POINTS.conversion})
+            </button>
+            <button onClick={() => applyConversion(false)}
+              className={`w-full border font-bold text-sm rounded-xl py-3 transition-colors ${t.neutralBtn}`}>
+              Missed / not taken
+            </button>
+          </div>
+        </Sheet>
+      )}
+
+      {/* Try enrichment — step 3: try scorer (only when lineup players exist) */}
+      {tryEnrich?.step === 'scorer' && (() => {
+        const players = fixtureSidePlayers(tryEnrich.side)
         return (
-          <Sheet t={t} title={`Who scored? · ${teamName(goalEnrich.side)}`}
-            subtitle={`${gameMinuteLabel(match, enrichGoalEvent?.matchTimestamp ?? 0)}`}
-            color={teamColor(goalEnrich.side)}
+          <Sheet t={t} title={`Who scored the try? · ${teamName(tryEnrich.side)}`}
+            subtitle={`${gameMinuteLabel(match, tryEnrichEvent?.matchTimestamp ?? 0)}`}
+            color={teamColor(tryEnrich.side)}
             dismissable={false} closable={false}
             onClose={() => {}}>
             <div className="space-y-1.5 max-h-64 overflow-y-auto mb-4">
               {players.map(entry => {
-                const selected = enrichGoalEvent?.scorerPersonId === entry.personId
+                const selected = tryEnrichEvent?.scorerPersonId === entry.personId
                 return (
-                  <button key={entry.id} onClick={() => applyGoalAttribution(entry)}
+                  <button key={entry.id} onClick={() => applyTryScorer(entry)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${
                       selected ? 'bg-emerald-500/20 border-emerald-500/50' : t.neutralBtn
                     }`}>
@@ -1242,7 +1333,7 @@ export default function ScoreMatch() {
                 )
               })}
             </div>
-            <button onClick={() => applyGoalAttribution(null)}
+            <button onClick={() => applyTryScorer(null)}
               className={`w-full border font-bold text-sm rounded-xl py-3 transition-colors ${t.neutralBtn}`}>
               Unassigned
             </button>
@@ -1250,21 +1341,21 @@ export default function ScoreMatch() {
         )
       })()}
 
-      {/* Goal enrichment — step 3: assist attribution (scorer excluded) */}
-      {goalEnrich?.step === 'assist' && (() => {
-        const players = fixtureSidePlayers(goalEnrich.side)
-          .filter(p => p.personId !== goalEnrich.scorerPersonId)
+      {/* Try enrichment — step 4: conversion kicker */}
+      {tryEnrich?.step === 'kicker' && (() => {
+        const players = fixtureSidePlayers(tryEnrich.side)
+        const conversion = (match.scores ?? []).find(e => e.id === tryEnrich.conversionId)
         return (
-          <Sheet t={t} title={`Who assisted? · ${teamName(goalEnrich.side)}`}
-            subtitle={`${gameMinuteLabel(match, enrichGoalEvent?.matchTimestamp ?? 0)}`}
-            color={teamColor(goalEnrich.side)}
+          <Sheet t={t} title={`Who kicked the conversion? · ${teamName(tryEnrich.side)}`}
+            subtitle={`${gameMinuteLabel(match, conversion?.matchTimestamp ?? 0)}`}
+            color={teamColor(tryEnrich.side)}
             dismissable={false} closable={false}
             onClose={() => {}}>
             <div className="space-y-1.5 max-h-64 overflow-y-auto mb-4">
               {players.map(entry => {
-                const selected = enrichGoalEvent?.assistPersonId === entry.personId
+                const selected = conversion?.scorerPersonId === entry.personId
                 return (
-                  <button key={entry.id} onClick={() => applyGoalAssist(entry)}
+                  <button key={entry.id} onClick={() => applyConversionKicker(entry)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${
                       selected ? 'bg-emerald-500/20 border-emerald-500/50' : t.neutralBtn
                     }`}>
@@ -1282,9 +1373,66 @@ export default function ScoreMatch() {
                 )
               })}
             </div>
-            <button onClick={() => applyGoalAssist(null)}
+            <button onClick={() => applyConversionKicker(null)}
               className={`w-full border font-bold text-sm rounded-xl py-3 transition-colors ${t.neutralBtn}`}>
-              No assist
+              Unassigned
+            </button>
+          </Sheet>
+        )
+      })()}
+
+      {/* Kick — choose penalty / drop goal (the choice IS the points) */}
+      {pendingKick && (
+        <Sheet t={t} title={`Kick at goal · ${teamName(pendingKick.side)}`}
+          subtitle={`${gameMinuteLabel(match, pendingKick.matchTimestamp)}`}
+          color={teamColor(pendingKick.side)} onClose={() => setPendingKick(null)}>
+          <div className="space-y-2">
+            {KICK_TYPES.map(kt => (
+              <button key={kt.key} onClick={() => applyKickType(kt.key)} disabled={saving}
+                className="w-full flex items-center gap-3 px-4 rounded-xl border border-slate-300/30 font-bold text-sm hover:opacity-90 transition-opacity"
+                style={{ minHeight: 52 }}>
+                {kt.label}
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
+
+      {/* Kicker attribution for a penalty / drop goal */}
+      {kickEnrich && (() => {
+        const players = fixtureSidePlayers(kickEnrich.side)
+        const kickEvent = (match.scores ?? []).find(e => e.id === kickEnrich.eventId)
+        return (
+          <Sheet t={t} title={`Who kicked it? · ${teamName(kickEnrich.side)}`}
+            subtitle={`${SCORE_LABEL[kickEvent?.scoreType] ?? 'Kick'} · ${gameMinuteLabel(match, kickEvent?.matchTimestamp ?? 0)}`}
+            color={teamColor(kickEnrich.side)}
+            dismissable={false} closable={false}
+            onClose={() => {}}>
+            <div className="space-y-1.5 max-h-64 overflow-y-auto mb-4">
+              {players.map(entry => {
+                const selected = kickEvent?.scorerPersonId === entry.personId
+                return (
+                  <button key={entry.id} onClick={() => applyKickKicker(entry)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                      selected ? 'bg-emerald-500/20 border-emerald-500/50' : t.neutralBtn
+                    }`}>
+                    <span className={`font-mono text-sm font-black w-7 text-right shrink-0 tabular-nums ${
+                      selected ? 'text-emerald-600' : t.muted
+                    }`}>
+                      {entry.shirtNumber ?? '—'}
+                    </span>
+                    <PersonAvatar name={entry.personName} photoUrl={entry.photoUrl} size={28} />
+                    <span className="text-sm flex-1 truncate">{entry.personName}</span>
+                    {entry.isStarter && (
+                      <span className="text-emerald-500 text-[9px] font-bold shrink-0">★</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            <button onClick={() => applyKickKicker(null)}
+              className={`w-full border font-bold text-sm rounded-xl py-3 transition-colors ${t.neutralBtn}`}>
+              Unassigned
             </button>
           </Sheet>
         )
@@ -1296,23 +1444,23 @@ export default function ScoreMatch() {
           subtitle={`${gameMinuteLabel(match, pendingCard.matchTimestamp)}`}
           color={teamColor(pendingCard.side)} onClose={() => setPendingCard(null)}>
 
-          {pendingCard.cardType === 'green' ? (
-            /* Green-card duration step */
+          {pendingCard.cardType === 'yellow' ? (
+            /* Yellow-card sin-bin duration step */
             <>
               <div className="flex items-center gap-2 mb-3">
-                <span className="w-4 h-5 rounded-sm bg-emerald-500 shrink-0" />
-                <span className="font-bold text-sm">Green Card duration</span>
+                <span className="w-4 h-5 rounded-sm bg-yellow-400 shrink-0" />
+                <span className="font-bold text-sm">Sin-bin duration</span>
               </div>
               <div className="grid grid-cols-2 gap-2 mb-3">
-                {GREEN_DURATIONS.map(min => (
-                  <button key={min} onClick={() => writeCard('green', min)} disabled={saving}
+                {YELLOW_DURATIONS.map(min => (
+                  <button key={min} onClick={() => writeCard('yellow', min)} disabled={saving}
                     className={`flex items-center justify-center font-bold text-sm rounded-xl border border-slate-300/30 hover:opacity-90 transition-opacity ${t.neutralBtn}`}
                     style={{ minHeight: 52 }}>
-                    {min} min
+                    {min} min{min === 10 ? ' (XV)' : ' (7s)'}
                   </button>
                 ))}
               </div>
-              <button onClick={() => writeCard('green', null)} disabled={saving}
+              <button onClick={() => writeCard('yellow', null)} disabled={saving}
                 className={`w-full text-sm font-bold rounded-xl py-3 transition-colors ${t.muted} hover:opacity-70`}>
                 Skip — no duration
               </button>
@@ -1346,7 +1494,7 @@ export default function ScoreMatch() {
                     style={{ minHeight: 52 }}>
                     <span className={`w-4 h-5 rounded-sm ${c.dot}`} />
                     {c.label}
-                    {c.key === 'green' && <span className={`ml-auto text-[11px] ${t.muted}`}>Set duration →</span>}
+                    {c.key === 'yellow' && <span className={`ml-auto text-[11px] ${t.muted}`}>Set sin-bin →</span>}
                   </button>
                 ))}
               </div>
@@ -1366,23 +1514,23 @@ export default function ScoreMatch() {
             <div className={`text-xs ${t.muted} mt-1`}>Duration {formatClock(elapsedMs)} · This will update standings.</div>
           </div>
 
-          {/* Shootout — only offered on a drawn regulation score */}
+          {/* Place-kick competition — only offered on a level score (knockout decider) */}
           {(match.homeScore ?? 0) === (match.awayScore ?? 0) && (
             <div className={`mb-4 pt-4 border-t ${t.header}`}>
               <label className="flex items-center gap-2 cursor-pointer mb-3">
-                <input type="checkbox" checked={shootoutEnabled}
-                  onChange={e => setShootoutEnabled(e.target.checked)}
+                <input type="checkbox" checked={kickCompEnabled}
+                  onChange={e => setKickCompEnabled(e.target.checked)}
                   className="accent-emerald-600 w-4 h-4" />
-                <span className="text-sm font-semibold">Shootout?</span>
+                <span className="text-sm font-semibold">Place-kick competition?</span>
               </label>
-              {shootoutEnabled && (
+              {kickCompEnabled && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1 truncate`}>
                       {match.homeTeamName ?? 'Home'}
                     </div>
-                    <input type="number" min="0" max="99" value={shootoutHome}
-                      onChange={e => setShootoutHome(e.target.value)}
+                    <input type="number" min="0" max="99" value={kickCompHome}
+                      onChange={e => setKickCompHome(e.target.value)}
                       placeholder="0"
                       className={`w-full rounded-lg border px-3 py-2 text-center font-mono font-bold text-xl focus:outline-none focus:border-emerald-500 ${t.neutralBtn}`} />
                   </div>
@@ -1390,8 +1538,8 @@ export default function ScoreMatch() {
                     <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1 truncate`}>
                       {match.awayTeamName ?? 'Away'}
                     </div>
-                    <input type="number" min="0" max="99" value={shootoutAway}
-                      onChange={e => setShootoutAway(e.target.value)}
+                    <input type="number" min="0" max="99" value={kickCompAway}
+                      onChange={e => setKickCompAway(e.target.value)}
                       placeholder="0"
                       className={`w-full rounded-lg border px-3 py-2 text-center font-mono font-bold text-xl focus:outline-none focus:border-emerald-500 ${t.neutralBtn}`} />
                   </div>
@@ -1486,9 +1634,9 @@ export default function ScoreMatch() {
             <div className="font-mono font-black text-4xl tabular-nums mb-1">
               {match.homeScore ?? 0} — {match.awayScore ?? 0}
             </div>
-            {match.shootoutHome != null && match.shootoutAway != null && (
+            {match.kickCompHome != null && match.kickCompAway != null && (
               <div className={`text-sm font-mono ${t.muted} mb-1`}>
-                ({match.shootoutHome}–{match.shootoutAway} SO)
+                ({match.kickCompHome}–{match.kickCompAway} kicks)
               </div>
             )}
             <div className={`text-sm ${t.muted} mb-1`}>{match.homeTeamName} vs {match.awayTeamName}</div>
@@ -1497,11 +1645,11 @@ export default function ScoreMatch() {
               <button onClick={() => {
                 const hs = match.homeScore ?? 0
                 const as = match.awayScore ?? 0
-                const so = match.shootoutHome != null && match.shootoutAway != null
-                  ? ` (${match.shootoutHome}–${match.shootoutAway} SO)` : ''
+                const kc = match.kickCompHome != null && match.kickCompAway != null
+                  ? ` (${match.kickCompHome}–${match.kickCompAway} kicks)` : ''
                 const homeDisplay = match.homeOrgName ? `${match.homeOrgName} ${match.homeTeamName}` : (match.homeTeamName ?? "")
                 const awayDisplay = match.awayOrgName ? `${match.awayOrgName} ${match.awayTeamName}` : (match.awayTeamName ?? "")
-                const text = `Full time ⏱\n${homeDisplay} ${hs}–${as} ${awayDisplay}${so}`
+                const text = `Full time ⏱\n${homeDisplay} ${hs}–${as} ${awayDisplay}${kc}`
                 if (navigator.share) {
                   navigator.share({ title: 'Match result', text }).catch(() => {})
                 } else {
@@ -1888,11 +2036,11 @@ export default function ScoreMatch() {
             <div>
               <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1.5`}>Game type</div>
               <div className="grid grid-cols-2 gap-2">
-                {[{ v: false, label: 'Outdoor' }, { v: true, label: 'Indoor' }].map(opt => (
+                {[{ v: false, label: 'Fifteens (XV)' }, { v: true, label: 'Sevens (7s)' }].map(opt => (
                   <button type="button" key={opt.label}
-                    onClick={() => setEditForm(f => ({ ...f, indoor: opt.v }))}
+                    onClick={() => setEditForm(f => ({ ...f, sevens: opt.v }))}
                     className={`text-sm font-bold py-2.5 rounded-xl border transition-colors ${
-                      (editForm.indoor === true) === opt.v
+                      (editForm.sevens === true) === opt.v
                         ? 'bg-emerald-600 border-emerald-600 text-white'
                         : t.neutralBtn
                     }`}>
@@ -1903,13 +2051,13 @@ export default function ScoreMatch() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1.5`}>Periods</div>
+                <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1.5`}>Halves</div>
                 <input type="number" min="1" max="4" value={editForm.periods}
                   onChange={e => setEditForm(f => ({ ...f, periods: e.target.value }))}
                   className={`w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors ${t.neutralBtn}`} />
               </div>
               <div>
-                <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1.5`}>Period length (min)</div>
+                <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1.5`}>Half length (min)</div>
                 <input type="number" min="1" max="90" value={editForm.periodMinutes}
                   onChange={e => setEditForm(f => ({ ...f, periodMinutes: e.target.value }))}
                   className={`w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors ${t.neutralBtn}`} />
@@ -1950,8 +2098,9 @@ export default function ScoreMatch() {
 }
 
 // Match-result decision tree. The headline job is ENTERING a result for a game
-// that was played but not live-scored — score plus optional scorer attribution
-// (players credited, no fabricated minutes, no timeline). The other branches
+// that was played but not live-scored — points plus optional try counts (they
+// drive bonus points) and try-scorer attribution (players credited, no
+// fabricated minutes, no timeline). The other branches
 // cover games that didn't happen (awarded / not played) and abandonments.
 // Every action is reversible and audit-logged.
 function ResultSheet({
@@ -1964,11 +2113,14 @@ function ResultSheet({
   const [winScore, setWinScore]   = useState(numStr(wkDefault?.opposing, 5))
   const [loseScore, setLoseScore] = useState(numStr(wkDefault?.conceding, 0))
   const [reason, setReason] = useState('')
-  // Enter-result state: scores + one scorer row per goal (optional).
+  // Enter-result state: final points, optional try counts (they drive bonus
+  // points), and one optional try-scorer row per try.
   const [hs, setHs] = useState('')
   const [as, setAs] = useState('')
-  const [homeScorers, setHomeScorers] = useState([])   // [{ name, personId }]
-  const [awayScorers, setAwayScorers] = useState([])
+  const [hTries, setHTries] = useState('')
+  const [aTries, setATries] = useState('')
+  const [homeTryRows, setHomeTryRows] = useState([])   // [{ name, personId }]
+  const [awayTryRows, setAwayTryRows] = useState([])
 
   // The competition's default walkover score loads async — reflect it once here.
   useEffect(() => {
@@ -2018,7 +2170,7 @@ function ResultSheet({
         {!isFinal && (
           <button onClick={() => setMode('enter')} className={btn}>
             Enter final result
-            <span className={sub}>The game was played — type in the score (and scorers, if known). No live timeline is invented.</span>
+            <span className={sub}>The game was played — type in the score (and tries and scorers, if known). No live timeline is invented.</span>
           </button>
         )}
         {isFinal && (
@@ -2042,27 +2194,43 @@ function ResultSheet({
   if (mode === 'enter') {
     const validScore = hs !== '' && as !== '' && Number(hs) >= 0 && Number(as) >= 0
     function submit() {
-      const goals = [
-        ...homeScorers.filter(s => s.name).map(s => ({ side: 'home', scorerName: s.name, scorerPersonId: s.personId ?? null, assistName: s.assistName ?? null, assistPersonId: s.assistPersonId ?? null })),
-        ...awayScorers.filter(s => s.name).map(s => ({ side: 'away', scorerName: s.name, scorerPersonId: s.personId ?? null, assistName: s.assistName ?? null, assistPersonId: s.assistPersonId ?? null })),
+      const tries = [
+        ...homeTryRows.filter(r => r.name).map(r => ({ side: 'home', scorerName: r.name, scorerPersonId: r.personId ?? null })),
+        ...awayTryRows.filter(r => r.name).map(r => ({ side: 'away', scorerName: r.name, scorerPersonId: r.personId ?? null })),
       ]
-      onEnterResult({ homeScore: Number(hs), awayScore: Number(as), ...(goals.length ? { goals } : {}) })
+      onEnterResult({
+        homeScore: Number(hs), awayScore: Number(as),
+        homeTries: hTries === '' ? null : Number(hTries),
+        awayTries: aTries === '' ? null : Number(aTries),
+        ...(tries.length ? { tries } : {}),
+      })
     }
     return (
       <div className="space-y-3">
-        <p className={`text-sm ${t?.muted}`}>Type in the final score. Add scorers if you know them — they count toward player stats. No minute-by-minute timeline is created.</p>
+        <p className={`text-sm ${t?.muted}`}>Type in the final points. Add tries and try scorers if you know them — tries drive bonus points and scorers count toward player stats. No minute-by-minute timeline is created.</p>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <div className={`text-[10px] font-bold uppercase tracking-widest ${t?.muted} mb-1.5 truncate`}>{homeName || 'Home'}</div>
+            <div className={`text-[10px] font-bold uppercase tracking-widest ${t?.muted} mb-1.5 truncate`}>{homeName || 'Home'} points</div>
             <input type="number" min={0} inputMode="numeric" value={hs} onChange={e => setHs(e.target.value)} className={input} />
           </div>
           <div>
-            <div className={`text-[10px] font-bold uppercase tracking-widest ${t?.muted} mb-1.5 truncate`}>{awayName || 'Away'}</div>
+            <div className={`text-[10px] font-bold uppercase tracking-widest ${t?.muted} mb-1.5 truncate`}>{awayName || 'Away'} points</div>
             <input type="number" min={0} inputMode="numeric" value={as} onChange={e => setAs(e.target.value)} className={input} />
           </div>
         </div>
-        <ScorerRows t={t} label={homeName || 'Home'} score={Number(hs) || 0} players={match.homeLineup ?? []} rows={homeScorers} setRows={setHomeScorers} input={input} />
-        <ScorerRows t={t} label={awayName || 'Away'} score={Number(as) || 0} players={match.awayLineup ?? []} rows={awayScorers} setRows={setAwayScorers} input={input} />
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className={`text-[10px] font-bold uppercase tracking-widest ${t?.muted} mb-1.5 truncate`}>Tries (optional)</div>
+            <input type="number" min={0} inputMode="numeric" value={hTries} onChange={e => setHTries(e.target.value)} placeholder="?" className={input} />
+          </div>
+          <div>
+            <div className={`text-[10px] font-bold uppercase tracking-widest ${t?.muted} mb-1.5 truncate`}>Tries (optional)</div>
+            <input type="number" min={0} inputMode="numeric" value={aTries} onChange={e => setATries(e.target.value)} placeholder="?" className={input} />
+          </div>
+        </div>
+        <p className={`text-[11px] ${t?.muted}`}>Leave tries blank if unknown — a blank never counts as zero, it just means no try bonus can be awarded.</p>
+        <TryScorerRows t={t} label={homeName || 'Home'} tries={hTries === '' ? null : Number(hTries)} players={match.homeLineup ?? []} rows={homeTryRows} setRows={setHomeTryRows} input={input} />
+        <TryScorerRows t={t} label={awayName || 'Away'} tries={aTries === '' ? null : Number(aTries)} players={match.awayLineup ?? []} rows={awayTryRows} setRows={setAwayTryRows} input={input} />
         {error && <p className="text-red-500 text-sm">{error}</p>}
         <button onClick={submit} disabled={busy || !validScore} className={primary}>Save final result</button>
         <button onClick={() => setMode('menu')} className={btn}>Back</button>
@@ -2161,62 +2329,46 @@ function ResultSheet({
   )
 }
 
-// Scorer attribution rows for an entered result: one row per goal, each picked
-// from the team's LINEUP (profiled players only — no free-text names). A goal
-// with no scorer selected simply stays unattributed. `players` are the side's
-// lineup entries ({ personId, personName }).
-function ScorerRows({ t, label, score, players, rows, setRows, input }) {
-  if (score <= 0) return null
+// Try-scorer attribution rows for an entered result: one row per try, each
+// picked from the team's LINEUP (profiled players only — no free-text names).
+// A try with no scorer selected simply stays unattributed. `players` are the
+// side's lineup entries ({ personId, personName }). Rows are capped at the
+// entered try count when it is known.
+function TryScorerRows({ t, label, tries, players, rows, setRows, input }) {
+  if (tries === 0) return null
   const available = (players ?? []).filter(p => p.personId)
-  const canAdd = rows.length < score
+  const maxRows = tries ?? 15
+  const canAdd = rows.length < maxRows
   function setRow(i, patch) { setRows(prev => prev.map((r, j) => (j === i ? { ...r, ...patch } : r))) }
   function removeRow(i) { setRows(prev => prev.filter((_, j) => j !== i)) }
   return (
     <div>
-      <div className={`text-[10px] font-bold uppercase tracking-widest ${t?.muted} mb-1.5`}>{label} scorers (optional)</div>
+      <div className={`text-[10px] font-bold uppercase tracking-widest ${t?.muted} mb-1.5`}>{label} try scorers (optional)</div>
       {available.length === 0 ? (
         <p className={`text-[11px] ${t?.muted} leading-relaxed`}>
-          Add players to this team's lineup (in “Match Lineup”) to credit who scored — only players with a profile can be credited.
+          Add players to this team's lineup (in “Match Lineup”) to credit who scored the tries — only players with a profile can be credited.
         </p>
       ) : (
         <div className="space-y-1.5">
           {rows.map((row, i) => (
-            <div key={i} className="space-y-1">
-              <div className="flex items-center gap-1.5">
-                <select value={row.personId ?? ''} className={input + ' flex-1'}
-                  onChange={e => {
-                    const p = available.find(x => x.personId === e.target.value)
-                    // A scorer change invalidates a same-player assist selection.
-                    setRow(i, {
-                      personId: p?.personId ?? null, name: p?.personName ?? '',
-                      ...(row.assistPersonId && row.assistPersonId === p?.personId
-                        ? { assistPersonId: null, assistName: null } : {}),
-                    })
-                  }}>
-                  <option value="">Who scored?</option>
-                  {available.map(p => <option key={p.personId} value={p.personId}>{p.personName}</option>)}
-                </select>
-                <button onClick={() => removeRow(i)} className={`shrink-0 p-2 rounded-lg border ${t?.neutralBtn ?? 'border-slate-200'}`} title="Remove">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              {row.personId && available.length > 1 && (
-                <select value={row.assistPersonId ?? ''} className={input}
-                  onChange={e => {
-                    const p = available.find(x => x.personId === e.target.value)
-                    setRow(i, { assistPersonId: p?.personId ?? null, assistName: p?.personName ?? null })
-                  }}>
-                  <option value="">Assist — optional</option>
-                  {available.filter(p => p.personId !== row.personId).map(p =>
-                    <option key={p.personId} value={p.personId}>{p.personName}</option>)}
-                </select>
-              )}
+            <div key={i} className="flex items-center gap-1.5">
+              <select value={row.personId ?? ''} className={input + ' flex-1'}
+                onChange={e => {
+                  const p = available.find(x => x.personId === e.target.value)
+                  setRow(i, { personId: p?.personId ?? null, name: p?.personName ?? '' })
+                }}>
+                <option value="">Who scored the try?</option>
+                {available.map(p => <option key={p.personId} value={p.personId}>{p.personName}</option>)}
+              </select>
+              <button onClick={() => removeRow(i)} className={`shrink-0 p-2 rounded-lg border ${t?.neutralBtn ?? 'border-slate-200'}`} title="Remove">
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           ))}
           {canAdd && (
             <button onClick={() => setRows(prev => [...prev, { name: '', personId: null }])}
               className={`text-[11px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg border ${t?.neutralBtn ?? 'border-slate-200'}`}>
-              + Add scorer ({rows.length}/{score})
+              + Add try scorer{tries != null ? ` (${rows.length}/${tries})` : ''}
             </button>
           )}
         </div>

@@ -7,6 +7,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, auth, functions } from '../firebase'
 import { slugify, matchSlug as buildMatchSlug } from './slugify'
 import { periodLabels, DEFAULT_PERIODS, DEFAULT_PERIOD_MINUTES, DEFAULT_BREAK_MINUTES } from './matchClock'
+import { SCORE_POINTS, isTryEvent } from './rugbyScoring'
 import { generatedTeamName } from './teamNaming'
 import { defaultRulesForType, rulesHash } from './competitionRules'
 import { assertCanAdministerCompetition } from './competitionAuth'
@@ -79,7 +80,7 @@ export async function recordFixtureAudit(matchId, { eventType, method = null, be
   return Promise.all(writes)
 }
 
-// Client-generated id for an event inside the goals/cards arrays. Used to
+// Client-generated id for an event inside the scores/cards arrays. Used to
 // identify an entry for enrichment (goal type, scorer) and reversal.
 function eventId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
@@ -165,8 +166,8 @@ export async function createPerson(data) {
   return addDoc(collection(db, 'people'), {
     ...data,
     slug,
-    careerCaps: 0, careerGoals: 0,
-    careerCards: { green: 0, yellow: 0, red: 0 },
+    careerCaps: 0, careerTries: 0, careerPoints: 0,
+    careerCards: { yellow: 0, red: 0 },
     createdBy: uid(), createdAt: serverTimestamp(),
   })
 }
@@ -265,7 +266,7 @@ async function ensurePlayerSlice(match, side, person) {
     teamId, competitionId, season,
     organizationId: t.organizationId ?? null,
     shirtNumber: null, position: null, isCaptain: false,
-    caps: 0, goals: 0, assists: 0, cards: { green: 0, yellow: 0, red: 0 },
+    caps: 0, tries: 0, conversions: 0, penalties: 0, dropGoals: 0, points: 0, cards: { yellow: 0, red: 0 },
     competitionName: c.name ?? null,
     competitionSeason: c.season ?? null,
     competitionStatus: c.status ?? null,
@@ -515,7 +516,7 @@ export async function createTeam(orgData, displayName, options = {}) {
     ...(slug     ? { slug }     : {}),
     active: true,
     played: 0, won: 0, drawn: 0, lost: 0,
-    goalsFor: 0, goalsAgainst: 0, points: 0,
+    pointsFor: 0, pointsAgainst: 0, points: 0,
     createdBy: uid(), createdAt: serverTimestamp(),
   })
 }
@@ -628,8 +629,8 @@ export async function syncFixtureMembership(matchId, competitionId, { homeTeamId
 }
 
 // Switch a fixture's home and away teams. Swaps every denormalised identity
-// field, the score, any shootout, lineups, and flips the side on each recorded
-// goal/card so the result stays correct. Regenerates the match slug from the new
+// field, the score and try counts, any kick competition, lineups, and flips the
+// side on each recorded scoring event/card so the result stays correct. Regenerates the match slug from the new
 // orientation (so the public URL reflects it) and syncs the competition fixture
 // membership. Works before OR after scoring.
 export async function swapFixtureSides(matchId) {
@@ -662,13 +663,14 @@ export async function swapFixtureSides(matchId) {
     awayTeamSlug: m.homeTeamSlug ?? null,
     awayOrgId: m.homeOrgId ?? null, awayOrgName: m.homeOrgName ?? null, awayRegistered: !!m.homeRegistered,
     homeScore: m.awayScore ?? 0, awayScore: m.homeScore ?? 0,
-    goals: flipSide(m.goals ?? []), cards: flipSide(m.cards ?? []),
+    homeTries: m.awayTries ?? 0, awayTries: m.homeTries ?? 0,
+    scores: flipSide(m.scores ?? []), cards: flipSide(m.cards ?? []),
     matchSlug,
     updatedBy: uid(), updatedAt: serverTimestamp(),
   }
-  if (m.shootoutHome != null || m.shootoutAway != null) {
-    patch.shootoutHome = m.shootoutAway ?? null
-    patch.shootoutAway = m.shootoutHome ?? null
+  if (m.kickCompHome != null || m.kickCompAway != null) {
+    patch.kickCompHome = m.kickCompAway ?? null
+    patch.kickCompAway = m.kickCompHome ?? null
   }
   if (m.homeLineup !== undefined || m.awayLineup !== undefined) {
     patch.homeLineup = m.awayLineup ?? []
@@ -715,7 +717,7 @@ export async function assignPlayer(teamData, personData, { shirtNumber, position
     personSlug:    personData.slug ?? null,
     personName:    personData.fullName,
     shirtNumber, position, isCaptain,
-    caps: 0, goals: 0, assists: 0, cards: { green: 0, yellow: 0, red: 0 },
+    caps: 0, tries: 0, conversions: 0, penalties: 0, dropGoals: 0, points: 0, cards: { yellow: 0, red: 0 },
     competitionName:    null,
     competitionSeason:  null,
     competitionStatus:  null,
@@ -744,7 +746,7 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
   scheduledAt, pitch = '', season,
   periods = DEFAULT_PERIODS, periodMinutes = DEFAULT_PERIOD_MINUTES,
   breakMinutes = DEFAULT_BREAK_MINUTES,
-  indoor = false,
+  sevens = false,
 }) {
   if (!scheduledAt) throw new Error('scheduledAt is required')
   const baseSlug = buildMatchSlug(homeTeam.displayName, awayTeam.displayName)
@@ -778,14 +780,14 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
     awayOrgId:         awayTeam.organizationId ?? null,
     awayRegistered,
     ...(awayTeam.manualOpponentId ? { manualAwayOpponentId: awayTeam.manualOpponentId } : {}),
-    homeScore: 0, awayScore: 0,
+    homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
     periods: Number(periods) || DEFAULT_PERIODS,
     periodMinutes: Number(periodMinutes) || DEFAULT_PERIOD_MINUTES,
     breakMinutes: Array.isArray(breakMinutes) ? breakMinutes : DEFAULT_BREAK_MINUTES,
-    goals: [], cards: [], controlLog: [],
+    scores: [], cards: [], controlLog: [],
     startedAt: null, pausedAt: null, totalPausedMs: 0,
     nextPeriodIndex: 1,
-    scheduledAt, pitch, indoor: !!indoor, status: 'scheduled', tracked: false,
+    scheduledAt, pitch, sevens: !!sevens, status: 'scheduled', tracked: false,
     matchSlug,
     ...(seasonStr ? { season: seasonStr } : {}),
     createdBy: uid(), createdAt: serverTimestamp(),
@@ -831,8 +833,9 @@ export async function pauseMatch(id, { matchTimestamp = 0 } = {}) {
 }
 
 // Restart a match back to its un-started ("scheduled") state — for when "Start
-// match" was tapped by mistake. Clears the clock, period progress, score, goals,
-// cards, shootout and control log so it can be kicked off cleanly again.
+// match" was tapped by mistake. Clears the clock, half progress, score, tries,
+// scoring events, cards, kick competition and control log so it can be kicked
+// off cleanly again.
 export async function resetMatch(id) {
   const ref = doc(db, 'matches', id)
   const snap = await getDoc(ref)
@@ -843,9 +846,9 @@ export async function resetMatch(id) {
     status: 'scheduled', tracked: false,
     startedAt: null, pausedAt: null, totalPausedMs: 0, endedAt: null,
     currentPeriod: null, nextPeriodIndex: 1,
-    homeScore: 0, awayScore: 0,
-    goals: [], cards: [],
-    shootoutHome: null, shootoutAway: null,
+    homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
+    scores: [], cards: [],
+    kickCompHome: null, kickCompAway: null,
     controlLog: [],
     updatedBy: uid(), updatedAt: serverTimestamp(),
   })
@@ -887,31 +890,65 @@ export async function startPeriod(id, { matchTimestamp = 0, period, index, pause
   })
 }
 
-// ── Goals ─────────────────────────────────────────────────────────────────
-// First tap creates a complete, active goal event (Open Play default) and
-// increments the score in a single atomic write. Enrichment follows.
+// ── Scoring events ────────────────────────────────────────────────────────
+// A rugby score is typed at capture — the type IS the point value (try 5,
+// conversion 2, penalty 3, drop goal 3, penalty try 7), so the first tap
+// creates a complete, active event and increments the score by the type's
+// points in a single atomic write. Tries additionally bump the side's try
+// counter (standings read it for bonus points). Attribution follows as
+// enrichment.
 
-export async function addGoal(matchId, side, { matchTimestamp = 0 } = {}) {
+export async function addScore(matchId, side, { matchTimestamp = 0, scoreType = 'try', convertedTryId = null } = {}) {
+  const points = SCORE_POINTS[scoreType]
+  if (points == null) throw new Error(`Unknown score type: ${scoreType}`)
   const scoreField = side === 'home' ? 'homeScore' : 'awayScore'
+  const triesField = side === 'home' ? 'homeTries' : 'awayTries'
   const id = eventId()
   const event = {
     id, side, matchTimestamp,
-    goalType: 'open', scorerName: null, scorerPlayerId: null,
-    assistName: null, assistPersonId: null,
+    scoreType, points,
+    scorerName: null, scorerPersonId: null,
+    ...(convertedTryId ? { convertedTryId } : {}),
     status: 'active', createdBy: uid(), createdAt: Date.now(),
   }
   await updateDoc(doc(db, 'matches', matchId), {
-    [scoreField]: increment(1),
-    goals: arrayUnion(event),
+    [scoreField]: increment(points),
+    ...(isTryEvent(event) ? { [triesField]: increment(1) } : {}),
+    scores: arrayUnion(event),
     updatedBy: uid(), updatedAt: serverTimestamp(),
   })
   return id
 }
 
-// Enrich an existing goal (type and/or scorer). Replaces the array entry by id.
-export async function enrichGoal(matchId, eventId, patch, currentGoals) {
-  const goals = (currentGoals ?? []).map(g => g.id === eventId ? { ...g, ...patch } : g)
-  return updateDoc(doc(db, 'matches', matchId), { goals, updatedBy: uid(), updatedAt: serverTimestamp() })
+// Enrich an existing scoring event (scorer/kicker attribution). Replaces the
+// array entry by id. Never changes the type or points — see changeScoreType.
+export async function enrichScore(matchId, eventId, patch, currentScores) {
+  const scores = (currentScores ?? []).map(e => e.id === eventId ? { ...e, ...patch } : e)
+  return updateDoc(doc(db, 'matches', matchId), { scores, updatedBy: uid(), updatedAt: serverTimestamp() })
+}
+
+// Correct a scoring event's type (e.g. a try upgraded to a penalty try). The
+// score total and try counter are adjusted by the DELTA between the old and new
+// point values in the same atomic write, so the running score stays true.
+export async function changeScoreType(matchId, eventId, newType, currentScores) {
+  const newPoints = SCORE_POINTS[newType]
+  if (newPoints == null) throw new Error(`Unknown score type: ${newType}`)
+  const scores = currentScores ?? []
+  const target = scores.find(e => e.id === eventId)
+  if (!target || target.status === 'reversed') return { ok: false, reason: 'not-found' }
+  if (target.scoreType === newType) return { ok: true }
+  const oldPoints = Number(target.points ?? SCORE_POINTS[target.scoreType] ?? 0)
+  const scoreField = target.side === 'home' ? 'homeScore' : 'awayScore'
+  const triesField = target.side === 'home' ? 'homeTries' : 'awayTries'
+  const triesDelta = (isTryEvent({ scoreType: newType }) ? 1 : 0) - (isTryEvent(target) ? 1 : 0)
+  const updated = scores.map(e => e.id === eventId ? { ...e, scoreType: newType, points: newPoints } : e)
+  await updateDoc(doc(db, 'matches', matchId), {
+    scores: updated,
+    [scoreField]: increment(newPoints - oldPoints),
+    ...(triesDelta !== 0 ? { [triesField]: increment(triesDelta) } : {}),
+    updatedBy: uid(), updatedAt: serverTimestamp(),
+  })
+  return { ok: true }
 }
 
 // ── Cards ─────────────────────────────────────────────────────────────────
@@ -938,35 +975,39 @@ export async function enrichCard(matchId, eventId, patch, currentCards) {
 }
 
 // ── Event reversal (never delete) ────────────────────────────────────────────
-// Marks an event status='reversed' with audit fields. For goals, decrements the
-// score. Reversed events are hidden from public/scorer views but kept for audit.
+// Marks an event status='reversed' with audit fields. For scoring events,
+// decrements the score by the event's points (and the try counter for tries).
+// Reversed events are hidden from public/scorer views but kept for audit.
 
-export async function reverseGoal(matchId, eventId, currentGoals) {
-  const goals = currentGoals ?? []
-  const target = goals.find(g => g.id === eventId)
+export async function reverseScore(matchId, eventId, currentScores) {
+  const scores = currentScores ?? []
+  const target = scores.find(e => e.id === eventId)
   if (!target || target.status === 'reversed') return { ok: false, reason: 'not-found' }
+  const points = Number(target.points ?? SCORE_POINTS[target.scoreType] ?? 0)
   const scoreField = target.side === 'home' ? 'homeScore' : 'awayScore'
+  const triesField = target.side === 'home' ? 'homeTries' : 'awayTries'
 
   // Data-integrity guard: a reversal must never drive a scoreline negative.
   // Read the authoritative current score (served from the offline cache when
   // disconnected) and abort if decrementing would produce an invalid value.
   const snap = await getDoc(doc(db, 'matches', matchId))
   const current = snap.exists() ? Number(snap.data()[scoreField] ?? 0) : 0
-  if (current <= 0) {
+  if (current < points) {
     console.warn(
-      `[reverseGoal] aborted: ${scoreField} is already ${current}; reversing goal ` +
-      `${eventId} on match ${matchId} would produce a negative score. The score ` +
-      `was left unchanged and the goal was not reversed.`
+      `[reverseScore] aborted: ${scoreField} is ${current}; reversing event ` +
+      `${eventId} (${points} pts) on match ${matchId} would produce a negative ` +
+      `score. The score was left unchanged and the event was not reversed.`
     )
     return { ok: false, reason: 'negative-score' }
   }
 
-  const updated = goals.map(g => g.id === eventId
-    ? { ...g, status: 'reversed', reversedBy: uid(), reversedAt: Date.now() }
-    : g)
+  const updated = scores.map(e => e.id === eventId
+    ? { ...e, status: 'reversed', reversedBy: uid(), reversedAt: Date.now() }
+    : e)
   await updateDoc(doc(db, 'matches', matchId), {
-    goals: updated,
-    [scoreField]: increment(-1),
+    scores: updated,
+    [scoreField]: increment(-points),
+    ...(isTryEvent(target) ? { [triesField]: increment(-1) } : {}),
     updatedBy: uid(), updatedAt: serverTimestamp(),
   })
   return { ok: true }
@@ -1021,12 +1062,17 @@ export async function finalizeMatch(matchId) {
 // `method` records HOW the result was reached for the audit trail:
 //   'submitted'      — entered directly (Path D, or a never-tracked sweep)
 //   'admin_approved' — confirmed from the awaiting-result queue
-// Goal/card events supplied by the caller (§D: submit-result stat parity) are
+// Try/card events supplied by the caller (§D: submit-result stat parity) are
 // written to the match doc for untracked fixtures. Stats themselves are derived
 // from that timeline by the finalisation trigger — the client writes no stats.
+// Try COUNTS (homeTries/awayTries) are captured separately from try scorer
+// attribution: the count drives bonus points and may be known even when the
+// scorers are not. An omitted count stays unknown (null) — it never defaults
+// to zero, so standings will not silently deny a try bonus.
 export async function submitFixtureResult(matchId, {
   homeScore, awayScore, method = 'submitted',
-  goals: submittedGoals = null,
+  homeTries = null, awayTries = null,
+  tries: submittedTries = null,
   cards: submittedCards = null,
 } = {}) {
   const snap = await getDoc(doc(db, 'matches', matchId))
@@ -1045,14 +1091,12 @@ export async function submitFixtureResult(matchId, {
   // minute is not, and the platform never fabricates a time. Stats count them
   // (the stats engine reads names, not timestamps); the public timeline shows
   // them without a minute label.
-  const goalEvents = (!m.tracked && submittedGoals)
-    ? submittedGoals.map(g => ({
-        id: eventId(), side: g.side, matchTimestamp: null,
-        goalType: g.goalType || 'open',
-        scorerName: g.scorerName || null,
-        scorerPersonId: g.scorerPersonId || null,
-        assistName: g.assistName || null,
-        assistPersonId: g.assistPersonId || null,
+  const tryEvents = (!m.tracked && submittedTries)
+    ? submittedTries.map(t => ({
+        id: eventId(), side: t.side, matchTimestamp: null,
+        scoreType: 'try', points: SCORE_POINTS.try,
+        scorerName: t.scorerName || null,
+        scorerPersonId: t.scorerPersonId || null,
         status: 'active', createdBy: uid(), createdAt: Date.now(),
       }))
     : null
@@ -1066,15 +1110,31 @@ export async function submitFixtureResult(matchId, {
       }))
     : null
 
+  const parseTries = v => {
+    if (v == null || v === '') return null
+    const n = Number(v)
+    return Number.isFinite(n) && n >= 0 ? n : null
+  }
+  const ht = parseTries(homeTries)
+  const at = parseTries(awayTries)
+
   await updateDoc(doc(db, 'matches', matchId), {
     status: 'final', homeScore: hs, awayScore: as,
+    // Tracked matches keep their live-maintained counters unless explicitly
+    // corrected. Untracked submissions ALWAYS write the counter — the entered
+    // number, or null for "not captured" (overriding the doc's created-at-0
+    // default, which would otherwise masquerade as a known zero and silently
+    // deny a try bonus).
+    ...(m.tracked
+      ? { ...(ht != null ? { homeTries: ht } : {}), ...(at != null ? { awayTries: at } : {}) }
+      : { homeTries: ht, awayTries: at }),
     // An entered result stays labelled 'submitted' even when scorers were
     // attributed — only a live-scored match is 'tracked'. The public page uses
     // this to explain the absence of a minute-by-minute timeline.
     resultSource: m.tracked ? 'tracked' : 'submitted',
     endedAt: serverTimestamp(), pausedAt: null,
     controlLog: arrayUnion(controlEntry('match_end', null, 0)),
-    ...(goalEvents ? { goals: goalEvents } : {}),
+    ...(tryEvents ? { scores: tryEvents } : {}),
     ...(cardEvents ? { cards: cardEvents } : {}),
     updatedBy: uid(), updatedAt: serverTimestamp(),
   })
@@ -1092,7 +1152,7 @@ export async function submitFixtureResult(matchId, {
 // Edit the score of an already-Final fixture (spec §6 — results stay editable;
 // the audit log is what makes open editing safe). Standings recompute on read,
 // so an edit can never double-count.
-export async function editFinalResult(matchId, { homeScore, awayScore } = {}) {
+export async function editFinalResult(matchId, { homeScore, awayScore, homeTries, awayTries } = {}) {
   const snap = await getDoc(doc(db, 'matches', matchId))
   if (!snap.exists()) throw new Error('Match not found')
   const m = snap.data()
@@ -1100,9 +1160,18 @@ export async function editFinalResult(matchId, { homeScore, awayScore } = {}) {
   if (!Number.isFinite(hs) || !Number.isFinite(as) || hs < 0 || as < 0) {
     throw new Error('Enter a valid score for both teams.')
   }
+  const parseTries = v => {
+    if (v == null || v === '') return undefined
+    const n = Number(v)
+    return Number.isFinite(n) && n >= 0 ? n : undefined
+  }
+  const ht = parseTries(homeTries)
+  const at = parseTries(awayTries)
   const before = { status: m.status, homeScore: m.homeScore ?? null, awayScore: m.awayScore ?? null }
   await updateDoc(doc(db, 'matches', matchId), {
     homeScore: hs, awayScore: as,
+    ...(ht !== undefined ? { homeTries: ht } : {}),
+    ...(at !== undefined ? { awayTries: at } : {}),
     updatedBy: uid(), updatedAt: serverTimestamp(),
   })
   await recordFixtureAudit(matchId, {
@@ -1170,14 +1239,18 @@ function outcomeAudit(competitionId, matchId, eventType, before, after, reason) 
 // A snapshot of the current result state, stored on the outcome so a revert
 // restores the fixture exactly.
 function prevSnapshot(m) {
-  return { status: m.status ?? null, homeScore: m.homeScore ?? 0, awayScore: m.awayScore ?? 0 }
+  return {
+    status: m.status ?? null,
+    homeScore: m.homeScore ?? 0, awayScore: m.awayScore ?? 0,
+    homeTries: m.homeTries ?? 0, awayTries: m.awayTries ?? 0,
+  }
 }
 
 // Not played — festival/friendly with no consequence. No score, no log, no stats.
 export async function setFixtureNotPlayed(matchId, { reason = null } = {}) {
   const { ref, m } = await readMatchForOutcome(matchId)
   const outcome = { kind: 'not_played', flag: null, prev: prevSnapshot(m), reason: reason || null, by: uid(), at: Date.now() }
-  await updateDoc(ref, { status: 'final', homeScore: 0, awayScore: 0, outcome, updatedBy: uid(), updatedAt: serverTimestamp() })
+  await updateDoc(ref, { status: 'final', homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0, outcome, updatedBy: uid(), updatedAt: serverTimestamp() })
   await outcomeAudit(m.competitionId, matchId, 'fixture_not_played', prevSnapshot(m), { kind: 'not_played' }, reason)
 }
 
@@ -1190,26 +1263,26 @@ export async function setFixtureWalkover(matchId, { kind = 'walkover', awardedTo
   const homeScore = Number(home) || 0
   const awayScore = Number(away) || 0
   const outcome = { kind, flag: 'awarded', awardedTo, prev: prevSnapshot(m), reason: reason || null, by: uid(), at: Date.now() }
-  await updateDoc(ref, { status: 'final', homeScore, awayScore, outcome, updatedBy: uid(), updatedAt: serverTimestamp() })
+  await updateDoc(ref, { status: 'final', homeScore, awayScore, homeTries: 0, awayTries: 0, outcome, updatedBy: uid(), updatedAt: serverTimestamp() })
   await outcomeAudit(m.competitionId, matchId, `fixture_${kind}`, prevSnapshot(m), { kind, awardedTo, homeScore, awayScore }, reason)
 }
 
 // Abandon — freeze the current score as a stopped-attempt record, flag the
-// timeline's goals/cards as an abandoned attempt, reset the live slot to 0-0 and
+// timeline's scoring events/cards as an abandoned attempt, reset the live slot to 0-0 and
 // return the fixture to Scheduled to await a replay. Nothing counts until the
 // replay finalises (or the frozen score is let-stand).
 export async function abandonMatch(matchId, { minute = 0, reason = null } = {}) {
   const { ref, m } = await readMatchForOutcome(matchId)
-  const frozen = { home: m.homeScore ?? 0, away: m.awayScore ?? 0, minute: Number(minute) || 0 }
-  const goals = (m.goals ?? []).map(g => (g.status === 'reversed' ? g : { ...g, abandonedAttempt: true }))
+  const frozen = { home: m.homeScore ?? 0, away: m.awayScore ?? 0, homeTries: m.homeTries ?? 0, awayTries: m.awayTries ?? 0, minute: Number(minute) || 0 }
+  const scores = (m.scores ?? []).map(e => (e.status === 'reversed' ? e : { ...e, abandonedAttempt: true }))
   const cards = (m.cards ?? []).map(c => (c.status === 'reversed' ? c : { ...c, abandonedAttempt: true }))
   const outcome = { kind: 'abandoned', flag: 'frozen', frozen, prev: prevSnapshot(m), reason: reason || null, by: uid(), at: Date.now() }
   await updateDoc(ref, {
     status: 'scheduled', tracked: false,
-    homeScore: 0, awayScore: 0,
+    homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
     startedAt: null, pausedAt: null, totalPausedMs: 0, endedAt: null,
     currentPeriod: null, nextPeriodIndex: 1,
-    goals, cards,
+    scores, cards,
     controlLog: arrayUnion(controlEntry('abandoned', null, Number(minute) || 0)),
     outcome,
     updatedBy: uid(), updatedAt: serverTimestamp(),
@@ -1227,26 +1300,32 @@ export async function letAbandonedStand(matchId, { reason = null } = {}) {
   const home = o.frozen?.home ?? 0
   const away = o.frozen?.away ?? 0
   const outcome = { ...o, flag: 'final', standBy: uid(), standAt: Date.now(), reason: reason || o.reason || null }
-  await updateDoc(ref, { status: 'final', homeScore: home, awayScore: away, outcome, updatedBy: uid(), updatedAt: serverTimestamp() })
+  await updateDoc(ref, {
+    status: 'final', homeScore: home, awayScore: away,
+    homeTries: o.frozen?.homeTries ?? 0, awayTries: o.frozen?.awayTries ?? 0,
+    outcome, updatedBy: uid(), updatedAt: serverTimestamp(),
+  })
   await outcomeAudit(m.competitionId, matchId, 'fixture_let_stand', { kind: 'abandoned', flag: 'frozen', frozen: o.frozen }, { flag: 'final', homeScore: home, awayScore: away }, reason)
 }
 
 // Revert any outcome — restore the fixture to its pre-outcome state. Un-flags any
-// abandoned-attempt goals/cards. Organiser/admin only, audited.
+// abandoned-attempt scoring events/cards. Organiser/admin only, audited.
 export async function revertFixtureOutcome(matchId, { reason = null } = {}) {
   const { ref, m } = await readMatchForOutcome(matchId)
   const o = m.outcome
   if (!o || !o.kind) throw new Error('Fixture has no outcome to revert.')
-  const prev = o.prev ?? { status: 'scheduled', homeScore: 0, awayScore: 0 }
+  const prev = o.prev ?? { status: 'scheduled', homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0 }
   const patch = {
     status: prev.status ?? 'scheduled',
     homeScore: prev.homeScore ?? 0,
     awayScore: prev.awayScore ?? 0,
+    homeTries: prev.homeTries ?? 0,
+    awayTries: prev.awayTries ?? 0,
     outcome: deleteField(),
     updatedBy: uid(), updatedAt: serverTimestamp(),
   }
   if (o.kind === 'abandoned') {
-    patch.goals = (m.goals ?? []).map(({ abandonedAttempt, ...g }) => g)
+    patch.scores = (m.scores ?? []).map(({ abandonedAttempt, ...e }) => e)
     patch.cards = (m.cards ?? []).map(({ abandonedAttempt, ...c }) => c)
   }
   await updateDoc(ref, patch)
@@ -1404,8 +1483,8 @@ export async function createChildPlayerProfile(data, relationship = 'guardian', 
     slug,
     roles: ['player'],
     ...control,
-    careerCaps: 0, careerGoals: 0,
-    careerCards: { green: 0, yellow: 0, red: 0 },
+    careerCaps: 0, careerTries: 0, careerPoints: 0,
+    careerCards: { yellow: 0, red: 0 },
     // Consent record — immutable after creation (firestore.rules), queryable.
     consentGiven: true,
     consentTextVersion: PLAYER_CONSENT_VERSION,
@@ -1742,7 +1821,7 @@ export async function generateRoundRobinFixtures(competitionId, teams, options =
     poolId = null,
     ownerOrgId = null,
     competitionSlug = null,
-    indoor = false,
+    sevens = false,
   } = options
 
   const pairs = balancedRoundRobinPairs(teams, doubleRoundRobin)
@@ -1773,14 +1852,14 @@ export async function generateRoundRobinFixtures(competitionId, teams, options =
       awayOrgId:         away.organizationId ?? null,
       awayOrgName:       away.orgName       || null,
       awayRegistered:    !!away.organizationId,
-      homeScore: 0, awayScore: 0,
+      homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
       periods:       Number(periods)       || DEFAULT_PERIODS,
       periodMinutes: Number(periodMinutes) || DEFAULT_PERIOD_MINUTES,
       breakMinutes:  Array.isArray(breakMinutes) ? breakMinutes : DEFAULT_BREAK_MINUTES,
-      goals: [], cards: [], controlLog: [],
+      scores: [], cards: [], controlLog: [],
       startedAt: null, pausedAt: null, totalPausedMs: 0,
       nextPeriodIndex: 1,
-      scheduledAt: null, pitch: '', indoor: !!indoor, status: 'scheduled', tracked: false,
+      scheduledAt: null, pitch: '', sevens: !!sevens, status: 'scheduled', tracked: false,
       matchSlug,
       ...(seasonStr ? { season: seasonStr } : {}),
       ...(competitionSlug && seasonStr ? { competitionSlug, competitionSeason: seasonStr } : {}),
@@ -1798,10 +1877,12 @@ export async function generateRoundRobinFixtures(competitionId, teams, options =
 
   return createdIds
 }
-export async function recordShootout(matchId, shootoutHome, shootoutAway) {
+// Place-kick competition — the decider when a knockout match is still level
+// after regulation (and any extra time). Stored beside the score, never in it.
+export async function recordKickComp(matchId, kickCompHome, kickCompAway) {
   return updateDoc(doc(db, 'matches', matchId), {
-    shootoutHome: Number(shootoutHome),
-    shootoutAway: Number(shootoutAway),
+    kickCompHome: Number(kickCompHome),
+    kickCompAway: Number(kickCompAway),
     updatedBy: uid(), updatedAt: serverTimestamp(),
   })
 }
@@ -2241,10 +2322,10 @@ export async function createPlayoffHoldingFixtures(competition, games, format) {
       homeOrgId: null, homeOrgName: null, homeRegistered: false,
       awayTeamId: null, awayTeamName: g.awayName, awayTeamShortCode: null, awayTeamColor: null,
       awayOrgId: null, awayOrgName: null, awayRegistered: false,
-      homeScore: 0, awayScore: 0,
+      homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
       periods: Number(format.periods), periodMinutes: Number(format.periodMinutes),
       breakMinutes: Array.isArray(format.breakMinutes) ? format.breakMinutes : DEFAULT_BREAK_MINUTES,
-      goals: [], cards: [], controlLog: [],
+      scores: [], cards: [], controlLog: [],
       startedAt: null, pausedAt: null, totalPausedMs: 0, nextPeriodIndex: 1,
       scheduledAt: null, pitch: '', status: 'scheduled', tracked: false,
       matchSlug,
@@ -2340,7 +2421,7 @@ export async function generatePoolFixtures(competitionId, poolId, options = {}) 
     breakMinutes  = DEFAULT_BREAK_MINUTES,
     ownerOrgId    = null,
     scheduleConfig = null,
-    indoor        = false,
+    sevens        = false,
   } = options
 
   const competition = await assertCompetitionAdmin(competitionId)
@@ -2422,16 +2503,16 @@ export async function generatePoolFixtures(competitionId, poolId, options = {}) 
       awayOrgId:         null,
       awayRegistered:    !!awaySlot.teamId,
       awaySlotId:        awaySlot.slotId,
-      homeScore: 0, awayScore: 0,
+      homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
       isBye: false,
       periods:       Number(periods)       || DEFAULT_PERIODS,
       periodMinutes: Number(periodMinutes) || DEFAULT_PERIOD_MINUTES,
       breakMinutes:  Array.isArray(breakMinutes) ? breakMinutes : DEFAULT_BREAK_MINUTES,
-      goals: [], cards: [], controlLog: [],
+      scores: [], cards: [], controlLog: [],
       startedAt: null, pausedAt: null, totalPausedMs: 0, nextPeriodIndex: 1,
       scheduledAt,
       pitch,
-      indoor: !!indoor,
+      sevens: !!sevens,
       status: 'scheduled', tracked: false,
       ...(seasonStr ? { season: seasonStr } : {}),
       createdBy: uid(), createdAt: serverTimestamp(),
@@ -2538,7 +2619,7 @@ export async function finalizePool(competitionId, poolId) {
 // callable `recalculateCompetitionStats` (functions/index.js), which runs the
 // SAME recompute-from-history engine the finalisation trigger uses — there is no
 // separate client-side replay. The backend reads the competition's Final
-// fixtures and rebuilds its `players` slices (caps/goals/cards) with idempotent
+// fixtures and rebuilds its `players` slices (caps/tries/points/cards) with idempotent
 // SET writes. Career totals are cross-competition and are NOT touched here; they
 // refresh on the nightly wholesale run (dailyCareerStatsRecompute).
 // Returns { matchCount, playerCount }.

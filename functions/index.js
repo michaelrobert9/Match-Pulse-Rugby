@@ -565,7 +565,7 @@ exports.dailyFixtureSweep = onSchedule(
 
 // ── Stats: recompute-from-history ──────────────────────────────────────────────
 //
-// Stats are ALWAYS derived from match history (lineups, goals, cards), never
+// Stats are ALWAYS derived from match history (lineups, scoring events, cards), never
 // trusted as stored state. One rebuild engine (functions/statsEngine.js), two
 // triggers with different scope:
 //   • Competition slices — rebuilt the moment a fixture is finalised or its
@@ -582,7 +582,9 @@ function statsRelevantChanged(before, after) {
   const j = v => JSON.stringify(v ?? null)
   return before.homeScore !== after.homeScore
     || before.awayScore !== after.awayScore
-    || j(before.goals)      !== j(after.goals)
+    || before.homeTries !== after.homeTries
+    || before.awayTries !== after.awayTries
+    || j(before.scores)     !== j(after.scores)
     || j(before.cards)      !== j(after.cards)
     || j(before.homeLineup) !== j(after.homeLineup)
     || j(before.awayLineup) !== j(after.awayLineup)

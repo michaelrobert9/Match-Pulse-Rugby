@@ -10,15 +10,18 @@ import {
   knockoutResult, formatScoreline, SLOT_STATUS,
 } from '../src/lib/competitionStructure.js'
 
-const POINTS = { win: 3, draw: 1, loss: 0 }
+const POINTS = { win: 4, draw: 2, loss: 0 }
+// Bonus points off for these structural tests — the bonus system itself is
+// covered in test-standings.mjs.
+const BONUS_OFF = { tryBonus: false, losingBonus: false }
 const TIE_BREAKERS = [
   { key: 'points',              direction: 'desc' },
   { key: 'headToHeadMiniTable', direction: 'desc' },
-  { key: 'goalDifference',      direction: 'desc' },
-  { key: 'goalsFor',            direction: 'desc' },
+  { key: 'pointsDifference',    direction: 'desc' },
+  { key: 'pointsFor',           direction: 'desc' },
   { key: 'manualDecision',      direction: null   },
 ]
-const comp = () => ({ id: 'c1', rules: { points: POINTS, tieBreakers: TIE_BREAKERS } })
+const comp = () => ({ id: 'c1', rules: { points: POINTS, bonusPoints: BONUS_OFF, tieBreakers: TIE_BREAKERS } })
 const member = (teamId, status = 'accepted') => ({ teamId, status, displaySnapshot: { teamName: teamId } })
 const match = (id, h, a, hs, as, status = 'final', extra = {}) =>
   ({ id, homeTeamId: h, awayTeamId: a, homeScore: hs, awayScore: as, status, cards: [], ...extra })
@@ -34,9 +37,9 @@ test('Pool standings: only that pool\'s fixtures count', () => {
     comp(),
     [member('A'), member('B')],
     [fixture('m1', 'A', 'B')],
-    [match('m1', 'A', 'B', 3, 1)],
+    [match('m1', 'A', 'B', 24, 12)],
   )
-  assert.equal(row(res, 'A').Pts, 3)
+  assert.equal(row(res, 'A').Pts, 4)
   assert.equal(row(res, 'A').pos, 1)
   assert.equal(row(res, 'B').Pts, 0)
   assert.equal(res.manualDecisionRequired.length, 0)
@@ -64,18 +67,18 @@ test('Pool standings: countsTowardStandings=false ignored', () => {
   assert.equal(row(res, 'B').P, 0)
 })
 
-test('Pool standings: shootout does NOT change a pool draw', () => {
-  // Drawn regulation 2-2 with a shootout — pool treats it as a draw, 1pt each,
-  // and GF/GA reflect only regulation goals.
+test('Pool standings: a place-kick competition does NOT change a pool draw', () => {
+  // Drawn 17-17 with a kick competition — the pool log treats it as a draw,
+  // 2pts each, and PF/PA reflect only match points.
   const res = computePoolStandings(
     comp(),
     [member('A'), member('B')],
     [fixture('m1', 'A', 'B')],
-    [match('m1', 'A', 'B', 2, 2, 'final', { shootoutHome: 4, shootoutAway: 3 })],
+    [match('m1', 'A', 'B', 17, 17, 'final', { kickCompHome: 4, kickCompAway: 3 })],
   )
-  assert.equal(row(res, 'A').Pts, 1); assert.equal(row(res, 'A').D, 1)
-  assert.equal(row(res, 'B').Pts, 1); assert.equal(row(res, 'B').D, 1)
-  assert.equal(row(res, 'A').GF, 2); assert.equal(row(res, 'A').GA, 2)
+  assert.equal(row(res, 'A').Pts, 2); assert.equal(row(res, 'A').D, 1)
+  assert.equal(row(res, 'B').Pts, 2); assert.equal(row(res, 'B').D, 1)
+  assert.equal(row(res, 'A').PF, 17); assert.equal(row(res, 'A').PA, 17)
 })
 
 test('Pool standings: unresolved tie flags MANUAL DECISION REQUIRED', () => {
@@ -112,13 +115,13 @@ test('Pool standings: non-final fixtures are excluded', () => {
     comp(),
     [member('A'), member('B')],
     [fixture('m1', 'A', 'B'), fixture('m2', 'B', 'A')],
-    [match('m1', 'A', 'B', 2, 0), match('m2', 'B', 'A', 9, 0, 'live')],
+    [match('m1', 'A', 'B', 12, 0), match('m2', 'B', 'A', 50, 0, 'live')],
     { poolTeamIds: ['A', 'B'] },
   )
   assert.equal(row(res, 'A').P, 1)
   assert.equal(row(res, 'B').P, 1)
-  assert.equal(row(res, 'B').GF, 0)          // live goals never counted
-  assert.equal(row(res, 'A').Pts, 3)
+  assert.equal(row(res, 'B').PF, 0)          // live points never counted
+  assert.equal(row(res, 'A').Pts, 4)
 })
 
 test('Manual placement: resolves a tied pool and clears the flag', () => {
@@ -202,34 +205,34 @@ test('Festival stats: rows in membership order, NO position, NO points/sort', ()
     comp(),
     [member('A'), member('B')],
     [fixture('m1', 'A', 'B')],
-    [match('m1', 'A', 'B', 0, 9)],
+    [match('m1', 'A', 'B', 0, 33)],
   )
   assert.deepEqual(stats.map(s => s.teamId), ['A', 'B'])      // membership order preserved
   assert.equal(stats[0].pos, undefined)                        // no position column
   assert.equal(stats[0].Pts, undefined)                        // no points
-  assert.equal(stats[1].GF, 9)                                 // stats still accumulate
-  assert.equal(stats[0].GA, 9)
+  assert.equal(stats[1].PF, 33)                                // stats still accumulate
+  assert.equal(stats[0].PA, 33)
 })
 
 // ── Knockout: scoreline + result derivation ────────────────────────────────
 
-test('formatScoreline: plain and shootout forms', () => {
-  assert.equal(formatScoreline({ homeScore: 3, awayScore: 1 }), '3–1')
-  assert.equal(formatScoreline({ homeScore: 2, awayScore: 2, shootoutHome: 4, shootoutAway: 3 }), '2–2 (4–3 SO)')
+test('formatScoreline: plain and kick-competition forms', () => {
+  assert.equal(formatScoreline({ homeScore: 24, awayScore: 12 }), '24–12')
+  assert.equal(formatScoreline({ homeScore: 20, awayScore: 20, kickCompHome: 4, kickCompAway: 3 }), '20–20 (4–3 kicks)')
 })
 
-test('knockoutResult: shootout decides a drawn knockout match', () => {
+test('knockoutResult: a place-kick competition decides a drawn knockout match', () => {
   assert.deepEqual(
-    knockoutResult(match('k1', 'A', 'B', 2, 2, 'final', { shootoutHome: 4, shootoutAway: 3 })),
+    knockoutResult(match('k1', 'A', 'B', 20, 20, 'final', { kickCompHome: 4, kickCompAway: 3 })),
     { winnerTeamId: 'A', loserTeamId: 'B' },
   )
   assert.deepEqual(
-    knockoutResult(match('k2', 'A', 'B', 0, 1, 'final')),
+    knockoutResult(match('k2', 'A', 'B', 6, 9, 'final')),
     { winnerTeamId: 'B', loserTeamId: 'A' },
   )
-  // Genuine draw with no shootout → undecided (never invent a winner).
-  assert.equal(knockoutResult(match('k3', 'A', 'B', 1, 1, 'final')), null)
-  assert.equal(knockoutResult(match('k4', 'A', 'B', 1, 1, 'live')), null)
+  // Genuine draw with no kick competition → undecided (never invent a winner).
+  assert.equal(knockoutResult(match('k3', 'A', 'B', 13, 13, 'final')), null)
+  assert.equal(knockoutResult(match('k4', 'A', 'B', 13, 13, 'live')), null)
 })
 
 // ── Advancement source resolution ──────────────────────────────────────────
@@ -297,10 +300,10 @@ test('computeBestPlacedAtPosition: ranks runners-up by chain, resolves cleanly',
   // Runner-up of A has 6pts, runner-up of B has 3pts → A's runner-up ranks first.
   const pools = [
     { poolId: 'PA', verified: true, rows: [
-      { pos: 1, teamId: 'A1', Pts: 9 }, { pos: 2, teamId: 'A2', Pts: 6, GD: 2, GF: 5 },
+      { pos: 1, teamId: 'A1', Pts: 9 }, { pos: 2, teamId: 'A2', Pts: 6, PD: 2, PF: 5 },
     ] },
     { poolId: 'PB', verified: true, rows: [
-      { pos: 1, teamId: 'B1', Pts: 9 }, { pos: 2, teamId: 'B2', Pts: 3, GD: 1, GF: 4 },
+      { pos: 1, teamId: 'B1', Pts: 9 }, { pos: 2, teamId: 'B2', Pts: 3, PD: 1, PF: 4 },
     ] },
   ]
   const { ranked, manualRequired, allVerified } = computeBestPlacedAtPosition(pools, 2, TIE_BREAKERS)
@@ -311,8 +314,8 @@ test('computeBestPlacedAtPosition: ranks runners-up by chain, resolves cleanly',
 
 test('computeBestPlacedAtPosition: indistinguishable runners-up → manual required', () => {
   const pools = [
-    { poolId: 'PA', verified: true, rows: [{ pos: 1, teamId: 'A1' }, { pos: 2, teamId: 'A2', Pts: 4, GD: 1, GF: 3 }] },
-    { poolId: 'PB', verified: true, rows: [{ pos: 1, teamId: 'B1' }, { pos: 2, teamId: 'B2', Pts: 4, GD: 1, GF: 3 }] },
+    { poolId: 'PA', verified: true, rows: [{ pos: 1, teamId: 'A1' }, { pos: 2, teamId: 'A2', Pts: 4, PD: 1, PF: 3 }] },
+    { poolId: 'PB', verified: true, rows: [{ pos: 1, teamId: 'B1' }, { pos: 2, teamId: 'B2', Pts: 4, PD: 1, PF: 3 }] },
   ]
   const { manualRequired } = computeBestPlacedAtPosition(pools, 2, TIE_BREAKERS)
   assert.equal(manualRequired.length, 1)
@@ -337,7 +340,7 @@ test('bracket_winner resolves once a matchId is linked to the source slot', () =
     { slotId: 'SF1', matchId: 'm-sf1', source: { type: 'direct_team', teamId: 'A' } },
     { slotId: 'F-h', source: { type: 'bracket_winner', matchSlotId: 'SF1' } },
   ]
-  const matches = { 'm-sf1': match('m-sf1', 'A', 'B', 2, 1) }
+  const matches = { 'm-sf1': match('m-sf1', 'A', 'B', 22, 15) }
 
   // Before linking: no bracketResults → unresolved.
   assert.equal(resolveSlot(slots[1], { bracketResults: {} }).status, SLOT_STATUS.unresolved)
@@ -361,7 +364,7 @@ test('bracket_loser resolves once a matchId is linked to the source slot', () =>
     { slotId: 'SF1', matchId: 'm-sf1', source: { type: 'direct_team', teamId: 'A' } },
     { slotId: '3P-h', source: { type: 'bracket_loser', matchSlotId: 'SF1' } },
   ]
-  const matches = { 'm-sf1': match('m-sf1', 'A', 'B', 2, 1) }
+  const matches = { 'm-sf1': match('m-sf1', 'A', 'B', 22, 15) }
 
   assert.equal(resolveSlot(slots[1], { bracketResults: {} }).status, SLOT_STATUS.unresolved)
 

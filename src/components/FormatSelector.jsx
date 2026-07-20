@@ -1,7 +1,10 @@
-// FormatSelector — outdoor/indoor, periods (1-4), minutes per period
-// (0-60 spinner), and per-break duration between each pair of consecutive
-// periods. onChange receives { periods, periodMinutes, breakMinutes, indoor }
-// where breakMinutes is an array of length (periods - 1).
+// FormatSelector — fifteens/sevens, halves (2, or 3-4 when a knockout plays
+// extra time), minutes per half (0-60 spinner), and per-break duration between
+// each pair of consecutive halves. onChange receives
+// { periods, periodMinutes, breakMinutes, sevens } where breakMinutes is an
+// array of length (periods - 1).
+
+import { periodLabels, SEVENS_PERIOD_MINUTES, SEVENS_BREAK_MINUTES, DEFAULT_PERIOD_MINUTES, DEFAULT_BREAK_MINUTES } from '../lib/matchClock'
 
 function clampMinutes(v) { return Math.max(0, Math.min(60, Number(v) || 0)) }
 function clampBreak(v)   { return Math.max(0, Math.min(60, Number(v) || 0)) }
@@ -33,55 +36,61 @@ function MinuteSpinner({ value, onChange, min = 0, max = 60, label }) {
   )
 }
 
-export default function FormatSelector({ periods, periodMinutes, breakMinutes = [], indoor = false, onChange }) {
+export default function FormatSelector({ periods, periodMinutes, breakMinutes = [], sevens = false, onChange }) {
   const numPeriods  = Number(periods) || 2
   const numMins     = Number(periodMinutes) || 0
-  const isIndoor    = indoor === true
+  const isSevens    = sevens === true
 
   // Ensure breakMinutes array length always matches numPeriods - 1,
-  // padding with 10 minutes as default.
+  // padding with the format's default half-time break.
+  const defaultBreak = isSevens ? SEVENS_BREAK_MINUTES[0] : DEFAULT_BREAK_MINUTES[0]
   const normalizedBreaks = Array.from({ length: Math.max(0, numPeriods - 1) }, (_, i) =>
-    breakMinutes[i] ?? 10
+    breakMinutes[i] ?? defaultBreak
   )
 
   function setPeriods(n) {
     const newBreaks = Array.from({ length: Math.max(0, n - 1) }, (_, i) =>
-      breakMinutes[i] ?? 10
+      breakMinutes[i] ?? defaultBreak
     )
-    onChange({ periods: n, periodMinutes, breakMinutes: newBreaks, indoor: isIndoor })
+    onChange({ periods: n, periodMinutes, breakMinutes: newBreaks, sevens: isSevens })
   }
 
   function setMins(m) {
-    onChange({ periods, periodMinutes: m, breakMinutes: normalizedBreaks, indoor: isIndoor })
+    onChange({ periods, periodMinutes: m, breakMinutes: normalizedBreaks, sevens: isSevens })
   }
 
   function setBreak(idx, v) {
     const next = [...normalizedBreaks]
     next[idx] = clampBreak(v)
-    onChange({ periods, periodMinutes, breakMinutes: next, indoor: isIndoor })
+    onChange({ periods, periodMinutes, breakMinutes: next, sevens: isSevens })
   }
 
-  function setIndoor(v) {
-    onChange({ periods, periodMinutes, breakMinutes: normalizedBreaks, indoor: v })
+  // Switching variant re-seeds sensible half/break lengths for that variant —
+  // a sevens half is 7 minutes, not 35 — while leaving the half count alone.
+  function setSevens(v) {
+    onChange({
+      periods,
+      periodMinutes: v ? SEVENS_PERIOD_MINUTES : DEFAULT_PERIOD_MINUTES,
+      breakMinutes:  Array.from({ length: Math.max(0, numPeriods - 1) }, () =>
+        v ? SEVENS_BREAK_MINUTES[0] : DEFAULT_BREAK_MINUTES[0]),
+      sevens: v,
+    })
   }
 
-  const periodLabel = i => {
-    if (numPeriods === 2) return i === 0 ? '1st Half' : '2nd Half'
-    if (numPeriods === 4) return `Q${i + 1}`
-    return `Period ${i + 1}`
-  }
+  const labels = periodLabels(numPeriods)
+  const periodLabel = i => labels[i] ?? `Period ${i + 1}`
 
   return (
     <div className="space-y-4">
-      {/* Outdoor / indoor */}
+      {/* Fifteens / sevens */}
       <div>
         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Game type</p>
         <div className="flex gap-2">
-          {[{ v: false, label: 'Outdoor' }, { v: true, label: 'Indoor' }].map(opt => (
+          {[{ v: false, label: 'Fifteens (XV)' }, { v: true, label: 'Sevens (7s)' }].map(opt => (
             <button type="button" key={opt.label}
-              onClick={() => setIndoor(opt.v)}
+              onClick={() => setSevens(opt.v)}
               className={`flex-1 text-sm font-bold py-2 rounded-lg border transition-colors ${
-                isIndoor === opt.v
+                isSevens === opt.v
                   ? 'bg-emerald-600 border-emerald-600 text-white'
                   : 'border-slate-200 text-slate-500 hover:border-slate-400'
               }`}>
@@ -91,9 +100,9 @@ export default function FormatSelector({ periods, periodMinutes, breakMinutes = 
         </div>
       </div>
 
-      {/* Periods */}
+      {/* Halves (3-4 model a knockout that plays extra time) */}
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Periods</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Halves</p>
         <div className="flex gap-2">
           {[1, 2, 3, 4].map(n => (
             <button type="button" key={n}
@@ -107,19 +116,20 @@ export default function FormatSelector({ periods, periodMinutes, breakMinutes = 
             </button>
           ))}
         </div>
+        <p className="text-[10px] text-slate-400 mt-1.5">2 is a normal match; 3–4 add extra-time periods for knockouts.</p>
       </div>
 
-      {/* Minutes per period */}
+      {/* Minutes per half */}
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Minutes per period</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Minutes per half</p>
         <MinuteSpinner value={numMins} onChange={setMins} />
       </div>
 
-      {/* Break durations (one per gap between periods) */}
+      {/* Break durations (one per gap between halves) */}
       {normalizedBreaks.length > 0 && (
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
-            Break{normalizedBreaks.length > 1 ? 's' : ''} between periods
+            Break{normalizedBreaks.length > 1 ? 's' : ''} between halves
           </p>
           <div className="space-y-2">
             {normalizedBreaks.map((brk, i) => (
@@ -140,7 +150,7 @@ export default function FormatSelector({ periods, periodMinutes, breakMinutes = 
       {/* Summary */}
       {numPeriods > 0 && numMins > 0 && (
         <p className="text-[11px] text-slate-500 font-mono">
-          {isIndoor ? 'Indoor' : 'Outdoor'} · {numPeriods} × {numMins} min
+          {isSevens ? 'Sevens' : 'Fifteens'} · {numPeriods} × {numMins} min
           {normalizedBreaks.length > 0 &&
             ' · breaks: ' + normalizedBreaks.map(b => `${b}m`).join(' / ')
           }

@@ -1,13 +1,13 @@
 import { AlertTriangle } from 'lucide-react'
 
-function gdLabel(gd) {
-  if (gd > 0) return `+${gd}`
-  return String(gd)
+function pdLabel(pd) {
+  if (pd > 0) return `+${pd}`
+  return String(pd)
 }
 
-function gdColor(gd) {
-  if (gd > 0) return 'text-emerald-600'
-  if (gd < 0) return 'text-red-500'
+function pdColor(pd) {
+  if (pd > 0) return 'text-emerald-600'
+  if (pd < 0) return 'text-red-500'
   return 'text-slate-400'
 }
 
@@ -28,11 +28,13 @@ function buildManualGroups(rows) {
   return groups
 }
 
-const COLS = ['P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts']
+// Rugby log columns: match points for/against/difference, tries for, bonus
+// points (already included in Pts, broken out for transparency).
+const COLS = ['P', 'W', 'D', 'L', 'PF', 'PA', 'PD', 'TF', 'BP', 'Pts']
 
 export default function StandingsTable({ rows = [] }) {
   if (rows.length === 0) {
-    return <p className="text-center text-slate-500 text-sm py-12">No results yet — standings will appear once completed fixtures are recorded.</p>
+    return <p className="text-center text-slate-500 text-sm py-12">No results yet — the log will appear once completed fixtures are recorded.</p>
   }
 
   const items = buildManualGroups(rows)
@@ -76,7 +78,7 @@ export default function StandingsTable({ rows = [] }) {
 }
 
 function TeamRow({ row }) {
-  const gd = row.GD ?? 0
+  const pd = row.PD ?? 0
   return (
     <div className="flex items-center gap-0 bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
       <div className="w-6 text-center text-[10px] font-bold font-mono text-slate-400 shrink-0 pl-2">
@@ -85,10 +87,12 @@ function TeamRow({ row }) {
       <div className="flex-1 min-w-0 flex items-center gap-2 px-2 py-3">
         <span className="text-slate-900 text-sm font-semibold truncate">{row.orgName ? `${row.orgName} ${row.teamName}` : row.teamName}</span>
       </div>
-      {[row.P, row.W, row.D, row.L, row.GF, row.GA].map((val, ci) => (
+      {[row.P, row.W, row.D, row.L, row.PF, row.PA].map((val, ci) => (
         <div key={ci} className="w-8 text-center font-mono text-xs text-slate-500 py-3">{val ?? 0}</div>
       ))}
-      <div className={`w-8 text-center font-mono text-xs py-3 ${gdColor(gd)}`}>{gdLabel(gd)}</div>
+      <div className={`w-8 text-center font-mono text-xs py-3 ${pdColor(pd)}`}>{pdLabel(pd)}</div>
+      <div className="w-8 text-center font-mono text-xs text-slate-500 py-3">{row.TF ?? 0}</div>
+      <div className="w-8 text-center font-mono text-xs text-slate-500 py-3">{row.BP ?? 0}</div>
       <div className="w-10 text-center font-mono font-black text-sm text-slate-900 py-3 pr-2">{row.Pts ?? 0}</div>
     </div>
   )

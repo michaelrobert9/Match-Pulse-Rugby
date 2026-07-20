@@ -170,8 +170,8 @@ export async function fetchCompetitionTopScorers(competitionId, limit = 5) {
   ))
   return snaps
     .flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
-    .filter(p => p.goals > 0)
-    .sort((a, b) => b.goals - a.goals)
+    .filter(p => (p.points ?? 0) > 0)
+    .sort((a, b) => (b.points ?? 0) - (a.points ?? 0) || (b.tries ?? 0) - (a.tries ?? 0))
     .slice(0, limit)
 }
 
