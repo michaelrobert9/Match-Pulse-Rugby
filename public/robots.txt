@@ -1,5 +1,7 @@
-# MatchPulse — https://matchpulse.co.za
-# Public hockey content (competitions, fixtures, results, teams, players) is
+# MatchPulse Rugby
+# NOTE: the production domain is not decided yet. Before launch, set the
+# absolute Sitemap URL below to the deployed origin (see README → Deployment).
+# Public rugby content (competitions, fixtures, results, teams, players) is
 # open to crawlers. Authenticated / operational areas are disallowed.
 #
 # NOTE: robots.txt groups do NOT inherit. A crawler that matches a named
@@ -42,4 +44,4 @@ Disallow: /login
 Disallow: /signup
 Disallow: /portal
 
-Sitemap: https://matchpulse.co.za/sitemap.xml
+Sitemap: /sitemap.xml

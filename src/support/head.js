@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 // and optional JSON-LD, and restores them on unmount.
 export function useSupportHead({ title, description, path, jsonLd } = {}) {
   useEffect(() => {
-    const origin = 'https://matchpulse.co.za'
+    const origin = (import.meta.env?.VITE_PUBLIC_BASE_URL || '').replace(/\/$/, '') || window.location.origin
     const url = origin + (path || '')
     const prevTitle = document.title
     if (title) document.title = title

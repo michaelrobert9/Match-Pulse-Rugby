@@ -59,12 +59,11 @@ Match Pulse is a **professional sports data platform for school sport** — not 
 | Secondary | `text-slate-400` to `text-slate-500` | Descriptions, subtitles, labels |
 | Muted / structural | `text-slate-600` | Dividers, deeply de-emphasised text |
 
-### Semantic / Hockey Event Colours
+### Semantic / Rugby Event Colours
 
 | Event | Tailwind | Suspension |
 |-------|----------|------------|
-| Green Card | `green-500` | 2 minutes |
-| Yellow Card | `yellow-400` | 5 minutes |
+| Yellow Card | `yellow-400` | Sin-bin — 10 minutes (fifteens) / 2 minutes (sevens) |
 | Red Card | `red-600` | Full dismissal |
 
 ### Colour Rules
@@ -86,7 +85,7 @@ Match Pulse is a **professional sports data platform for school sport** — not 
 |------|--------|-------|
 | **Display** | Space Grotesk | Player names, main titles, app logo, score displays, match timers |
 | **Sans / UI** | Inter | Paragraphs, standard UI elements, lists, body copy |
-| **Mono / Data** | JetBrains Mono (or `ui-monospace`) | All numerical stats, caps, goals, season years — enforces rigid grid alignment |
+| **Mono / Data** | JetBrains Mono (or `ui-monospace`) | All numerical stats, caps, tries, points, season years — enforces rigid grid alignment |
 
 The three-font system is intentional: each family has an exclusive domain. Do not use Space Grotesk for body copy or Inter for score numbers.
 
@@ -214,14 +213,16 @@ Used in hero sections for lifetime achievements.
 
 **Team identifiers are always `w-3 h-3 rounded-sm` colour blocks** in the team's primary colour — never empty circles. This is a platform-wide rule.
 
-### Hockey Event Timeline Items
+### Rugby Event Timeline Items
 
-Map event type to visual treatment consistently across all views:
+Map event type to visual treatment consistently across all views. Every scoring
+event carries its point value (+5 try, +2 conversion, +3 penalty / drop goal,
++7 penalty try) beside the label:
 
 | Event | Icon | Border / Background |
 |-------|------|---------------------|
-| Goal / PC Goal | Filled circle, `text-emerald-400` | `border-emerald-500/40 bg-emerald-500/15` |
-| Green Card | Rectangle card shape, `text-green-400` | `border-green-500/40 bg-green-600/15` |
+| Try / Penalty Try | Filled circle, `text-emerald-400` | `border-emerald-500/40 bg-emerald-500/15` |
+| Conversion / Penalty / Drop Goal | Filled circle, `text-emerald-400` | `border-emerald-500/40 bg-emerald-500/15` |
 | Yellow Card | Rectangle card shape, `text-yellow-400` | `border-yellow-500/40 bg-yellow-400/15` |
 | Red Card | Rectangle card shape, `text-red-400` | `border-red-500/40 bg-red-600/15` |
 

@@ -4,11 +4,11 @@ MatchPulse tracks stats for individual players, both within a competition and ac
 
 ## Where player stats come from
 
-When you score a match and attribute a goal to a player, that goal counts towards their stats. Do this across a competition and you get a full picture of who scored what. This is why a complete, correctly spelt squad and live attribution matter, they're what make player stats possible. See [Record goals and events](../06-live-scoring/record-events.md).
+When you score a match and attribute a try or kick to a player, that score counts towards their stats. Do this across a competition and you get a full picture of who scored what. This is why a complete, correctly spelt squad and live attribution matter, they're what make player stats possible. See [Record goals and events](../06-live-scoring/record-events.md).
 
 ## Competition stats vs career stats
 
-- **Competition stats** cover a single competition, the goals a player scored in that season or tournament.
+- **Competition stats** cover a single competition, the tries and points a player scored in that season or tournament.
 - **Career stats** span everything a player has done across competitions over time.
 
 ## How career stats are built
@@ -19,7 +19,7 @@ This rebuild happens in the background, so career records stay in step with the 
 
 ## Keeping stats clean
 
-- **Attribute goals to the right player** during the match.
+- **Attribute tries and kicks to the right player** during the match.
 - **Keep squads accurate**, with correct names and no duplicates. See [Manage your squad](../02-organisations-teams/manage-your-squad.md).
 - **Fix mistakes at the source.** If a player's tally looks wrong, the cause is usually a misattributed goal in a specific match. Correct that match and the stat follows.
 

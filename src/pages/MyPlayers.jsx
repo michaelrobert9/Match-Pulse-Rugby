@@ -266,7 +266,7 @@ function PlayerProfileCard({ person, userId, onUpdated, onRemoved }) {
 function QuickEdit({ person, onUpdated }) {
   const [form,   setForm]   = useState({
     position:   person.position   ?? 'Mid',
-    sahaNumber: person.sahaNumber ?? '',
+    saRugbyNumber: person.saRugbyNumber ?? '',
     photoUrl:   person.photoUrl   ?? '',
   })
   const [saving, setSaving] = useState(false)
@@ -290,8 +290,8 @@ function QuickEdit({ person, onUpdated }) {
           className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-emerald-500">
           {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
-        <Input value={form.sahaNumber} placeholder="SAHA number"
-          onChange={e => setForm(f => ({ ...f, sahaNumber: e.target.value }))} />
+        <Input value={form.saRugbyNumber} placeholder="SA Rugby number"
+          onChange={e => setForm(f => ({ ...f, saRugbyNumber: e.target.value }))} />
       </div>
       <Input type="url" value={form.photoUrl} placeholder="Photo URL (optional)"
         onChange={e => setForm(f => ({ ...f, photoUrl: e.target.value }))} />

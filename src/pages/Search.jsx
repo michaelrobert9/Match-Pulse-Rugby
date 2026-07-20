@@ -154,7 +154,7 @@ export default function Search() {
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="font-mono text-xs text-emerald-600">{p.careerCaps ?? 0} caps</span>
                       <span className="text-slate-300">·</span>
-                      <span className="font-mono text-xs text-slate-500">{p.careerGoals ?? 0} goals</span>
+                      <span className="font-mono text-xs text-slate-500">{p.careerTries ?? 0} tries</span>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />

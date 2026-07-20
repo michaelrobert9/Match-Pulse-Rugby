@@ -12,13 +12,21 @@
 
 import { competitionUrl, teamUrl, playerUrl, orgUrl, matchUrl } from './slugify'
 
+// The public origin is environment-configured — the rugby platform's domain
+// has not been decided yet, so nothing may hardcode one. In the browser the
+// current origin is the correct fallback; in a build with no env set, relative
+// URLs are produced (fine for previews, replaced the moment
+// VITE_PUBLIC_BASE_URL is configured).
+const PUBLIC_ORIGIN = (import.meta.env?.VITE_PUBLIC_BASE_URL || '').replace(/\/$/, '')
+  || (typeof window !== 'undefined' ? window.location.origin : '')
+
 export const SITE = {
-  origin:        'https://matchpulse.co.za',
+  origin:        PUBLIC_ORIGIN,
   name:          'MatchPulse',
   titleSuffix:   ' | MatchPulse',
-  defaultTitle:  'MatchPulse — Live Hockey Scores, Fixtures & Results SA',
-  description:   'Follow live scores, fixtures, log tables and player records for South African school and club hockey. Free to follow every competition.',
-  ogImage:       'https://matchpulse.co.za/og-default.png', // export og-default.svg → PNG before deploy
+  defaultTitle:  'MatchPulse — Live Rugby Scores, Fixtures & Results SA',
+  description:   'Follow live scores, fixtures, log tables and player records for South African school and club rugby. Free to follow every competition.',
+  ogImage:       `${PUBLIC_ORIGIN}/og-default.png`, // export og-default.svg → PNG before deploy
   twitterCard:   'summary_large_image',
   twitterSite:   '@matchpulse',
   themeColor:    '#008C5A',
@@ -74,41 +82,41 @@ export function buildMeta({ type, entity = null, path = null } = {}) {
     case 'home':
       core        = SITE.defaultTitle
       description = SITE.description
-      h1          = 'Live hockey scores, fixtures & results'
+      h1          = 'Live rugby scores, fixtures & results'
       canonical   = '/'
       break
 
     case 'plans':
-      core        = 'MatchPulse Pricing — Hockey League Management Software'
-      description = 'Run your hockey competition on MatchPulse. Free for supporters, Plus from R2,000 once-off, Pro at R15,000/yr. You pay for what you host.'
+      core        = 'MatchPulse Pricing — Rugby League Management Software'
+      description = 'Run your rugby competition on MatchPulse. Free for supporters, Plus from R2,000 once-off, Pro at R15,000/yr. You pay for what you host.'
       h1          = 'Plans & pricing'
       canonical   = '/plans'
       break
 
     case 'competitions':
-      core        = 'Hockey Competitions, Logs & Results'
-      description = 'Browse live South African school and club hockey competitions — log tables, fixtures, results and top scorers, updated as games finish.'
+      core        = 'Rugby Competitions, Logs & Results'
+      description = 'Browse live South African school and club rugby competitions — log tables, fixtures, results and top scorers, updated as games finish.'
       h1          = 'Competitions'
       canonical   = '/competitions'
       break
 
     case 'players':
-      core        = 'Hockey Players & Career Records'
-      description = 'Search hockey players across South African schools and clubs. Career appearances, goals and competition history on MatchPulse.'
+      core        = 'Rugby Players & Career Records'
+      description = 'Search rugby players across South African schools and clubs. Career caps, tries, points and competition history on MatchPulse.'
       h1          = 'Players'
       canonical   = '/players'
       break
 
     case 'schools':
-      core        = 'School Hockey — Fixtures, Results & Teams'
-      description = 'South African school hockey on MatchPulse: fixtures, results, log tables and squad records for every school competition.'
+      core        = 'School Rugby — Fixtures, Results & Teams'
+      description = 'South African school rugby on MatchPulse: fixtures, results, log tables and squad records for every school competition.'
       h1          = 'Schools'
       canonical   = '/schools'
       break
 
     case 'clubs':
-      core        = 'Club Hockey — Fixtures, Results & Teams'
-      description = 'South African club hockey on MatchPulse: fixtures, results, log tables and squad records for every club competition.'
+      core        = 'Club Rugby — Fixtures, Results & Teams'
+      description = 'South African club rugby on MatchPulse: fixtures, results, log tables and squad records for every club competition.'
       h1          = 'Clubs'
       canonical   = '/clubs'
       break
@@ -125,8 +133,8 @@ export function buildMeta({ type, entity = null, path = null } = {}) {
 
     case 'team': {
       const name = entity?.displayName ?? entity?.name ?? 'Team'
-      core        = `${name} Hockey Fixtures & Results`
-      description = `Fixtures, results, log position and squad records for ${name}. Follow every ${name} hockey match live on MatchPulse.`
+      core        = `${name} Rugby Fixtures & Results`
+      description = `Fixtures, results, log position and squad records for ${name}. Follow every ${name} rugby match live on MatchPulse.`
       h1          = name
       canonical   = teamUrl(entity) ?? null
       ogImage     = entity?.logoUrl || ogImage
@@ -135,8 +143,8 @@ export function buildMeta({ type, entity = null, path = null } = {}) {
 
     case 'player': {
       const name = entity?.fullName ?? entity?.name ?? 'Player'
-      core        = `${name} — Hockey Career Stats`
-      description = `Career hockey record for ${name}: appearances, goals and competition history across all teams on MatchPulse.`
+      core        = `${name} — Rugby Career Stats`
+      description = `Career rugby record for ${name}: caps, tries, points and competition history across all teams on MatchPulse.`
       h1          = name
       canonical   = playerUrl(entity)
       ogImage     = entity?.photoUrl || ogImage
@@ -147,8 +155,8 @@ export function buildMeta({ type, entity = null, path = null } = {}) {
     case 'org': {
       const name = entity?.name ?? 'Organisation'
       const kind = entity?.type === 'club' ? 'club' : 'school'
-      core        = `${name} Hockey — Fixtures & Results`
-      description = `${name} hockey on MatchPulse: fixtures, results, log tables and teams for this ${kind}.`
+      core        = `${name} Rugby — Fixtures & Results`
+      description = `${name} rugby on MatchPulse: fixtures, results, log tables and teams for this ${kind}.`
       h1          = name
       canonical   = orgUrl(entity)
       ogImage     = entity?.logoUrl || ogImage
@@ -160,10 +168,10 @@ export function buildMeta({ type, entity = null, path = null } = {}) {
       const away = entity?.awayTeamName ?? 'Away'
       const isFinal = entity?.status === 'final'
       const score   = isFinal ? ` ${entity?.homeScore ?? 0}-${entity?.awayScore ?? 0}` : ''
-      core        = `${home} vs ${away}${score} — Hockey ${isFinal ? 'Result' : 'Fixture'}`
+      core        = `${home} vs ${away}${score} — Rugby ${isFinal ? 'Result' : 'Fixture'}`
       description = isFinal
         ? `Full result and match timeline: ${home} ${entity?.homeScore ?? 0}-${entity?.awayScore ?? 0} ${away}. Scorers, cards and stats on MatchPulse.`
-        : `${home} vs ${away} hockey fixture. Follow it live with scores, timeline and stats on MatchPulse.`
+        : `${home} vs ${away} rugby fixture. Follow it live with scores, timeline and stats on MatchPulse.`
       h1          = `${home} vs ${away}`
       canonical   = matchUrl(entity)
       ogType      = 'article'
@@ -248,7 +256,7 @@ export function sportsTeamLd(team) {
     '@context': 'https://schema.org',
     '@type': 'SportsTeam',
     name: team.displayName ?? team.name,
-    sport: 'Field hockey',
+    sport: 'Rugby union',
     url: abs(teamUrl(team) ?? '/'),
     ...(team.logoUrl ? { logo: team.logoUrl } : {}),
   }
@@ -263,7 +271,7 @@ export function athleteLd(person) {
     name: person.fullName ?? person.name,
     url: abs(playerUrl(person)),
     ...(person.photoUrl ? { image: person.photoUrl } : {}),
-    knowsAbout: 'Field hockey',
+    knowsAbout: 'Rugby union',
   }
 }
 
@@ -289,7 +297,7 @@ export function sportsEventLd(match, comp = null) {
     '@context': 'https://schema.org',
     '@type': 'SportsEvent',
     name: `${home} vs ${away}`,
-    sport: 'Field hockey',
+    sport: 'Rugby union',
     url: abs(matchUrl({ ...match, competitionSlug: comp?.slug, competitionSeason: comp?.season })),
     eventStatus,
     ...(startDate ? { startDate } : {}),

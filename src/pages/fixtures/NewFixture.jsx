@@ -155,7 +155,7 @@ function SchoolFixtureForm({ org, canChange, onChangeOrg }) {
     periods:       DEFAULT_PERIODS,
     periodMinutes: DEFAULT_PERIOD_MINUTES,
     breakMinutes:  DEFAULT_BREAK_MINUTES,
-    indoor:        false,
+    sevens:        false,
     competitionId: '',
   })
 
@@ -191,7 +191,7 @@ function SchoolFixtureForm({ org, canChange, onChangeOrg }) {
         periods:       Number(form.periods),
         periodMinutes: Number(form.periodMinutes),
         breakMinutes:  form.breakMinutes,
-        indoor:        form.indoor,
+        sevens:        form.sevens,
       })
       // A competition fixture is ALWAYS a match + a membership join record —
       // never a bare match.competitionId. The dropdown only lists competitions
@@ -291,7 +291,7 @@ function SchoolFixtureForm({ org, canChange, onChangeOrg }) {
             </label>
             <input type="text"
               className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
-              placeholder="e.g. Main astro, Field 1"
+              placeholder="e.g. Main field, Field 1"
               value={form.pitch}
               onChange={e => setForm(f => ({ ...f, pitch: e.target.value }))} />
           </div>
@@ -303,8 +303,8 @@ function SchoolFixtureForm({ org, canChange, onChangeOrg }) {
               periods={form.periods}
               periodMinutes={form.periodMinutes}
               breakMinutes={form.breakMinutes}
-              indoor={form.indoor}
-              onChange={({ periods, periodMinutes, breakMinutes, indoor }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, indoor }))}
+              sevens={form.sevens}
+              onChange={({ periods, periodMinutes, breakMinutes, sevens }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens }))}
             />
           </div>
 
@@ -349,7 +349,7 @@ function ClubFixtureForm({ org, canChange, onChangeOrg }) {
     periods:       DEFAULT_PERIODS,
     periodMinutes: DEFAULT_PERIOD_MINUTES,
     breakMinutes:  DEFAULT_BREAK_MINUTES,
-    indoor:        false,
+    sevens:        false,
     competitionId: '',
   })
 
@@ -401,7 +401,7 @@ function ClubFixtureForm({ org, canChange, onChangeOrg }) {
         periods:       Number(form.periods),
         periodMinutes: Number(form.periodMinutes),
         breakMinutes:  form.breakMinutes,
-        indoor:        form.indoor,
+        sevens:        form.sevens,
       })
       if (form.competitionId) {
         await addFixtureToCompetition(form.competitionId, {
@@ -518,7 +518,7 @@ function ClubFixtureForm({ org, canChange, onChangeOrg }) {
           </label>
           <input type="text"
             className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
-            placeholder="e.g. Astro 1, Club ground"
+            placeholder="e.g. Field 1, Club ground"
             value={form.pitch}
             onChange={e => setForm(f => ({ ...f, pitch: e.target.value }))} />
         </div>
@@ -530,8 +530,8 @@ function ClubFixtureForm({ org, canChange, onChangeOrg }) {
             periods={form.periods}
             periodMinutes={form.periodMinutes}
             breakMinutes={form.breakMinutes}
-            indoor={form.indoor}
-            onChange={({ periods, periodMinutes, breakMinutes, indoor }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, indoor }))}
+            sevens={form.sevens}
+            onChange={({ periods, periodMinutes, breakMinutes, sevens }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens }))}
           />
         </div>
 

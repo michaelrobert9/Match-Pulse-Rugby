@@ -103,7 +103,7 @@ function UpcomingFixturesSection({ orgId, org, competitions, teams, matches, set
     opponent:      null,
     scheduledAt:   '', pitch: '',
     periods:       DEFAULT_PERIODS, periodMinutes: DEFAULT_PERIOD_MINUTES,
-    breakMinutes:  DEFAULT_BREAK_MINUTES, indoor: false,
+    breakMinutes:  DEFAULT_BREAK_MINUTES, sevens: false,
     competitionId: '',
   })
 
@@ -156,7 +156,7 @@ function UpcomingFixturesSection({ orgId, org, competitions, teams, matches, set
         periods:       Number(form.periods),
         periodMinutes: Number(form.periodMinutes),
         breakMinutes:  form.breakMinutes,
-        indoor:        form.indoor,
+        sevens:        form.sevens,
       })
       // A competition fixture is a match + membership join record, never a
       // bare match.competitionId (dropdown lists only this org's competitions).
@@ -298,7 +298,7 @@ function UpcomingFixturesSection({ orgId, org, competitions, teams, matches, set
 
           <Input label="Date & time" type="datetime-local" required
             value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
-          <Input label="Venue / pitch (optional)" value={form.pitch} placeholder="e.g. Astro 1"
+          <Input label="Venue / pitch (optional)" value={form.pitch} placeholder="e.g. Field 1"
             onChange={e => setForm(f => ({ ...f, pitch: e.target.value }))} />
 
           <div>
@@ -307,8 +307,8 @@ function UpcomingFixturesSection({ orgId, org, competitions, teams, matches, set
               periods={form.periods}
               periodMinutes={form.periodMinutes}
               breakMinutes={form.breakMinutes}
-              indoor={form.indoor}
-              onChange={({ periods, periodMinutes, breakMinutes, indoor }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, indoor }))}
+              sevens={form.sevens}
+              onChange={({ periods, periodMinutes, breakMinutes, sevens }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens }))}
             />
           </div>
 

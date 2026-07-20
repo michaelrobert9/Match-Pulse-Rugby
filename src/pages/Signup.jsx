@@ -23,10 +23,14 @@ const ROLES = [
 ]
 
 const POSITIONS = [
-  { value: 'goalkeeper', label: 'Goalkeeper' },
-  { value: 'defence',    label: 'Defence' },
-  { value: 'midfield',   label: 'Midfield' },
-  { value: 'forward',    label: 'Forward' },
+  { value: 'prop',          label: 'Prop' },
+  { value: 'hooker',        label: 'Hooker' },
+  { value: 'lock',          label: 'Lock' },
+  { value: 'loose_forward', label: 'Loose Fwd' },
+  { value: 'scrumhalf',     label: 'Scrumhalf' },
+  { value: 'flyhalf',       label: 'Flyhalf' },
+  { value: 'centre',        label: 'Centre' },
+  { value: 'outside_back',  label: 'Outside Back' },
 ]
 
 const inputClass =
@@ -66,7 +70,7 @@ export default function Signup() {
   const [phone,      setPhone]      = useState('')
   const [role,       setRole]       = useState('')
   const [position,   setPosition]   = useState('')
-  const [sahaNumber, setSahaNumber] = useState('')
+  const [saRugbyNumber, setSaRugbyNumber] = useState('')
   const [photoURL,   setPhotoURL]   = useState('')
 
   const [createdUid, setCreatedUid] = useState(null)
@@ -137,7 +141,7 @@ export default function Signup() {
       phone:          phone.trim(),
       role,
       position:       role === 'player' ? position : '',
-      sahaNumber:     sahaNumber.trim(),
+      saRugbyNumber:     saRugbyNumber.trim(),
       profileComplete: true,
       platformAdmin:  false,
       orgRoles:       {},
@@ -340,9 +344,9 @@ export default function Signup() {
               </div>
             </div>
 
-            {/* Role in hockey */}
+            {/* Role in rugby */}
             <div>
-              <Label optional>Your role in hockey</Label>
+              <Label optional>Your role in rugby</Label>
               <div className="grid grid-cols-3 gap-2">
                 {ROLES.map(r => (
                   <button key={r.value} type="button"
@@ -377,14 +381,14 @@ export default function Signup() {
               </div>
             )}
 
-            {/* SAHA number */}
+            {/* SA Rugby number */}
             <div>
-              <Label optional>SAHA number</Label>
-              <input type="text" value={sahaNumber} onChange={e => setSahaNumber(e.target.value)}
+              <Label optional>SA Rugby number</Label>
+              <input type="text" value={saRugbyNumber} onChange={e => setSaRugbyNumber(e.target.value)}
                 placeholder="e.g. WP-2024-00123"
                 className={`${inputClass} font-mono`} />
               <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
-                Your South African Hockey Association (SAHA) registration number. Once entered, it will be visible on your public profile.
+                Your South African Rugby Union (SA Rugby) registration number. Once entered, it will be visible on your public profile.
               </p>
             </div>
 

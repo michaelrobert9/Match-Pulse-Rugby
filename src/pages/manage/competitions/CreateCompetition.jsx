@@ -56,7 +56,8 @@ const COMPARISON_ROWS = [
   ['knockouts',     'Knockouts'],
   ['pools',         'Pools'],
   ['rankings',      'Rankings'],
-  ['shootouts',     'Shootouts'],
+  ['bonusPoints',   'Bonus points'],
+  ['deciders',      'Knockout deciders'],
   ['teamSchedules', 'Team schedules'],
 ]
 
@@ -276,7 +277,7 @@ export default function CreateCompetition() {
             </div>
 
             <Input label="Series name" value={seriesName} onChange={e => setSeriesName(e.target.value)}
-              placeholder="e.g. Premier Hockey League" required
+              placeholder="e.g. Premier Rugby League" required
               hint="The recurring name shared across seasons." />
 
             <Input label="Season" value={season} onChange={e => setSeason(e.target.value)} placeholder="2026" required />
@@ -345,7 +346,7 @@ export default function CreateCompetition() {
                 ))}
               </ol>
               <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-                Default hockey order. This can be changed after creation, with confirmation. Alphabetical ordering is never used to decide an outcome.
+                Default rugby order. This can be changed after creation, with confirmation. Alphabetical ordering is never used to decide an outcome.
               </p>
             </section>
           )}

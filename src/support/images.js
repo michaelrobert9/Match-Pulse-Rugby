@@ -42,7 +42,7 @@ export const IMAGE_SLOTS = {
     { src: null, alt: 'The live scoring screen before kickoff with the “Start match” control.', caption: 'Starting a live match' },
   ],
   'live-scoring/record-events': [
-    { src: null, alt: 'The live scoring screen mid-match, recording a goal for the home team.', caption: 'Recording a goal' },
+    { src: null, alt: 'The live scoring screen mid-match, recording a try for the home team.', caption: 'Recording a try' },
   ],
   'live-scoring/finalise-a-result': [
     { src: null, alt: 'The live scoring screen with the “Finalise result” control at full time.', caption: 'Finalising a result' },
@@ -54,7 +54,7 @@ export const IMAGE_SLOTS = {
     { src: null, alt: 'A knockout bracket with pool qualifiers seeded into the first round.', caption: 'A seeded bracket' },
   ],
   'stats-standings/how-standings-work': [
-    { src: null, alt: 'A competition standings table with played, won, drawn, lost, goal difference and points columns.', caption: 'A standings table' },
+    { src: null, alt: 'A competition standings table with played, won, drawn, lost, points difference, tries and log points columns.', caption: 'A standings table' },
   ],
   'permissions/invite-people': [
     { src: null, alt: 'The invite screen where an organiser enters an email and assigns a role.', caption: 'Inviting people' },

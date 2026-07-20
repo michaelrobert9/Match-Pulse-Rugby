@@ -16,23 +16,23 @@ import { MatchTeamIdentity } from '../components/TeamIdentity'
 import StatusBadge from '../components/StatusBadge'
 import SquadManager from '../components/SquadManager'
 
-// Win/loss/draw + goals for a team across a (optionally season-filtered) set of
-// final matches. Computed from matches rather than the team doc's cumulative
-// counters so a current-season vs all-time split is always available.
+// Win/loss/draw + match points for a team across a (optionally season-filtered)
+// set of final matches. Computed from matches rather than the team doc's
+// cumulative counters so a current-season vs all-time split is always available.
 function computeTeamStats(matches, teamId, season = null) {
-  let played = 0, won = 0, lost = 0, drawn = 0, goalsFor = 0, goalsAgainst = 0
+  let played = 0, won = 0, lost = 0, drawn = 0, pointsFor = 0, pointsAgainst = 0
   for (const m of matches) {
     if (m.status !== 'final') continue
     if (season != null && String(m.season ?? '') !== String(season)) continue
     const isHome = m.homeTeamId === teamId
     const teamS  = isHome ? (m.homeScore ?? 0) : (m.awayScore ?? 0)
     const oppS   = isHome ? (m.awayScore ?? 0) : (m.homeScore ?? 0)
-    played++; goalsFor += teamS; goalsAgainst += oppS
+    played++; pointsFor += teamS; pointsAgainst += oppS
     if (teamS > oppS) won++
     else if (teamS < oppS) lost++
     else drawn++
   }
-  return { played, won, lost, drawn, goalsFor, goalsAgainst }
+  return { played, won, lost, drawn, pointsFor, pointsAgainst }
 }
 
 function StatGrid({ stats }) {
@@ -41,8 +41,8 @@ function StatGrid({ stats }) {
     { value: stats.won,          label: 'W'  },
     { value: stats.drawn,        label: 'D'  },
     { value: stats.lost,         label: 'L'  },
-    { value: stats.goalsFor,     label: 'GF' },
-    { value: stats.goalsAgainst, label: 'GA' },
+    { value: stats.pointsFor,     label: 'PF' },
+    { value: stats.pointsAgainst, label: 'PA' },
   ]
   return (
     <div className="grid grid-cols-6 gap-2">

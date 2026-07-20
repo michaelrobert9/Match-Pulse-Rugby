@@ -4,7 +4,7 @@ You'll need an account before you can set anything up. It takes a minute.
 
 ## Sign up
 
-1. Go to [matchpulse.co.za](https://matchpulse.co.za).
+1. Open MatchPulse Rugby in your browser.
 2. Click **Sign up**.
 3. Enter your email address and choose a password.
 4. Confirm your email if prompted.

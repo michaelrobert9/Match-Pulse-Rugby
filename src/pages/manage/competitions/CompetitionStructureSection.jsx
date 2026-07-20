@@ -412,7 +412,7 @@ export default function CompetitionStructureSection({ competition, panel = 'all'
                     periods:       fmt.periods,
                     periodMinutes: fmt.periodMinutes,
                     breakMinutes:  fmt.breakMinutes,
-                    indoor:        fmt.indoor,
+                    sevens:        fmt.sevens,
                   })
                   await reload()
                   const warns = result.warnings.length > 0 ? ` Warning: ${result.warnings.join(' ')}` : ''

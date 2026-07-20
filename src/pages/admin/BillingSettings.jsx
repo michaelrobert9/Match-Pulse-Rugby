@@ -834,15 +834,15 @@ export default function BillingSettings() {
             <TextInput
               value={form.notifyUrl}
               onChange={set('notifyUrl')}
-              placeholder="https://europe-west1-match-pulse-4560e.cloudfunctions.net/payfastITN"
+              placeholder="https://europe-west1-<your-project>.cloudfunctions.net/payfastITN"
               mono
             />
           </Field>
           <Field label="Return URL" hint="Where PayFast redirects the buyer after a successful payment.">
-            <TextInput value={form.returnUrl} onChange={set('returnUrl')} placeholder="https://matchpulse.co.za/portal" mono />
+            <TextInput value={form.returnUrl} onChange={set('returnUrl')} placeholder="https://<your-domain>/portal" mono />
           </Field>
           <Field label="Cancel URL" hint="Where PayFast redirects if the buyer cancels payment.">
-            <TextInput value={form.cancelUrl} onChange={set('cancelUrl')} placeholder="https://matchpulse.co.za/plans" mono />
+            <TextInput value={form.cancelUrl} onChange={set('cancelUrl')} placeholder="https://<your-domain>/plans" mono />
           </Field>
         </Section>
 

@@ -357,7 +357,7 @@ function ConfigTab({ competition, onSaved, onGoToTab }) {
 
 // ── Stats rebuild (competition admin) ────────────────────────────────────────
 // Triggers the backend recompute-from-history engine for this competition. Only
-// this competition's `players` slices (caps/goals/cards) are rebuilt. Career
+// this competition's `players` slices (caps/tries/points/cards) are rebuilt. Career
 // totals on player profiles span all competitions and refresh on the nightly
 // run, so they are intentionally not part of this immediate rebuild.
 
@@ -515,7 +515,7 @@ function StatsRebuildCard({ competition }) {
     <Card title="Recalculate player stats"
       subtitle="Rebuild this competition's stats from its Final fixtures">
       <p className="text-sm text-slate-600 mb-3">
-        Rebuilds caps, goals, and cards for every player in this competition from all its Final
+        Rebuilds caps, tries, points, and cards for every player in this competition from all its Final
         fixtures, on the server. Stats are always derived from match history, so this simply
         re-derives them — safe to run multiple times, with identical results each run.
       </p>
@@ -924,7 +924,7 @@ function ScoringCard({ competition, onSaved }) {
         <div className="flex items-start gap-3 opacity-60">
           <div className="flex-1">
             <div className="text-sm font-medium text-slate-700">Bonus points</div>
-            <p className="text-[11px] text-slate-400">Extra points for goals scored or margins.</p>
+            <p className="text-[11px] text-slate-400">Extra log points for tries scored or narrow losses.</p>
           </div>
           <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 shrink-0">Coming soon</span>
         </div>
@@ -1189,7 +1189,7 @@ function FestivalStatsCard({ competition, onSaved }) {
         <div>
           <span className="text-sm font-medium text-slate-700">Show informational stats table</span>
           <p className="text-[11px] text-slate-400">
-            Played, won, drawn, lost, goals — no positions, no official ranking.
+            Played, won, drawn, lost, points and tries — no positions, no official ranking.
           </p>
         </div>
       </label>
@@ -1218,7 +1218,7 @@ function MatchFormatCard({ competition, onSaved }) {
         periods:       Number(fmt.periods) || DEFAULT_PERIODS,
         periodMinutes: Number(fmt.periodMinutes) || 0,
         breakMinutes:  Array.isArray(fmt.breakMinutes) ? fmt.breakMinutes.map(Number) : DEFAULT_BREAK_MINUTES,
-        indoor:        fmt.indoor === true,
+        sevens:        fmt.sevens === true,
       }
       await updateCompetition(competition.id, { matchFormat })
       onSaved({ ...competition, matchFormat })
@@ -1226,7 +1226,7 @@ function MatchFormatCard({ competition, onSaved }) {
     } finally { setSaving(false) }
   }
 
-  const summary = `${current.indoor ? 'Indoor' : 'Outdoor'} · ${current.periods} × ${current.periodMinutes} min`
+  const summary = `${current.sevens ? 'Sevens' : 'Fifteens'} · ${current.periods} × ${current.periodMinutes} min`
     + (current.breakMinutes?.length ? ` · breaks ${current.breakMinutes.join(' / ')}m` : '')
 
   return (
@@ -1242,7 +1242,7 @@ function MatchFormatCard({ competition, onSaved }) {
         <div className="space-y-3">
           <FormatSelector
             periods={fmt.periods} periodMinutes={fmt.periodMinutes} breakMinutes={fmt.breakMinutes}
-            indoor={fmt.indoor}
+            sevens={fmt.sevens}
             onChange={(v) => setFmt(v)} />
           <SaveRow saving={saving} onSave={save} />
         </div>
@@ -2014,7 +2014,7 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
   const [newForm, setNewForm]     = useState({
     homeTeamId: '', awayTeamId: '', scheduledAt: '', pitch: '',
     periods: defaultFmt.periods, periodMinutes: defaultFmt.periodMinutes,
-    breakMinutes: defaultFmt.breakMinutes, indoor: defaultFmt.indoor,
+    breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens,
   })
 
   useEffect(() => {
@@ -2080,12 +2080,12 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
         awayTeamId: away.id, awayTeamName: away.displayName,
         awayTeamShortCode: away.shortCode || null, awayTeamColor: away.primaryColor || null,
         awayOrgId: away.organizationId ?? null, awayOrgName: away.orgName || null, awayRegistered: !!away.organizationId,
-        homeScore: 0, awayScore: 0,
+        homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
         periods: Number(newForm.periods), periodMinutes: Number(newForm.periodMinutes),
         breakMinutes: Array.isArray(newForm.breakMinutes) ? newForm.breakMinutes : DEFAULT_BREAK_MINUTES,
-        goals: [], cards: [], controlLog: [],
+        scores: [], cards: [], controlLog: [],
         startedAt: null, pausedAt: null, totalPausedMs: 0, nextPeriodIndex: 1,
-        scheduledAt, pitch: newForm.pitch || '', indoor: !!newForm.indoor, status: 'scheduled', tracked: false,
+        scheduledAt, pitch: newForm.pitch || '', sevens: !!newForm.sevens, status: 'scheduled', tracked: false,
         matchSlug,
         ...(seasonStr ? { season: seasonStr } : {}),
         ...(compSlug && seasonStr ? { competitionSlug: compSlug, competitionSeason: seasonStr } : {}),
@@ -2101,7 +2101,7 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
         scheduledAt, status: 'scheduled', tracked: false, homeScore: 0, awayScore: 0,
       }])
       setShowNew(false)
-      setNewForm({ homeTeamId: '', awayTeamId: '', scheduledAt: '', pitch: '', periods: defaultFmt.periods, periodMinutes: defaultFmt.periodMinutes, breakMinutes: defaultFmt.breakMinutes, indoor: defaultFmt.indoor })
+      setNewForm({ homeTeamId: '', awayTeamId: '', scheduledAt: '', pitch: '', periods: defaultFmt.periods, periodMinutes: defaultFmt.periodMinutes, breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens })
     } finally { setSaving(false) }
   }
 
@@ -2115,7 +2115,7 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
         periods:          genFmt.periods,
         periodMinutes:    genFmt.periodMinutes,
         breakMinutes:     genFmt.breakMinutes ?? DEFAULT_BREAK_MINUTES,
-        indoor:           genFmt.indoor === true,
+        sevens:           genFmt.sevens === true,
         ownerOrgId:       competition.ownerOrgId || null,
         competitionSlug:  competition.slug || null,
         ...(type === 'tournament' && genPoolId ? { poolId: genPoolId } : {}),
@@ -2275,9 +2275,9 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
               periods={genFmt.periods}
               periodMinutes={genFmt.periodMinutes}
               breakMinutes={genFmt.breakMinutes}
-              indoor={genFmt.indoor}
-              onChange={({ periods, periodMinutes, breakMinutes, indoor }) =>
-                setGenFmt({ periods, periodMinutes, breakMinutes, indoor })
+              sevens={genFmt.sevens}
+              onChange={({ periods, periodMinutes, breakMinutes, sevens }) =>
+                setGenFmt({ periods, periodMinutes, breakMinutes, sevens })
               }
             />
           </div>
@@ -2340,9 +2340,9 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
               periods={newForm.periods}
               periodMinutes={newForm.periodMinutes}
               breakMinutes={newForm.breakMinutes}
-              indoor={newForm.indoor}
-              onChange={({ periods, periodMinutes, breakMinutes, indoor }) =>
-                setNewForm(f => ({ ...f, periods, periodMinutes, breakMinutes, indoor }))
+              sevens={newForm.sevens}
+              onChange={({ periods, periodMinutes, breakMinutes, sevens }) =>
+                setNewForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens }))
               }
             />
           </div>
@@ -2579,7 +2579,7 @@ function FestivalStatsTab({ competition }) {
   return (
     <Card title="Festival stats" subtitle="Informational only — no positions or official ranking">
       <p className="text-sm text-slate-600 mb-4">
-        The stats table shows played, won, drawn, lost and goals for each team, in a fixed order.
+        The stats table shows played, won, drawn, lost, points and tries for each team, in a fixed order.
         It never ranks teams — festivals have no winners.
       </p>
       <Link to={`/competitions/${competition.id}`}

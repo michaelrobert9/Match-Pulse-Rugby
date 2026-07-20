@@ -81,7 +81,7 @@ export async function recordFixtureAudit(matchId, { eventType, method = null, be
 }
 
 // Client-generated id for an event inside the scores/cards arrays. Used to
-// identify an entry for enrichment (goal type, scorer) and reversal.
+// identify an entry for enrichment (score type, scorer/kicker) and reversal.
 function eventId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return `e_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
@@ -1292,7 +1292,7 @@ export async function abandonMatch(matchId, { minute = 0, reason = null } = {}) 
 
 // Let it stand — the frozen abandoned score becomes the real result. Restore the
 // frozen score into the slot, flag Final; standings + stats now read it (and the
-// abandoned-attempt goals count).
+// abandoned-attempt scoring events count).
 export async function letAbandonedStand(matchId, { reason = null } = {}) {
   const { ref, m } = await readMatchForOutcome(matchId)
   const o = m.outcome

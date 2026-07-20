@@ -49,7 +49,7 @@ If you're new, start with **Getting Started**. If you're looking for something s
 
 ## 6. Live Scoring
 - [Start a live match](06-live-scoring/start-a-live-match.md)
-- [Record goals and events](06-live-scoring/record-events.md)
+- [Record scores and events](06-live-scoring/record-events.md)
 - [Fix a mistake during a match](06-live-scoring/fix-a-mistake.md)
 - [Finalise a result](06-live-scoring/finalise-a-result.md)
 - [Correct a finalised result](06-live-scoring/correct-a-finalised-result.md)

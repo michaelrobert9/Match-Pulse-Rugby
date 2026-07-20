@@ -57,7 +57,7 @@ function Textarea({ value, onChange, placeholder, maxLength, rows = 3 }) {
 }
 
 // Google SERP preview
-function SerpPreview({ title, tagline, description, url = 'matchpulse.co.za' }) {
+function SerpPreview({ title, tagline, description, url = 'your-rugby-domain.example' }) {
   const displayTitle = [title, tagline].filter(Boolean).join(' — ')
   const snippet = description || 'No description set.'
   return (
@@ -742,14 +742,14 @@ export default function SeoSettings() {
           <Field label="Site name" hint="Shown as the bold heading in Google results and the browser tab.">
             <Input value={form.siteTitle} onChange={set('siteTitle')} placeholder="MatchPulse" maxLength={60} />
           </Field>
-          <Field label="Tagline" hint='Appended to the site name with an em-dash: "MatchPulse — School & Club Hockey".'>
-            <Input value={form.siteTagline} onChange={set('siteTagline')} placeholder="School & Club Hockey" maxLength={60} />
+          <Field label="Tagline" hint='Appended to the site name with an em-dash: "MatchPulse — School & Club Rugby".'>
+            <Input value={form.siteTagline} onChange={set('siteTagline')} placeholder="School & Club Rugby" maxLength={60} />
           </Field>
           <Field label="Meta description" hint="The snippet shown under the title in Google results. Aim for 120–160 characters.">
             <Textarea
               value={form.siteDescription}
               onChange={set('siteDescription')}
-              placeholder="Live scores, fixtures, results and player records for school and club hockey in South Africa."
+              placeholder="Live scores, fixtures, results and player records for school and club rugby in South Africa."
               maxLength={160}
               rows={3}
             />
@@ -758,13 +758,13 @@ export default function SeoSettings() {
             <Textarea
               value={form.keywords}
               onChange={set('keywords')}
-              placeholder="hockey, school hockey, club hockey, live scores, South Africa"
+              placeholder="rugby, school rugby, club rugby, live scores, South Africa"
               maxLength={500}
               rows={2}
             />
           </Field>
           <Field label="Social share image URL" hint="Shown when the site is shared on WhatsApp, Twitter/X, Facebook etc. Use a 1200×630 px image.">
-            <Input value={form.ogImageUrl} onChange={set('ogImageUrl')} placeholder="https://matchpulse.co.za/og-image.jpg" mono />
+            <Input value={form.ogImageUrl} onChange={set('ogImageUrl')} placeholder="https://your-rugby-domain.example/og-image.jpg" mono />
           </Field>
         </Section>
 
@@ -799,7 +799,7 @@ export default function SeoSettings() {
           )}
           <div className="text-xs text-slate-500 space-y-1 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
             <p className="font-semibold text-blue-800">Submit your sitemap to Google:</p>
-            <p>In Search Console → Sitemaps, add <span className="font-mono bg-white/70 px-1 rounded">https://matchpulse.co.za/sitemap.xml</span></p>
+            <p>In Search Console → Sitemaps, add <span className="font-mono bg-white/70 px-1 rounded">https://&lt;your-domain&gt;/sitemap.xml</span></p>
             <p className="text-blue-600">The sitemap is already live — you can verify it at <span className="font-mono">/sitemap.xml</span> before submitting.</p>
           </div>
         </Section>

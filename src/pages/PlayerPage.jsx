@@ -64,7 +64,7 @@ function OrgCard({ org }) {
 }
 
 function CareerCard({ player }) {
-  const total = (player.cards?.green ?? 0) + (player.cards?.yellow ?? 0) + (player.cards?.red ?? 0)
+  const total = (player.cards?.yellow ?? 0) + (player.cards?.red ?? 0)
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
       <div className="h-1" style={{ backgroundColor: player.teamPrimaryColor || '#94a3b8' }} />
@@ -88,14 +88,10 @@ function CareerCard({ player }) {
         </div>
         <div className="grid grid-cols-4 gap-0 border-t border-slate-200 pt-3">
           {[
-            { val: player.caps,  label: 'Caps',  cls: 'text-slate-900' },
-            { val: player.goals, label: 'Goals', cls: 'text-emerald-600' },
-            {
-              val: player.goals > 0 && player.caps > 0
-                ? (player.goals / player.caps).toFixed(2) : '—',
-              label: 'Avg', cls: 'text-slate-900'
-            },
-            { val: total || '—', label: 'Cards', cls: 'text-slate-900' },
+            { val: player.caps,   label: 'Caps',   cls: 'text-slate-900' },
+            { val: player.tries,  label: 'Tries',  cls: 'text-emerald-600' },
+            { val: player.points, label: 'Points', cls: 'text-slate-900' },
+            { val: total || '—',  label: 'Cards',  cls: 'text-slate-900' },
           ].map(({ val, label, cls }, i) => (
             <div key={label} className={`flex flex-col items-center${i > 0 ? ' border-l border-slate-200' : ''}`}>
               <span className={`font-mono font-black text-xl tabular-nums ${cls}`}>{val}</span>
@@ -154,7 +150,6 @@ export default function PlayerPage() {
     .split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
 
   const totalCards =
-    (person.careerCards?.green  ?? 0) +
     (person.careerCards?.yellow ?? 0) +
     (person.careerCards?.red    ?? 0)
 
@@ -195,10 +190,10 @@ export default function PlayerPage() {
                 {age(person.dateOfBirth) != null && ` · ${age(person.dateOfBirth)} yrs`}
               </div>
             )}
-            {person.sahaNumber && (
+            {person.saRugbyNumber && (
               <div className="mt-1.5">
                 <span className="inline-flex font-mono text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-500">
-                  SAHA {person.sahaNumber}
+                  SA Rugby {person.saRugbyNumber}
                 </span>
               </div>
             )}
@@ -212,12 +207,12 @@ export default function PlayerPage() {
             <span className="micro-label mt-0.5">Caps</span>
           </div>
           <div className="flex flex-col items-center py-3">
-            <span className="font-mono font-black text-2xl tabular-nums text-emerald-600 leading-none">{person.careerGoals ?? 0}</span>
-            <span className="micro-label mt-0.5">Goals</span>
+            <span className="font-mono font-black text-2xl tabular-nums text-emerald-600 leading-none">{person.careerTries ?? 0}</span>
+            <span className="micro-label mt-0.5">Tries</span>
           </div>
           <div className="flex flex-col items-center py-3">
-            <span className="font-mono font-black text-2xl tabular-nums text-slate-900 leading-none">{person.careerAssists ?? 0}</span>
-            <span className="micro-label mt-0.5">Assists</span>
+            <span className="font-mono font-black text-2xl tabular-nums text-slate-900 leading-none">{person.careerPoints ?? 0}</span>
+            <span className="micro-label mt-0.5">Points</span>
           </div>
           <div className="flex flex-col items-center py-3">
             <span className="font-mono font-black text-2xl tabular-nums text-slate-900 leading-none">{totalCards || 0}</span>

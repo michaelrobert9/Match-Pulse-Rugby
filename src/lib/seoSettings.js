@@ -3,9 +3,9 @@ import { db, configured } from '../firebase'
 
 export const DEFAULT_SEO = {
   siteTitle:                      'MatchPulse',
-  siteTagline:                    'School & Club Hockey',
-  siteDescription:                'Live scores, fixtures, results and player records for school and club hockey in South Africa.',
-  keywords:                       'hockey, school hockey, club hockey, live scores, fixtures, results, players, South Africa',
+  siteTagline:                    'School & Club Rugby',
+  siteDescription:                'Live scores, fixtures, results and player records for school and club rugby in South Africa.',
+  keywords:                       'rugby, school rugby, club rugby, live scores, fixtures, results, players, South Africa',
   googleAnalyticsId:              '',
   googleSearchConsoleVerification:'',
   statCounterProject:             '',

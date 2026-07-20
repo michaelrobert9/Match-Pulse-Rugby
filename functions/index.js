@@ -53,7 +53,10 @@ exports.sendInviteEmail = onDocumentCreated(
     }
 
     const roleLabel = ROLE_DISPLAY[invite.role] || invite.role || 'member'
-    const signupLink = `https://matchpulse.co.za/signup?invite=${inviteId}`
+    // PUBLIC_BASE_URL (functions/.env) — the rugby platform's domain is
+    // environment-configured; links fall back to the project's web.app origin.
+    const origin = (process.env.PUBLIC_BASE_URL || `https://${process.env.GCLOUD_PROJECT}.web.app`).replace(/\/$/, '')
+    const signupLink = `${origin}/signup?invite=${inviteId}`
 
     const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -90,7 +93,7 @@ exports.sendInviteEmail = onDocumentCreated(
 
     try {
       const { data, error } = await resend.emails.send({
-        from: 'MatchPulse <noreply@matchpulse.co.za>',
+        from: process.env.EMAIL_FROM || 'MatchPulse Rugby <noreply@example.com>',
         to: email,
         subject: 'You have been invited to MatchPulse',
         html,
@@ -123,7 +126,9 @@ exports.sendInviteEmail = onDocumentCreated(
 //     the captcha step is skipped (and logged) so the form works before the keys
 //     are provisioned. Set it — together with VITE_TURNSTILE_SITE_KEY on the
 //     frontend — to enforce the captcha. Keys: dash.cloudflare.com → Turnstile.
-const CONTACT_TO = 'michael@matchpulse.co.za'
+// Environment-configured — set CONTACT_EMAIL in functions/.env for this
+// deployment. Never inherit another product's inbox.
+const CONTACT_TO = process.env.CONTACT_EMAIL || ''
 
 async function verifyTurnstile(token, remoteip) {
   const secret = process.env.TURNSTILE_SECRET_KEY
@@ -178,6 +183,12 @@ exports.submitContactForm = onCall(
     }
 
     // ── send ──
+    // The destination inbox is deployment configuration — refuse loudly (and
+    // log) rather than silently posting into the void while it is unset.
+    if (!CONTACT_TO) {
+      logger.error('Contact form received but CONTACT_EMAIL is not configured — set it in functions/.env')
+      throw new HttpsError('failed-precondition', 'The contact form is not configured yet. Please try again later.')
+    }
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const messageHtml = esc(message).replace(/\n/g, '<br />')
     const resend = new Resend(process.env.RESEND_API_KEY)
@@ -208,7 +219,7 @@ exports.submitContactForm = onCall(
 
     try {
       const { data, error } = await resend.emails.send({
-        from: 'MatchPulse <noreply@matchpulse.co.za>',
+        from: process.env.EMAIL_FROM || 'MatchPulse Rugby <noreply@example.com>',
         to: CONTACT_TO,
         replyTo: email,
         subject: `Contact form: ${name}`,
@@ -312,8 +323,8 @@ exports.initPayFastPayment = onCall(
     const params = {
       merchant_id:   cfg.merchantId,
       merchant_key:  cfg.merchantKey,
-      return_url:    cfg.returnUrl  || 'https://matchpulse.co.za/portal',
-      cancel_url:    cfg.cancelUrl  || 'https://matchpulse.co.za/plans',
+      return_url:    cfg.returnUrl  || `${(process.env.PUBLIC_BASE_URL || `https://${process.env.GCLOUD_PROJECT}.web.app`).replace(/\/$/, '')}/portal`,
+      cancel_url:    cfg.cancelUrl  || `${(process.env.PUBLIC_BASE_URL || `https://${process.env.GCLOUD_PROJECT}.web.app`).replace(/\/$/, '')}/plans`,
       notify_url:    cfg.notifyUrl  || '',
       email_address: request.auth.token.email || '',
       m_payment_id:  mPaymentId,

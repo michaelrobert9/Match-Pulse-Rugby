@@ -9,7 +9,10 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUTPUT    = join(__dirname, '..', 'public', 'sitemap.xml')
-const BASE_URL  = 'https://matchpulse.co.za'
+// Environment-configured — the rugby platform's domain is set via
+// PUBLIC_BASE_URL (CI secret) once decided; the sitemap step is skipped
+// gracefully when it is absent.
+const BASE_URL  = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '')
 const NOW       = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
 
 if (!process.env.FIREBASE_SERVICE_ACCOUNT) {

@@ -60,18 +60,18 @@ function groupCareer(career, orgMap) {
       const records = [...group.byTeam[teamKey]].sort(
         (a, b) => String(b.competitionSeason).localeCompare(String(a.competitionSeason))
       )
-      const caps  = records.reduce((s, r) => s + (r.caps  ?? 0), 0)
-      const goals = records.reduce((s, r) => s + (r.goals ?? 0), 0)
+      const caps   = records.reduce((s, r) => s + (r.caps   ?? 0), 0)
+      const tries  = records.reduce((s, r) => s + (r.tries  ?? 0), 0)
+      const points = records.reduce((s, r) => s + (r.points ?? 0), 0)
       const cards = records.reduce((acc, r) => ({
-        green:  acc.green  + (r.cards?.green  || 0),
         yellow: acc.yellow + (r.cards?.yellow || 0),
         red:    acc.red    + (r.cards?.red    || 0),
-      }), { green: 0, yellow: 0, red: 0 })
+      }), { yellow: 0, red: 0 })
       return {
         teamId:           records[0].teamId,
         teamDisplayName:  records[0].teamDisplayName,
         teamPrimaryColor: records[0].teamPrimaryColor,
-        caps, goals, cards, records,
+        caps, tries, points, cards, records,
       }
     })
     return { orgId: group.orgId, org: group.org, teams }
@@ -114,7 +114,9 @@ function CompRecord({ record }) {
       <div className="flex items-center gap-2 shrink-0 font-mono text-[10px] text-slate-500">
         <span>{record.caps ?? 0} caps</span>
         <span className="text-slate-300">·</span>
-        <span className="text-emerald-600">{record.goals ?? 0} gls</span>
+        <span className="text-emerald-600">{record.tries ?? 0} tries</span>
+        <span className="text-slate-300">·</span>
+        <span>{record.points ?? 0} pts</span>
       </div>
     </div>
   )
@@ -123,7 +125,7 @@ function CompRecord({ record }) {
 // A team within an org: aggregate stats + expandable competition records.
 function TeamBlock({ team }) {
   const [expanded, setExpanded] = useState(false)
-  const totalCards = (team.cards?.green ?? 0) + (team.cards?.yellow ?? 0) + (team.cards?.red ?? 0)
+  const totalCards = (team.cards?.yellow ?? 0) + (team.cards?.red ?? 0)
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -144,13 +146,9 @@ function TeamBlock({ team }) {
         {/* Aggregate stats */}
         <div className="grid grid-cols-4 gap-0 border-t border-slate-200 pt-3">
           {[
-            { val: team.caps,  label: 'Caps',     cls: 'text-slate-900' },
-            { val: team.goals, label: 'Goals',    cls: 'text-emerald-600' },
-            {
-              val: team.caps > 0 && team.goals > 0
-                ? (team.goals / team.caps).toFixed(2) : '—',
-              label: 'Avg/Game', cls: 'text-slate-900',
-            },
+            { val: team.caps,   label: 'Caps',   cls: 'text-slate-900' },
+            { val: team.tries,  label: 'Tries',  cls: 'text-emerald-600' },
+            { val: team.points, label: 'Points', cls: 'text-slate-900' },
             { val: totalCards || '—', label: 'Cards', cls: 'text-slate-900' },
           ].map(({ val, label, cls }, i) => (
             <div key={label} className={`flex flex-col items-center${i > 0 ? ' border-l border-slate-200' : ''}`}>
@@ -163,7 +161,6 @@ function TeamBlock({ team }) {
         {/* Card breakdown */}
         {totalCards > 0 && (
           <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100">
-            {team.cards?.green  > 0 && <span className="flex items-center gap-1 text-[9px] font-mono text-green-600"><span className="w-1.5 h-2.5 bg-green-500 rounded-sm inline-block" />{team.cards.green}×</span>}
             {team.cards?.yellow > 0 && <span className="flex items-center gap-1 text-[9px] font-mono text-yellow-600"><span className="w-1.5 h-2.5 bg-yellow-400 rounded-sm inline-block" />{team.cards.yellow}×</span>}
             {team.cards?.red    > 0 && <span className="flex items-center gap-1 text-[9px] font-mono text-red-600"><span className="w-1.5 h-2.5 bg-red-500 rounded-sm inline-block" />{team.cards.red}×</span>}
           </div>
@@ -388,17 +385,18 @@ export default function PersonCareer() {
           </div>
 
           {/* Career total — compact summary bar */}
-          <div className="grid grid-cols-5 gap-0 bg-slate-50 rounded-xl border border-slate-200 p-3">
+          <div className="grid grid-cols-7 gap-0 bg-slate-50 rounded-xl border border-slate-200 p-3">
             <StatBlock value={person.careerCaps}  label="Total Caps" />
             <div className="w-px bg-slate-200 mx-auto" />
-            <StatBlock value={person.careerGoals} label="Total Goals" />
+            <StatBlock value={person.careerTries} label="Total Tries" />
+            <div className="w-px bg-slate-200 mx-auto" />
+            <StatBlock value={person.careerPoints} label="Total Points" />
             <div className="w-px bg-slate-200 mx-auto" />
             <div className="flex flex-col items-center gap-0.5">
               <div className="flex items-end gap-0.5">
-                {(person.careerCards?.green  > 0) && <span className="font-mono font-black text-xl text-green-600 tabular-nums leading-none">{person.careerCards.green}</span>}
-                {(person.careerCards?.yellow > 0) && <span className="font-mono font-black text-xl text-yellow-600 tabular-nums leading-none">{(person.careerCards?.green > 0) ? <span className="text-slate-300 text-base">/</span> : null}{person.careerCards.yellow}</span>}
-                {(person.careerCards?.red    > 0) && <span className="font-mono font-black text-xl text-red-600 tabular-nums leading-none">{(person.careerCards?.green > 0 || person.careerCards?.yellow > 0) ? <span className="text-slate-300 text-base">/</span> : null}{person.careerCards.red}</span>}
-                {(!person.careerCards?.green && !person.careerCards?.yellow && !person.careerCards?.red) && (
+                {(person.careerCards?.yellow > 0) && <span className="font-mono font-black text-xl text-yellow-600 tabular-nums leading-none">{person.careerCards.yellow}</span>}
+                {(person.careerCards?.red    > 0) && <span className="font-mono font-black text-xl text-red-600 tabular-nums leading-none">{(person.careerCards?.yellow > 0) ? <span className="text-slate-300 text-base">/</span> : null}{person.careerCards.red}</span>}
+                {(!person.careerCards?.yellow && !person.careerCards?.red) && (
                   <span className="font-mono font-black text-xl text-slate-400 tabular-nums leading-none">0</span>
                 )}
               </div>

@@ -70,14 +70,14 @@ function groupCareer(career, orgMap) {
       const records = [...group.byTeam[teamKey]].sort(
         (a, b) => String(b.competitionSeason ?? b.season ?? '').localeCompare(String(a.competitionSeason ?? a.season ?? ''))
       )
-      const caps    = records.reduce((s, r) => s + (r.caps    ?? 0), 0)
-      const goals   = records.reduce((s, r) => s + (r.goals   ?? 0), 0)
-      const assists = records.reduce((s, r) => s + (r.assists ?? 0), 0)
+      const caps   = records.reduce((s, r) => s + (r.caps   ?? 0), 0)
+      const tries  = records.reduce((s, r) => s + (r.tries  ?? 0), 0)
+      const points = records.reduce((s, r) => s + (r.points ?? 0), 0)
       return {
         teamId:           records[0].teamId,
         teamDisplayName:  records[0].teamDisplayName,
         teamPrimaryColor: records[0].teamPrimaryColor,
-        caps, goals, assists, records,
+        caps, tries, points, records,
       }
     })
     return { orgId: group.orgId, org: group.org, teams }
@@ -102,19 +102,19 @@ function CompRecord({ record }) {
       <div className="flex items-center gap-2 shrink-0 font-mono text-[10px] text-slate-500">
         <span>{record.caps ?? 0} caps</span>
         <span className="text-slate-300">·</span>
-        <span className="text-emerald-600">{record.goals ?? 0} gls</span>
+        <span className="text-emerald-600">{record.tries ?? 0} tries</span>
         <span className="text-slate-300">·</span>
-        <span>{record.assists ?? 0} ast</span>
+        <span>{record.points ?? 0} pts</span>
       </div>
     </div>
   )
 }
 
-// Team card: aggregate caps + goals + expandable competition rows.
+// Team card: aggregate caps + tries + points + expandable competition rows.
 function TeamBlock({ team }) {
   const [expanded, setExpanded] = useState(false)
-  const avg = team.caps > 0 && team.goals > 0
-    ? (team.goals / team.caps).toFixed(2) : '—'
+  const avg = team.caps > 0 && team.points > 0
+    ? (team.points / team.caps).toFixed(1) : '—'
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -132,10 +132,10 @@ function TeamBlock({ team }) {
         </div>
         <div className="grid grid-cols-4 gap-0 border-t border-slate-200 pt-3">
           {[
-            { val: team.caps,    label: 'Caps',     cls: 'text-slate-900' },
-            { val: team.goals,   label: 'Goals',    cls: 'text-emerald-600' },
-            { val: team.assists, label: 'Assists',  cls: 'text-slate-900' },
-            { val: avg,          label: 'Avg/Game', cls: 'text-slate-900' },
+            { val: team.caps,   label: 'Caps',     cls: 'text-slate-900' },
+            { val: team.tries,  label: 'Tries',    cls: 'text-emerald-600' },
+            { val: team.points, label: 'Points',   cls: 'text-slate-900' },
+            { val: avg,         label: 'Pts/Game', cls: 'text-slate-900' },
           ].map(({ val, label, cls }, i) => (
             <div key={label} className={`flex flex-col items-center${i > 0 ? ' border-l border-slate-200' : ''}`}>
               <span className={`font-mono font-black text-xl tabular-nums ${cls}`}>{val}</span>
@@ -342,7 +342,7 @@ export default function PlayerProfile() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-12 space-y-6">
 
-      {/* Hero: banner, photo, name, position, nationality, DOB, SAHA number */}
+      {/* Hero: banner, photo, name, position, nationality, DOB, SA Rugby number */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <ProfileBanner person={person} canEdit={canEditBanner}
           onSaved={url => setPerson(p => ({ ...p, bannerUrl: url }))} />
@@ -375,10 +375,10 @@ export default function PlayerProfile() {
                 {age(person.dateOfBirth) != null && ` · ${age(person.dateOfBirth)} yrs`}
               </div>
             )}
-            {person.sahaNumber && (
+            {person.saRugbyNumber && (
               <div className="mt-1.5">
                 <span className="inline-flex font-mono text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-500">
-                  SAHA {person.sahaNumber}
+                  SA Rugby {person.saRugbyNumber}
                 </span>
               </div>
             )}
@@ -392,7 +392,7 @@ export default function PlayerProfile() {
           onClaimed={patch => setPerson(p => ({ ...p, ...patch }))} />
       )}
 
-      {/* Represents: org → team blocks with caps/goals stats */}
+      {/* Represents: org → team blocks with caps/tries/points stats */}
       {allOrgGroups.length > 0 && (
         <section>
           <SectionHeader title="Represents" />

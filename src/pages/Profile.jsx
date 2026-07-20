@@ -23,10 +23,14 @@ const ROLES = [
 ]
 
 const POSITIONS = [
-  { value: 'goalkeeper', label: 'Goalkeeper' },
-  { value: 'defence',    label: 'Defence' },
-  { value: 'midfield',   label: 'Midfield' },
-  { value: 'forward',    label: 'Forward' },
+  { value: 'prop',          label: 'Prop' },
+  { value: 'hooker',        label: 'Hooker' },
+  { value: 'lock',          label: 'Lock' },
+  { value: 'loose_forward', label: 'Loose Fwd' },
+  { value: 'scrumhalf',     label: 'Scrumhalf' },
+  { value: 'flyhalf',       label: 'Flyhalf' },
+  { value: 'centre',        label: 'Centre' },
+  { value: 'outside_back',  label: 'Outside Back' },
 ]
 
 // ── Org summary chip ──────────────────────────────────────────────────────────
@@ -86,7 +90,7 @@ export default function Profile() {
   const [phone,       setPhone]       = useState('')
   const [role,        setRole]        = useState('')
   const [position,    setPosition]    = useState('')
-  const [sahaNumber,  setSahaNumber]  = useState('')
+  const [saRugbyNumber,  setSaRugbyNumber]  = useState('')
   const [saving,      setSaving]      = useState(false)
   const [uploading,   setUploading]   = useState(false)
   const [saved,       setSaved]       = useState(false)
@@ -109,7 +113,7 @@ export default function Profile() {
       setPhone(data.phone ?? '')
       setRole(data.role ?? '')
       setPosition(data.position ?? '')
-      setSahaNumber(data.sahaNumber ?? '')
+      setSaRugbyNumber(data.saRugbyNumber ?? '')
     }).catch(() => {})
   }, [user])
 
@@ -150,7 +154,7 @@ export default function Profile() {
         phone,
         role,
         position: role === 'player' ? position : '',
-        sahaNumber,
+        saRugbyNumber,
         updatedAt: serverTimestamp(),
       })
       setDoc(doc(db, 'userProfiles', user.uid), {
@@ -257,11 +261,11 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Hockey profile */}
+      {/* Rugby profile */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-slate-100" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0">Hockey profile</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0">Rugby profile</span>
           <div className="flex-1 h-px bg-slate-100" />
         </div>
 
@@ -302,17 +306,17 @@ export default function Profile() {
           </div>
         )}
 
-        {/* SAHA number */}
+        {/* SA Rugby number */}
         <div>
           <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1.5">
-            SAHA number
+            SA Rugby number
             <span className="ml-1.5 text-slate-400 normal-case tracking-normal font-normal">· visible on public profile</span>
           </label>
-          <input value={sahaNumber} onChange={e => setSahaNumber(e.target.value)}
+          <input value={saRugbyNumber} onChange={e => setSaRugbyNumber(e.target.value)}
             placeholder="e.g. WP-2024-00123"
             className="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-slate-900 text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
           <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
-            South African Hockey Association (SAHA) registration number.
+            South African Rugby Union (SA Rugby) registration number.
           </p>
         </div>
       </div>

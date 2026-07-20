@@ -11,7 +11,7 @@ A match isn't just "not played" or "played". It might be scheduled, in progress,
 A fixture progresses through a sequence that covers its whole life:
 
 1. **Scheduled.** The fixture exists, has its teams, date and venue, but hasn't started. This is where it sits after you add it.
-2. **In progress / live.** The match has kicked off and you're scoring it. Goals and events are being recorded as they happen.
+2. **In progress / live.** The match has kicked off and you're scoring it. Tries, kicks and cards are being recorded as they happen.
 3. **Completed / awaiting finalisation.** The match has ended and the score is captured, but it hasn't been locked in yet. This is the moment to check everything's right.
 4. **Finalised.** The result is confirmed and locked. It now counts towards the standings, and player and competition stats are written from it.
 
@@ -20,7 +20,7 @@ Alongside the normal flow, a fixture can reach a settled state without being pla
 ## What each stage lets you do
 
 - **Scheduled:** edit freely, change date, venue or teams, or delete it.
-- **Live:** record goals and events, fix mistakes as you go.
+- **Live:** record scores and events, fix mistakes as you go.
 - **Completed:** review the score, make corrections before finalising.
 - **Finalised:** the result counts. Changing it now is a correction, which recomputes the affected stats and standings.
 

@@ -11,7 +11,7 @@ Every shared component, all public pages, all manage/admin pages, and the AI Stu
 
 ### What MatchPulse feels like today
 
-A **functional dark-mode database tool** that happens to track hockey. The interaction patterns are clean and consistent, but the visual hierarchy is flat. A fixture looks the same as a settings field. A live score looks the same as a competition name. A school looks the same as any other row.
+A **functional dark-mode database tool** that happens to track rugby. The interaction patterns are clean and consistent, but the visual hierarchy is flat. A fixture looks the same as a settings field. A live score looks the same as a competition name. A school looks the same as any other row.
 
 ### What MatchPulse should feel like
 
@@ -196,7 +196,7 @@ font-mono     JetBrains Mono — scores, stats, badges, timestamps
 
 ### 4.3 Hero tagline
 
-The product tagline — "The easiest way to create, score and publish school and club hockey fixtures." — should appear on the Home hero in `font-sans text-base text-slate-400 leading-relaxed`. The main headline uses `font-display`.
+The product tagline — "The easiest way to create, score and publish school and club rugby fixtures." — should appear on the Home hero in `font-sans text-base text-slate-400 leading-relaxed`. The main headline uses `font-display`.
 
 ---
 
@@ -288,7 +288,7 @@ hover:border-slate-700
 ```
 - Avatar: `w-10 h-10 rounded-xl bg-slate-800 border border-slate-700`
 - Name: `font-sans font-semibold text-sm text-white`
-- Stats: `font-mono text-xs text-emerald-400` (caps) / `text-slate-400` (goals)
+- Stats: `font-mono text-xs text-emerald-400` (caps) / `text-slate-400` (tries, points)
 
 ---
 

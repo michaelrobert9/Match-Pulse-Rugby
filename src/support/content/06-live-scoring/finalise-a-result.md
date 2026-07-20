@@ -7,7 +7,7 @@ When a match ends, you finalise it to lock in the result. This is what makes the
 Take a moment to check:
 
 - The **score** is right.
-- The **goals are attributed** to the correct players.
+- The **tries and kicks are attributed** to the correct players.
 - Any other events are recorded.
 
 It's much easier to fix something now than after finalising. See [Fix a mistake during a match](fix-a-mistake.md).
@@ -24,7 +24,7 @@ The fixture moves to its finalised state. The result is locked.
 
 - The result counts towards the **standings**, which recompute to include it.
 - **Competition stats** are written from the match.
-- **Player and career stats** update to reflect the goals recorded.
+- **Player and career stats** update to reflect the scoring recorded.
 
 This all flows from the source result, so a correctly finalised match produces correct records right across the competition.
 

@@ -1,6 +1,6 @@
 # Manage your squad and players
 
-A team's squad is its list of players. Players are what link goals and events to individuals, which is how player and career stats build up over time.
+A team's squad is its list of players. Players are what link tries, kicks and cards to individuals, which is how player and career stats build up over time.
 
 ## Add a player
 
@@ -22,7 +22,7 @@ Remove a player from the squad list when they're no longer part of the team. The
 
 ## Why the squad matters for stats
 
-When you score a match live, goals and events get attributed to players. That's only possible if the players are in the squad. A complete, correctly spelt squad means clean player stats and accurate career records. See [Player and career stats](../07-stats-standings/player-and-career-stats.md) for how those build up.
+When you score a match live, scores and events get attributed to players. That's only possible if the players are in the squad. A complete, correctly spelt squad means clean player stats and accurate career records. See [Player and career stats](../07-stats-standings/player-and-career-stats.md) for how those build up.
 
 ## Tip
 

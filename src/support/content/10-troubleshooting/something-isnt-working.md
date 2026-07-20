@@ -20,7 +20,7 @@ These are calculated from finalised results, so a wrong-looking number nearly al
 
 ## A match won't finalise
 
-Check that the score and any required details are filled in. If goals need scorers attributed and the squad is missing a player, add them to the squad first, then finalise. See [Manage your squad](../02-organisations-teams/manage-your-squad.md).
+Check that the score and any required details are filled in. If tries need scorers attributed and the squad is missing a player, add them to the squad first, then finalise. See [Manage your squad](../02-organisations-teams/manage-your-squad.md).
 
 ## I paid but my plan hasn't unlocked
 

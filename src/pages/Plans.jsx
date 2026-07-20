@@ -7,15 +7,19 @@ import './WhyMatchPulse.css'
 import './Plans.css'
 
 // ── Update these with your actual bank details ────────────────────────────────
+// Billing configuration — set per deployment via environment variables. These
+// deliberately have NO real-account fallbacks: the rugby platform's banking
+// details and billing address are configured when the deployment target is
+// decided, never inherited from a sibling product.
 const BANK_DETAILS = {
-  bankName:      'First National Bank',
-  accountHolder: 'MatchPulse (Pty) Ltd',
-  accountNumber: '62791013982',
-  branchCode:    '250655',
-  accountType:   'Cheque',
+  bankName:      import.meta.env.VITE_BILLING_BANK_NAME      || '—',
+  accountHolder: import.meta.env.VITE_BILLING_ACCOUNT_HOLDER || 'MatchPulse Rugby',
+  accountNumber: import.meta.env.VITE_BILLING_ACCOUNT_NUMBER || '—',
+  branchCode:    import.meta.env.VITE_BILLING_BRANCH_CODE    || '—',
+  accountType:   import.meta.env.VITE_BILLING_ACCOUNT_TYPE   || '—',
   reference:     'Your invoice number',
 }
-const CONTACT_EMAIL = 'billing@matchpulse.co.za'
+const CONTACT_EMAIL = import.meta.env.VITE_BILLING_EMAIL || 'billing@example.com'
 
 function useReveal() {
   useEffect(() => {
@@ -158,7 +162,7 @@ function InvoiceModal({ data, onClose }) {
 <div class="hd">
   <div>
     <div class="logo">MatchPulse</div>
-    <div style="font-size:11px;color:#64748b;margin-top:4px">matchpulse.co.za</div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">MatchPulse Rugby</div>
   </div>
   <div>
     <div class="inv-label">Proforma Invoice</div>
@@ -212,7 +216,7 @@ function InvoiceModal({ data, onClose }) {
   Once payment is received, your MatchPulse competition access will be activated within one business day.<br/>
   Send proof of payment to <strong>${CONTACT_EMAIL}</strong> to expedite activation.
 </p>
-<div class="footer">MatchPulse · matchpulse.co.za · ${CONTACT_EMAIL}</div>
+<div class="footer">MatchPulse Rugby · ${CONTACT_EMAIL}</div>
 </body></html>`)
     w.document.close()
     w.focus()
@@ -268,11 +272,12 @@ function InvoiceModal({ data, onClose }) {
 // ── Purchase CTA — shared by Plus & Pro (paid tiers) ─────────────────────────
 // Primary: PayFast — user just needs to be logged in, nothing else required.
 // Fallback: EFT invoice — explicit secondary choice.
-// PayFast hosted payment links. Recurring billing for Pro is configured on the
-// PayFast side (subscription_type=1, annual frequency, indefinite cycles).
+// PayFast hosted payment links — configured per deployment. Empty until the
+// rugby platform has its own PayFast account; the CTA falls back to the EFT
+// invoice flow while unset. (Never reuse another product's payment links.)
 const PAYFAST_LINKS = {
-  event: 'https://payf.st/k1i9d',  // MatchPulse Plus — single event (once-off)
-  pro:   'https://payment.payfast.io/eng/process?cmd=_paynow&receiver=10266957&item_name=MatchPulse+Pro&email_confirmation=1&confirmation_address=michael@robertfamily.co.za&return_url=https://matchpulse.co.za/portal&cancel_url=https://matchpulse.co.za/plans&notify_url=https://matchpulse.co.za/payfast/itn&amount=15000&subscription_type=1&recurring_amount=15000&cycles=0&frequency=6',  // MatchPulse Pro — annual recurring subscription
+  event: import.meta.env.VITE_PAYFAST_LINK_EVENT || '',  // Plus — single event (once-off)
+  pro:   import.meta.env.VITE_PAYFAST_LINK_PRO   || '',  // Pro — annual recurring subscription
 }
 
 function PaidCTA({ plan, planName, price, label, styleClass }) {
@@ -299,6 +304,16 @@ function PaidCTA({ plan, planName, price, label, styleClass }) {
 
   if (step === 'invoice') return overlay(
     <InvoiceModal data={invoiceData} onClose={() => setStep('idle')} />
+  )
+
+  // No PayFast link configured for this deployment → the EFT invoice flow is
+  // the primary (and only) purchase path.
+  if (!link) return (
+    <div className="tier-cta-slot">
+      <button onClick={() => setStep('form')} className={`tier-cta ${styleClass}`}>
+        {label}
+      </button>
+    </div>
   )
 
   return (
@@ -396,7 +411,7 @@ const FEATURE_GROUPS = [
       'Auto-generate a full fixture list in seconds',
       'Hand-build your draw when you want full control',
       'Smart auto-scheduler',
-      'Automatic knockout rounds: quarters, semis and finals',
+      'Automatic knockout rounds: quarter-finals, semis and finals',
       'Run matches across multiple fields at once',
       'Share any fixture list as a print-ready PDF',
     ],
@@ -417,7 +432,7 @@ const FEATURE_GROUPS = [
       'Points, logs and standings update themselves',
       'Custom tie-breaker rules, applied automatically',
       'Full team and player statistics',
-      'A complete match timeline: goals, cards, and every key moment',
+      'A complete match timeline: tries, kicks, cards, and every key moment',
       'Every action credited to the player who made it',
       "Your organisation's logo across everything",
     ],

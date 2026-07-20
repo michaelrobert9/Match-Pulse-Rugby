@@ -339,8 +339,12 @@ export default function CompetitionOverview() {
                     <div className="micro-label">{player.teamDisplayName} · {player.position}</div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="font-mono font-black text-emerald-600 text-xl tabular-nums">{player.goals}</div>
-                    <div className="micro-label">goals</div>
+                    <div className="font-mono font-black text-emerald-600 text-xl tabular-nums">{player.points}</div>
+                    <div className="micro-label">points</div>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    <div className="font-mono font-bold text-slate-500 text-sm tabular-nums">{player.tries ?? 0}</div>
+                    <div className="micro-label">tries</div>
                   </div>
                 </div>
               ))}

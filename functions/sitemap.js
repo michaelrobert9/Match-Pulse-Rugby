@@ -9,7 +9,9 @@
 // URL builders below MIRROR src/lib/slugify.js. Keep them in sync — this file is
 // CommonJS (functions runtime) and cannot import the ESM client helpers.
 
-const ORIGIN = 'https://matchpulse.co.za'
+// Environment-configured — set PUBLIC_BASE_URL in functions/.env once the
+// rugby platform's domain is decided.
+const ORIGIN = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '')
 
 // Mirror of src/lib/slugify.js `slugify`.
 function slugify(str) {

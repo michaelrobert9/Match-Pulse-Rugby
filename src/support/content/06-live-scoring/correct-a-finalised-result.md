@@ -1,6 +1,6 @@
 # Correct a finalised result
 
-Sometimes a mistake only comes to light after a match is finalised: a wrong score, a misattributed goal, a result that was confirmed too early. You can still fix it. Because everything is calculated from the source result, correcting the fixture and re-running the numbers puts the records straight.
+Sometimes a mistake only comes to light after a match is finalised: a wrong score, a misattributed try, a result that was confirmed too early. You can still fix it. Because everything is calculated from the source result, correcting the fixture and re-running the numbers puts the records straight.
 
 ## How it works
 

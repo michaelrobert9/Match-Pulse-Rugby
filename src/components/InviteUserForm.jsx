@@ -97,7 +97,7 @@ export default function InviteUserForm({
               <p className="font-semibold text-blue-800 mb-0.5">Invite created</p>
               <p className="text-blue-700 text-xs leading-relaxed">
                 When <span className="font-mono font-semibold">{email}</span> signs up at
-                matchpulse.co.za with that email address, they will automatically receive
+                MatchPulse Rugby with that email address, they will automatically receive
                 the <span className="font-semibold">{ROLE_DISPLAY[role] ?? role}</span> role.
                 Share the sign-up link with them directly.
               </p>

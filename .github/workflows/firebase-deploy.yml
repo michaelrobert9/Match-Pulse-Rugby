@@ -43,6 +43,7 @@ jobs:
         run: npm install firebase-admin --no-save && node scripts/generate-sitemap.js
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PUBLIC_BASE_URL:          ${{ secrets.PUBLIC_BASE_URL }}
 
       - name: Build
         run: npm run build
@@ -53,6 +54,7 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET:      ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID:              ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_PUBLIC_BASE_URL:              ${{ secrets.PUBLIC_BASE_URL }}
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
@@ -60,7 +62,7 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
-          projectId: match-pulse-4560e
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
 
       # The hosting action above only deploys hosting. Firestore rules and the
       # composite indexes (required by the matches status+scheduledAt queries on
@@ -85,6 +87,6 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx --yes firebase-tools@latest deploy \
             --only firestore:rules,firestore:indexes \
-            --project match-pulse-4560e \
+            --project "${{ secrets.FIREBASE_PROJECT_ID }}" \
             --non-interactive
           rm -f "$GOOGLE_APPLICATION_CREDENTIALS"

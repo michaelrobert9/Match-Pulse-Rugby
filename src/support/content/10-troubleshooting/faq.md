@@ -32,8 +32,8 @@ Handle it as a withdrawal so their remaining fixtures resolve properly. Don't ju
 **I finalised a match with the wrong score. Can I fix it?**
 Yes. Correct the result and the standings and stats recompute from it. See [Correct a finalised result](../06-live-scoring/correct-a-finalised-result.md).
 
-**A player's goal tally looks wrong.**
-Usually a goal credited to the wrong player in a specific match. Fix that match. See [Why a stat looks wrong](../07-stats-standings/why-a-stat-looks-wrong.md).
+**A player's points tally looks wrong.**
+Usually a try or kick credited to the wrong player in a specific match. Fix that match. See [Why a stat looks wrong](../07-stats-standings/why-a-stat-looks-wrong.md).
 
 **Why doesn't the standings table match what I expect?**
 It's computed from finalised results, so a wrong-looking table traces back to a result. See [How standings are calculated](../07-stats-standings/how-standings-work.md).

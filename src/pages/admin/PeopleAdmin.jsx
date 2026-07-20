@@ -111,8 +111,8 @@ function PersonForm({ initial = {}, onSave, onDelete, saving }) {
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="SAHA number (optional)">
-          <Input value={form.sahaNumber ?? ''} onChange={e => set('sahaNumber', e.target.value)}
+        <Field label="SA Rugby number (optional)">
+          <Input value={form.saRugbyNumber ?? ''} onChange={e => set('saRugbyNumber', e.target.value)}
             placeholder="e.g. SA-12345" />
         </Field>
         <Field label="Photo URL (optional)">

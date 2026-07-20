@@ -15,7 +15,7 @@ The Owner is the final say. Everyone else operates within the limits the Owner s
 
 ## Scorer
 
-A Scorer can score matches: start a match live, record goals and events, and finalise the result. A Scorer can't reshape the competition, change its settings, or grant roles to others.
+A Scorer can score matches: start a match live, record scores and events, and finalise the result. A Scorer can't reshape the competition, change its settings, or grant roles to others.
 
 This is the role for someone whose job is to score on the day, a team manager, a coach, a parent helping out, without giving them control over the wider setup.
 

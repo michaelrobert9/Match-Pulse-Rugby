@@ -1,11 +1,11 @@
 # Start a live match
 
-When it's time to play, you start the fixture live and score it as the match unfolds. Goals and events go in as they happen.
+When it's time to play, you start the fixture live and score it as the match unfolds. Tries, kicks and cards go in as they happen.
 
 ## Before kick-off
 
 - The fixture should already exist with the right teams, date and venue. If not, [add it](../04-fixtures/add-a-fixture.md).
-- Both squads should be set up, so you can attribute goals to players. See [Manage your squad](../02-organisations-teams/manage-your-squad.md).
+- Both squads should be set up, so you can attribute tries and kicks to players. See [Manage your squad](../02-organisations-teams/manage-your-squad.md).
 - Make sure you have permission to score this fixture. A Scorer role on the team or competition is enough. See [Roles explained](../08-permissions/roles-explained.md).
 
 ## Start it
@@ -19,7 +19,7 @@ The fixture moves into its live state, and you're ready to record the action.
 
 ## During the match
 
-With the match live, you record goals and events as they happen. See [Record goals and events](record-events.md).
+With the match live, you record scores and events as they happen. See [Record scores and events](record-events.md).
 
 ## If you start the wrong fixture
 

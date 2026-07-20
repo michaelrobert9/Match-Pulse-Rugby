@@ -61,7 +61,7 @@ function OrgForm({ initial = {}, onSave, onDelete, saving }) {
       <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5">
         <div className="micro-label text-slate-500 mb-1">Public URL</div>
         <div className="text-sm text-slate-600 font-mono break-all">
-          matchpulse.co.za/<span className="text-slate-400">{previewBase}/</span>
+          <span className="text-slate-400">/{previewBase}/</span>
           <span className={isNew ? 'text-emerald-600' : 'text-slate-500'}>{previewSlug}</span>
         </div>
         {!isNew && <div className="micro-label text-slate-400 mt-1">URL is frozen and will not change if you rename this organisation.</div>}

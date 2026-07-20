@@ -27,5 +27,7 @@ export function imageSlots(category, slug) {
   return IMAGE_SLOTS[`${category}/${slug}`] ?? []
 }
 
-export const ORIGIN = 'https://matchpulse.co.za'
+// Environment-configured — the rugby platform's domain is set via
+// VITE_PUBLIC_BASE_URL once decided; relative URLs are produced until then.
+export const ORIGIN = (import.meta.env?.VITE_PUBLIC_BASE_URL || '').replace(/\/$/, '')
 export const supportArticleUrl = (category, slug) => `/support/${category}/${slug}`

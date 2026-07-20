@@ -8,10 +8,9 @@ import { submitFixtureResult, postponeFixture, cancelFixture } from '../../lib/a
 // fixture. The system has invented nothing: a human confirms or edits the score
 // here, which is the ONLY way these reach Final. tracked fixtures arrive with
 // their provisional live score pre-filled; untracked fixtures get a blank form
-// plus optional goal scorer and card fields (§D stat parity).
+// plus optional try count, try scorer and card fields (§D stat parity).
 
 const CARD_TYPES = [
-  { value: 'green',  label: 'Green' },
   { value: 'yellow', label: 'Yellow' },
   { value: 'red',    label: 'Red' },
 ]
@@ -23,14 +22,14 @@ function fmtWhen(val) {
     : 'Date TBD'
 }
 
-// Dynamic scorer name inputs: one row per goal based on the entered score.
-function ScorerInputs({ count, side, names, onChange, teamLabel }) {
+// Dynamic try-scorer name inputs: one row per try based on the entered count.
+function TryScorerInputs({ count, side, names, onChange, teamLabel }) {
   if (count <= 0) return null
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{teamLabel} scorers</p>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{teamLabel} try scorers</p>
       {Array.from({ length: count }).map((_, i) => (
-        <input key={i} type="text" placeholder={`Goal ${i + 1} scorer (optional)`}
+        <input key={i} type="text" placeholder={`Try ${i + 1} scorer (optional)`}
           value={names[i] ?? ''}
           onChange={e => {
             const next = [...names]
@@ -71,15 +70,18 @@ function QueueRow({ match, onResolved }) {
   // Pre-fill from the provisional live score for tracked matches; blank otherwise.
   const [home,         setHome]         = useState(tracked ? String(match.homeScore ?? 0) : '')
   const [away,         setAway]         = useState(tracked ? String(match.awayScore ?? 0) : '')
-  // Scorer names: arrays indexed by goal number for each side (untracked only).
+  // Try counts (blank = unknown; they drive bonus points) and scorer names,
+  // arrays indexed by try number for each side (untracked only).
+  const [homeTries,    setHomeTries]    = useState(tracked ? String(match.homeTries ?? '') : '')
+  const [awayTries,    setAwayTries]    = useState(tracked ? String(match.awayTries ?? '') : '')
   const [homeScorers,  setHomeScorers]  = useState([])
   const [awayScorers,  setAwayScorers]  = useState([])
   const [cards,        setCards]        = useState([])
   const [busy,         setBusy]         = useState(false)
   const [error,        setError]        = useState('')
 
-  const homeCount = Math.max(0, Math.min(99, parseInt(home, 10) || 0))
-  const awayCount = Math.max(0, Math.min(99, parseInt(away, 10) || 0))
+  const homeCount = Math.max(0, Math.min(30, parseInt(homeTries, 10) || 0))
+  const awayCount = Math.max(0, Math.min(30, parseInt(awayTries, 10) || 0))
 
   const homeLabel = match.homeOrgName
     ? `${match.homeOrgName} ${match.homeTeamName}` : match.homeTeamName || 'Home'
@@ -101,8 +103,10 @@ function QueueRow({ match, onResolved }) {
   function confirm() {
     if (home === '' || away === '') { setError('Enter a score for both teams.'); return }
 
-    // Build goals array from scorer inputs (only for untracked — tracked already has timeline).
-    const goals = !tracked
+    // Build the try attribution array from scorer inputs (only for untracked —
+    // tracked already has a live timeline). Rows without a name are dropped:
+    // the COUNT is carried separately by homeTries/awayTries.
+    const tries = !tracked
       ? [
           ...Array.from({ length: homeCount }, (_, i) => ({
             side: 'home', scorerName: homeScorers[i]?.trim() || null,
@@ -110,7 +114,7 @@ function QueueRow({ match, onResolved }) {
           ...Array.from({ length: awayCount }, (_, i) => ({
             side: 'away', scorerName: awayScorers[i]?.trim() || null,
           })),
-        ]
+        ].filter(r => r.scorerName)
       : null
 
     const cardPayload = !tracked && cards.length > 0
@@ -119,7 +123,9 @@ function QueueRow({ match, onResolved }) {
 
     run(() => submitFixtureResult(match.id, {
       homeScore: Number(home), awayScore: Number(away), method: 'admin_approved',
-      goals: goals?.length ? goals : null,
+      homeTries: homeTries === '' ? null : Number(homeTries),
+      awayTries: awayTries === '' ? null : Number(awayTries),
+      tries: tries?.length ? tries : null,
       cards: cardPayload,
     }))
   }
@@ -150,12 +156,27 @@ function QueueRow({ match, onResolved }) {
         </span>
       </div>
 
-      {/* Scorer + card fields: only for untracked (tracked already has live timeline data) */}
+      {/* Try counts — optional, drive bonus points; blank = unknown */}
+      {!tracked && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="flex-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 text-right">Tries</span>
+          <input type="number" min="0" inputMode="numeric" value={homeTries} onChange={e => setHomeTries(e.target.value)}
+            placeholder="?"
+            className="w-12 text-center font-mono font-bold text-sm bg-slate-50 border border-slate-200 rounded-lg py-1 focus:outline-none focus:border-emerald-500" />
+          <span className="text-slate-300 text-xs">–</span>
+          <input type="number" min="0" inputMode="numeric" value={awayTries} onChange={e => setAwayTries(e.target.value)}
+            placeholder="?"
+            className="w-12 text-center font-mono font-bold text-sm bg-slate-50 border border-slate-200 rounded-lg py-1 focus:outline-none focus:border-emerald-500" />
+          <span className="flex-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Tries</span>
+        </div>
+      )}
+
+      {/* Try scorer + card fields: only for untracked (tracked already has live timeline data) */}
       {!tracked && (homeCount > 0 || awayCount > 0 || cards.length > 0) && (
         <div className="space-y-3 mb-3 pt-3 border-t border-slate-100">
-          <ScorerInputs count={homeCount} side="home" names={homeScorers}
+          <TryScorerInputs count={homeCount} side="home" names={homeScorers}
             onChange={setHomeScorers} teamLabel={homeLabel} />
-          <ScorerInputs count={awayCount} side="away" names={awayScorers}
+          <TryScorerInputs count={awayCount} side="away" names={awayScorers}
             onChange={setAwayScorers} teamLabel={awayLabel} />
           {cards.length > 0 && (
             <div className="space-y-1.5">

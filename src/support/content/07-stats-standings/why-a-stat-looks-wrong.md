@@ -11,12 +11,12 @@ That's the key idea: the table and the records aren't the source of truth. The f
 ## How to track it down
 
 1. **Find the result behind the number.** A team too high or too low in the table? Look at their fixtures. A player's goal count off? Look at the matches they scored in.
-2. **Check the fixture.** Is the score right? Are the goals attributed to the correct players? Was a match finalised that shouldn't have been, or not finalised that should have been?
+2. **Check the fixture.** Is the score right? Are the tries and kicks attributed to the correct players? Was a match finalised that shouldn't have been, or not finalised that should have been?
 3. **Correct the source.** Fix the fixture, and the standings and stats recompute to match. See [Correct a finalised result](../06-live-scoring/correct-a-finalised-result.md).
 
 ## Common causes
 
-- **A goal credited to the wrong player.** The team score is right, so the table looks fine, but one player's tally is high and another's is low. Fix the goal's scorer on that match.
+- **A try or kick credited to the wrong player.** The team score is right, so the table looks fine, but one player's tally is high and another's is low. Fix the goal's scorer on that match.
 - **A wrong score.** Affects the standings directly. Correct the result.
 - **A match not finalised.** A played match that was never finalised won't count yet. Finalise it. See [Finalise a result](../06-live-scoring/finalise-a-result.md).
 - **A non-standard outcome recorded as a normal score.** A walkover or abandonment forced through as an invented scoreline can skew the table. Record it as the proper outcome instead. See [Walkovers, withdrawals and abandonments](../04-fixtures/non-standard-outcomes.md).

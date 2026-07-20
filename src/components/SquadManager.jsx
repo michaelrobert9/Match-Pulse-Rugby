@@ -115,9 +115,9 @@ export default function SquadManager({ team, readOnly = false }) {
   }
 
   function remove(p) {
-    const hasStats = (p.caps ?? 0) > 0 || (p.goals ?? 0) > 0
+    const hasStats = (p.caps ?? 0) > 0 || (p.points ?? 0) > 0 || (p.tries ?? 0) > 0
     const msg = hasStats
-      ? `${p.personName} has ${p.caps ?? 0} caps and ${p.goals ?? 0} goals recorded on this entry — removing it deletes those stats. Remove anyway?`
+      ? `${p.personName} has ${p.caps ?? 0} caps and ${p.points ?? 0} points recorded on this entry — removing it deletes those stats. Remove anyway?`
       : `Remove ${p.personName} from the ${season} squad?`
     if (!window.confirm(msg)) return
     run(() => removePlayer(p.id))
@@ -254,7 +254,7 @@ export default function SquadManager({ team, readOnly = false }) {
               {p.isCaptain && <span className="text-[9px] text-amber-600 font-bold shrink-0">©</span>}
               {p.position  && <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 shrink-0">{p.position}</span>}
               <span className="font-mono text-[10px] text-slate-400 shrink-0">
-                {p.caps ?? 0} caps · <span className="text-emerald-600">{p.goals ?? 0} gls</span>
+                {p.caps ?? 0} caps · <span className="text-emerald-600">{p.tries ?? 0} tries</span> · {p.points ?? 0} pts
               </span>
               {canManage && season === currentYear && (
                 <>
