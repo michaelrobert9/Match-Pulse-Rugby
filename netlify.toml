@@ -1,0 +1,20 @@
+# Optional config for hosting the static site on Netlify (a no-code, connect-
+# your-GitHub-with-clicks static host). Firebase Hosting ignores this file, so
+# it is harmless to keep either way.
+#
+# With this present, Netlify needs no manual build settings: it builds the Vite
+# app and serves dist/, and the redirect rule sends every route to index.html
+# so client-side routing (e.g. /competitions/...) works on refresh.
+#
+# To connect the app to your real Firebase data, add the VITE_FIREBASE_* values
+# as environment variables in the Netlify UI (Site settings -> Environment
+# variables). Without them the site runs on bundled sample data.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
