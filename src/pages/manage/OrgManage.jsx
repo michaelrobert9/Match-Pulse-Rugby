@@ -445,7 +445,7 @@ function RecentResultsSection({ matches, setMatches, loading }) {
 // ── Teams section ─────────────────────────────────────────────────────────────
 
 const SCHOOL_CHIPS = [
-  '1st XI', '2nd XI',
+  '1st',   '2nd',
   'U18A',  'U18B',
   'U16A',  'U16B',
   'U15A',  'U15B',
@@ -684,7 +684,7 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
                 </div>
                 <input
                   className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
-                  placeholder="Custom team (e.g. U16C, 3rd XI)"
+                  placeholder="Custom team (e.g. U16C, 3rd)"
                   value={dispName}
                   onChange={e => setDispName(e.target.value)}
                 />
@@ -874,7 +874,7 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
                       </div>
                       <input
                         className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
-                        placeholder="Custom team (e.g. U16C, 3rd XI)"
+                        placeholder="Custom team (e.g. U16C, 3rd)"
                         value={editLabel}
                         onChange={e => setEditLabel(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Escape') setEditId(null) }}
