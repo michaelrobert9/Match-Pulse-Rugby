@@ -69,17 +69,28 @@ The rugby platform deploys to its **own** Firebase project and (eventually)
 its own domain — neither exists yet, and nothing in this repo hardcodes
 either. See `DEPLOYMENT.md` for the full runbook. In short:
 
-1. Create a Firebase project (Firestore, Auth, Storage, Hosting, Functions).
+1. Create a Firebase project on the **Blaze** plan (Firestore, Auth, Storage,
+   Hosting, Functions — 2nd-gen functions need Blaze).
 2. Put its id in `.firebaserc` and the `FIREBASE_PROJECT_ID` GitHub secret.
 3. Add the `VITE_FIREBASE_*` web-config secrets (names in `.env.example`) and
-   the `FIREBASE_SERVICE_ACCOUNT` deploy credential.
+   the `FIREBASE_SERVICE_ACCOUNT` deploy credential (IAM roles in `DEPLOYMENT.md`).
 4. When the public domain is decided, set the `PUBLIC_BASE_URL` GitHub secret
    (drives canonical URLs, OG tags and the sitemap), the same variable in
    `functions/.env`, and the absolute `Sitemap:` line in `public/robots.txt`.
 5. Configure the server-side email/billing settings in `functions/.env`
    (template: `functions/.env.example`).
 
-Pushes to `main` build and deploy via the GitHub Actions workflow.
+Pushes to `main` build and deploy via the GitHub Actions workflow — a single
+`firebase deploy` of Hosting **+ Functions** + Firestore rules/indexes + Storage.
+Functions are not optional: `firebase.json` routes every page request through
+the `renderer` function (plus `/sitemap.xml` and `/payfast/itn`), so Hosting
+without Functions 500s on every load.
+
+> **Use classic Firebase Hosting, not Firebase App Hosting.** This is a static
+> SPA served from `dist/`; it does not run a web server. App Hosting expects a
+> container that listens on `$PORT` and will fail its rollout ("container failed
+> to start … on the port"). If an App Hosting backend was created for this repo,
+> delete it (Firebase console → App Hosting → Delete backend). See `DEPLOYMENT.md`.
 
 ## Deliberate deviations from the hockey product
 

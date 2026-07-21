@@ -1,4 +1,4 @@
-name: Deploy to Firebase Hosting
+name: Deploy to Firebase
 
 on:
   push:
@@ -56,37 +56,36 @@ jobs:
           VITE_FIREBASE_APP_ID:              ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_PUBLIC_BASE_URL:              ${{ secrets.PUBLIC_BASE_URL }}
 
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          channelId: live
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
-
-      # The hosting action above only deploys hosting. Firestore rules and the
-      # composite indexes (required by the matches status+scheduledAt queries on
-      # the home page) must be deployed separately, or those queries fail with
-      # a "query requires an index" error.
+      # One full deploy — Hosting, Functions, Firestore rules+indexes, Storage.
       #
-      # IAM: the FIREBASE_SERVICE_ACCOUNT used below must have these roles, or this
-      # step fails with a serviceusage.googleapis.com permission-denied error:
-      #   - Firebase Admin        (roles/firebase.admin)
-      #   - Cloud Datastore Owner (roles/datastore.owner)
-      #   - Service Usage Viewer  (roles/serviceusage.serviceUsageViewer)
+      # Functions are NOT optional here: firebase.json rewrites every page
+      # request (`**`), plus /sitemap.xml and /payfast/itn, to Cloud Functions,
+      # so Hosting without Functions would 500 on every load. Deploying them
+      # together in a single operation keeps the rewrites and their targets in
+      # step. (This app uses classic Firebase Hosting — do NOT create a Firebase
+      # App Hosting backend for it; that product runs the repo as a web server
+      # on $PORT, which a static Vite SPA never does. See DEPLOYMENT.md.)
+      #
+      # IAM: the FIREBASE_SERVICE_ACCOUNT must have these roles, or this step
+      # fails with a serviceusage.googleapis.com permission-denied error:
+      #   - Firebase Admin              (roles/firebase.admin)
+      #   - Cloud Datastore Owner       (roles/datastore.owner)
+      #   - Cloud Functions Admin       (roles/cloudfunctions.admin)
+      #   - Service Account User        (roles/iam.serviceAccountUser)
+      #   - Service Usage Viewer        (roles/serviceusage.serviceUsageViewer)
       # See DEPLOYMENT.md -> "CI service account - required IAM roles".
-      - name: Deploy Firestore rules & indexes
+      - name: Deploy to Firebase (hosting, functions, firestore, storage)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "FIREBASE_SERVICE_ACCOUNT not set — skipping Firestore rules & indexes deploy."
+            echo "FIREBASE_SERVICE_ACCOUNT not set — skipping deploy."
             exit 0
           fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx --yes firebase-tools@latest deploy \
-            --only firestore:rules,firestore:indexes \
+            --only hosting,functions,firestore:rules,firestore:indexes,storage \
             --project "${{ secrets.FIREBASE_PROJECT_ID }}" \
             --non-interactive
           rm -f "$GOOGLE_APPLICATION_CREDENTIALS"

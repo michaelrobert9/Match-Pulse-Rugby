@@ -27,7 +27,12 @@ const ROLE_DISPLAY = {
 // the RESEND_API_KEY secret (Google Cloud Secret Manager) and read from
 // process.env — never committed or hard-coded.
 exports.sendInviteEmail = onDocumentCreated(
-  { document: 'invites/{inviteId}', secrets: ['RESEND_API_KEY'] },
+  // RESEND_API_KEY is read from process.env (functions/.env, see
+  // functions/.env.example). It is intentionally NOT declared as a Secret
+  // Manager secret so a fresh, pre-launch deploy succeeds before any email
+  // provider is configured — the handler no-ops gracefully when the key is
+  // absent. Provision the key in functions/.env to enable invite emails.
+  { document: 'invites/{inviteId}' },
   async (event) => {
     const snap = event.data
     if (!snap) return
@@ -148,7 +153,11 @@ async function verifyTurnstile(token, remoteip) {
 }
 
 exports.submitContactForm = onCall(
-  { region: 'europe-west1', secrets: ['RESEND_API_KEY', 'TURNSTILE_SECRET_KEY'] },
+  // RESEND_API_KEY / TURNSTILE_SECRET_KEY are read from process.env
+  // (functions/.env). Not declared as Secret Manager secrets so a pre-launch
+  // deploy succeeds before those providers are set up — the captcha step is
+  // skipped and the send guards on CONTACT_TO when they are absent.
+  { region: 'europe-west1' },
   async (request) => {
     const d = request.data ?? {}
     const name    = String(d.name    ?? '').trim()
