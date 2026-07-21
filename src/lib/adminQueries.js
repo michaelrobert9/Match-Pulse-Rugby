@@ -101,9 +101,21 @@ async function generateUniqueOrgSlug(name) {
   return `${base}-${n}`
 }
 
+// Derive a short code (team/org abbreviation, e.g. "PBHS", "HRC") from a name
+// when the caller didn't supply one. Initials of each word, falling back to the
+// first letters of the name. Never returns undefined — Firestore rejects it.
+export function deriveOrgShortCode(name) {
+  const words = String(name || '').trim().split(/\s+/).filter(Boolean)
+  const initials = words.map(w => w[0]).join('').replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  if (initials.length >= 2) return initials.slice(0, 4)
+  const letters = String(name || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  return letters.slice(0, 3) || null
+}
+
 export async function createOrganization(data) {
   const slug = await generateUniqueOrgSlug(data.name)
-  return addDoc(collection(db, 'organizations'), { ...data, slug, createdBy: uid(), createdAt: serverTimestamp() })
+  const shortCode = data.shortCode || deriveOrgShortCode(data.name)
+  return addDoc(collection(db, 'organizations'), { ...data, shortCode, slug, createdBy: uid(), createdAt: serverTimestamp() })
 }
 
 // Self-service org creation: any authenticated user creates an org and
@@ -114,10 +126,11 @@ export async function selfCreateOrganization(data) {
   const userId = uid()
   if (!userId) throw new Error('Must be signed in to create an organisation')
   const slug = await generateUniqueOrgSlug(data.name)
+  const shortCode = data.shortCode || deriveOrgShortCode(data.name)
 
   // Step 1 — create the organisation document.
   const orgRef = await addDoc(collection(db, 'organizations'), {
-    ...data, slug, createdBy: userId, createdAt: serverTimestamp(),
+    ...data, shortCode, slug, createdBy: userId, createdAt: serverTimestamp(),
   })
 
   // Step 2 — add creator as owner in staff subcollection + mirror to user doc.
@@ -500,12 +513,14 @@ export async function createTeam(orgData, displayName, options = {}) {
   const name = displayName || orgData.name
   return addDoc(collection(db, 'teams'), {
     organizationId: orgData.id,
-    orgName:        orgData.name,
+    orgName:        orgData.name ?? null,
     displayName:    name,
     searchName:     name.toLowerCase(),
-    shortCode:      orgData.shortCode,
+    // Coalesce to null — Firestore rejects `undefined`. An org created without a
+    // short code (or colour) must not break team creation.
+    shortCode:      orgData.shortCode ?? null,
     logoUrl:        orgData.logoUrl || null,
-    primaryColor:   orgData.primaryColor,
+    primaryColor:   orgData.primaryColor ?? null,
     secondaryColor: orgData.secondaryColor || '#FFFFFF',
     // Structured naming fields — gender (school: boys/girls, club: division)
     // and the team label (e.g. "U16A" or "1st Team") are stored alongside the
@@ -721,9 +736,9 @@ export async function assignPlayer(teamData, personData, { shirtNumber, position
     competitionName:    null,
     competitionSeason:  null,
     competitionStatus:  null,
-    teamDisplayName:    teamData.displayName,
-    teamShortCode:      teamData.shortCode,
-    teamPrimaryColor:   teamData.primaryColor,
+    teamDisplayName:    teamData.displayName ?? null,
+    teamShortCode:      teamData.shortCode ?? null,
+    teamPrimaryColor:   teamData.primaryColor ?? null,
     createdBy: uid(), createdAt: serverTimestamp(),
   })
   // Record competition participation on the person doc so the career-stat
