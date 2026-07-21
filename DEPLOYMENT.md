@@ -1,28 +1,60 @@
 # Deployment Guide
 
-MatchPulse is a Vite SPA on **Firebase Hosting** with **Cloud Firestore** rules and
-indexes. This guide covers both automated (CI) and manual deployment, and — importantly —
-the **IAM permissions** the CI service account needs to deploy Firestore rules.
+MatchPulse Rugby is a Vite SPA on **classic Firebase Hosting**, fronted by **Cloud
+Functions** (an SSR/bot renderer that every page request is routed through, plus a
+sitemap and a PayFast webhook), with **Cloud Firestore** rules/indexes and **Cloud
+Storage** rules. This guide covers both automated (CI) and manual deployment, and the
+**IAM permissions** the CI service account needs.
 
-- **Firebase project:** created per deployment — the rugby platform runs on its
-  OWN Firebase project (not decided yet). Everywhere below, `<project-id>` means
-  that project's id, configured via the `FIREBASE_PROJECT_ID` GitHub secret and
-  `.firebaserc`.
+- **Firebase project:** `match-pulse-rugby` — pinned in `.firebaserc` and in the
+  deploy workflow, so no `FIREBASE_PROJECT_ID` secret is needed. (`<project-id>`
+  below means `match-pulse-rugby`.)
 - **CI workflow:** `.github/workflows/firebase-deploy.yml` (runs on push to `main`)
+- **Required GitHub secrets:** `FIREBASE_SERVICE_ACCOUNT` (deploy credential) and
+  the six `VITE_FIREBASE_*` web-config values (see `.env.example`). Optional:
+  `PUBLIC_BASE_URL`. This mirrors the hockey repo's secrets, with this project's
+  values.
+
+> ### ⚠️ Do NOT use Firebase App Hosting
+>
+> This app is built for **classic Firebase Hosting** (`firebase deploy`). It is a
+> static SPA that is served from `dist/` — it does **not** run a web server.
+> **Firebase App Hosting** is a different product: it builds your repo and then runs
+> a container that must listen on `$PORT` (8080). Pointing App Hosting at this repo
+> produces a rollout that fails with *"container failed to start and listen on the
+> port … within the allocated timeout"*, because nothing here ever listens on a port.
+>
+> If an App Hosting backend was created for this repo (e.g. one named `rugby`),
+> **delete it**: Firebase console → **App Hosting** → the backend → **⋮ → Delete
+> backend** (or `firebase apphosting:backends:delete <name>`). Deploy via classic
+> Hosting instead, as described below.
 
 ---
 
 ## What gets deployed
 
-| Artifact | Source | Deploy target |
-|---|---|---|
-| Static site | `dist/` (from `npm run build`) | Firebase Hosting |
-| Firestore security rules | `firestore.rules` | Cloud Firestore |
-| Firestore composite indexes | `firestore.indexes.json` | Cloud Firestore |
-| Storage rules | `storage.rules` | Cloud Storage |
+| Artifact | Source | Deploy target | Required? |
+|---|---|---|---|
+| Static site | `dist/` (from `npm run build`) | Firebase Hosting | **Yes** — this is the site |
+| Firestore security rules | `firestore.rules` | Cloud Firestore | **Yes** |
+| Firestore composite indexes | `firestore.indexes.json` | Cloud Firestore | **Yes** |
+| Storage rules | `storage.rules` | Cloud Storage | **Yes** |
+| Cloud Functions (email, scheduled fixture sweeps, automatic stats recompute, PayFast webhook) | `functions/` | Cloud Functions (2nd gen) | Optional |
 
-The hosting deploy and the **Firestore rules/indexes deploy are separate steps.** Hosting
-can succeed while the rules deploy fails — always confirm both.
+**The site is a plain static SPA.** `firebase.json` serves `dist/` and rewrites
+unknown paths to `/index.html` (`** -> /index.html`) — no Cloud Function sits in the
+page-request path, so Hosting works entirely on its own. The CI workflow deploys the
+site + rules in one step, then deploys Functions in a separate **non-blocking** step.
+
+**Cloud Functions are optional.** They add automatic stats recompute on result
+finalisation, scheduled fixture sweeps (auto-flip to live, retire abandoned matches),
+invite/contact email, and the PayFast payment webhook. The website loads and is fully
+browsable without them; deploy them once the project is on the Blaze plan and the CI
+service account has the functions roles below. Their keys (Resend, Turnstile,
+`PUBLIC_BASE_URL`, contact inbox) come from `functions/.env` (see
+`functions/.env.example`) and are deliberately **not** Secret Manager secrets, so a
+pre-launch functions deploy succeeds before any of them exist — the handlers no-op
+gracefully until the values are provided.
 
 ---
 
@@ -48,7 +80,9 @@ This is an **IAM / deployment-permission issue, not an application-code issue.**
 |---|---|---|
 | **Firebase Admin** | `roles/firebase.admin` | Deploy Hosting, manage Firebase resources, release Firestore rules. |
 | **Cloud Datastore Owner** | `roles/datastore.owner` | Write Firestore security rules and create/update composite indexes. |
-| **Service Usage Viewer** | `roles/serviceusage.serviceUsageViewer` | Allow the CLI to check that `firestore.googleapis.com` is enabled (the role missing in the failed deploy). |
+| **Cloud Functions Admin** | `roles/cloudfunctions.admin` | Deploy the renderer/sitemap/webhook/scheduled/stats Cloud Functions (2nd gen). |
+| **Service Account User** | `roles/iam.serviceAccountUser` | Let the deploy act as the Functions runtime service account (2nd-gen functions run on Cloud Run). |
+| **Service Usage Viewer** | `roles/serviceusage.serviceUsageViewer` | Allow the CLI to check that required APIs (Firestore, Cloud Functions, Cloud Run, Cloud Build) are enabled. |
 
 ### How to grant them
 
@@ -69,15 +103,24 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:$SA_EMAIL" --role="roles/datastore.owner"
 
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$SA_EMAIL" --role="roles/cloudfunctions.admin"
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$SA_EMAIL" --role="roles/iam.serviceAccountUser"
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:$SA_EMAIL" --role="roles/serviceusage.serviceUsageViewer"
 ```
 
-After granting, re-run the workflow (push to `main` or **Actions → Deploy to Firebase
-Hosting → Run workflow**). IAM changes can take a minute or two to propagate.
+After granting, re-run the workflow (push to `main` or **Actions → Deploy to Firebase →
+Run workflow**). IAM changes can take a minute or two to propagate.
 
-> Also ensure the **Cloud Firestore API** (`firestore.googleapis.com`) and **Service Usage
-> API** (`serviceusage.googleapis.com`) are enabled on the project (APIs & Services →
-> Enabled APIs). Service Usage Viewer lets the CLI *check* this; it does not *enable* the API.
+> **Billing:** 2nd-gen Cloud Functions require the **Blaze** (pay-as-you-go) plan. Enable
+> it before the first deploy or the functions step fails.
+>
+> Also ensure the **Cloud Firestore**, **Cloud Functions**, **Cloud Run**, **Cloud Build**
+> and **Service Usage** APIs are enabled on the project (APIs & Services → Enabled APIs).
+> Service Usage Viewer lets the CLI *check* these; it does not *enable* them.
 
 ---
 
@@ -102,6 +145,16 @@ Expected output:
 ✔  Deploy complete!
 ```
 
+### Full deploy (what CI does)
+```bash
+npm ci && npm run build
+firebase deploy \
+  --only hosting,functions,firestore:rules,firestore:indexes,storage \
+  --project <project-id>
+```
+Deploy everything together so the Hosting rewrites and their Cloud Function targets go
+live in step — Hosting alone (without Functions) 500s on every page.
+
 ### Other manual targets
 ```bash
 # Rules + indexes together
@@ -110,7 +163,10 @@ firebase deploy --only firestore:rules,firestore:indexes --project <project-id>
 # Storage rules
 firebase deploy --only storage --project <project-id>
 
-# Hosting (after npm run build)
+# Functions only (e.g. after changing the renderer)
+firebase deploy --only functions --project <project-id>
+
+# Hosting only (after npm run build) — only safe once Functions already exist
 npm run build
 firebase deploy --only hosting --project <project-id>
 
