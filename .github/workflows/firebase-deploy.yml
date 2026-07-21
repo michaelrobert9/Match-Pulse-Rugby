@@ -56,29 +56,40 @@ jobs:
           VITE_FIREBASE_APP_ID:              ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_PUBLIC_BASE_URL:              ${{ secrets.PUBLIC_BASE_URL }}
 
-      # Core deploy — the website plus its data rules. This is all the site
-      # needs to work: firebase.json serves dist/ as a plain static SPA
+      # Deploy the website — the one required step. Publishes the static site
+      # (dist/) to Firebase Hosting's live channel using the same reliable action
+      # the hockey repo uses. firebase.json serves dist/ as a plain static SPA
       # (** -> /index.html), with no Cloud Function in the request path.
-      # (This app uses classic Firebase Hosting — do NOT create a Firebase App
-      # Hosting backend for it; that product runs the repo as a web server on
-      # $PORT, which a static Vite SPA never does. See DEPLOYMENT.md.)
-      #
-      # IAM: the FIREBASE_SERVICE_ACCOUNT must have at least Firebase Admin
-      # (roles/firebase.admin) + Cloud Datastore Owner (roles/datastore.owner)
-      # + Service Usage Viewer (roles/serviceusage.serviceUsageViewer).
-      # See DEPLOYMENT.md -> "CI service account - required IAM roles".
-      - name: Deploy site & data rules (hosting, firestore, storage)
+      # (Classic Firebase Hosting — do NOT create a Firebase App Hosting backend
+      # for this repo; that product runs it as a web server on $PORT, which a
+      # static Vite SPA never does. See DEPLOYMENT.md.)
+      - name: Deploy website (Firebase Hosting)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: match-pulse-rugby
+
+      # Firestore security rules + indexes and Storage rules. Best-effort: a
+      # missing IAM permission (the serviceusage 403 error) or a product that is
+      # not set up yet must NOT block the website deploy above, so this step is
+      # non-blocking. To turn it green: grant the deploy service account the
+      # roles in DEPLOYMENT.md ("CI service account - required IAM roles") and
+      # make sure Firestore and Storage are set up on the project, then re-run.
+      - name: Deploy Firestore & Storage rules (optional, non-blocking)
+        continue-on-error: true
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "FIREBASE_SERVICE_ACCOUNT not set — skipping deploy."
+            echo "FIREBASE_SERVICE_ACCOUNT not set — skipping rules deploy."
             exit 0
           fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx --yes firebase-tools@latest deploy \
-            --only hosting,firestore:rules,firestore:indexes,storage \
+            --only firestore:rules,firestore:indexes,storage \
             --project match-pulse-rugby \
             --non-interactive
           rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
