@@ -458,6 +458,7 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
   const [editId,           setEditId]           = useState(null)
   const [squadOpenId,      setSquadOpenId]      = useState(null)   // team whose squad panel is open
   const [saving,           setSaving]           = useState(false)
+  const [createError,      setCreateError]      = useState('')     // add-team failure message
   const [editSaving,       setEditSaving]       = useState(false)
   const [deleteTarget,     setDeleteTarget]     = useState(null)   // team to delete
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
@@ -506,6 +507,7 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
     )
     if (isDupe) return
     setSaving(true)
+    setCreateError('')
     const options = isSchool
       ? { gender: effectiveSchoolGender, teamLabel: dispName.trim() }
       : { gender, teamLabel: (teamLevel === 'custom' ? customLevel.trim() : teamLevel) || null }
@@ -515,9 +517,9 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
         id: ref.id, organizationId: orgId, orgName: org.name,
         displayName: name, gender: options.gender ?? null, teamLabel: options.teamLabel ?? null,
         active: true,
-        shortCode: org.shortCode, primaryColor: org.primaryColor,
+        shortCode: org.shortCode ?? null, primaryColor: org.primaryColor ?? null,
         secondaryColor: org.secondaryColor || '#FFFFFF', logoUrl: org.logoUrl || null,
-        played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, points: 0,
+        played: 0, won: 0, drawn: 0, lost: 0, pointsFor: 0, pointsAgainst: 0, points: 0,
       }])
       setShowAdd(false)
       setDispName('')
@@ -525,6 +527,8 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
       setGender('')
       setTeamLevel('')
       setCustomLevel('')
+    } catch (err) {
+      setCreateError(err?.message || 'Could not add the team. Please try again.')
     } finally { setSaving(false) }
   }
 
@@ -769,6 +773,9 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
               <>
                 {isDupe && (
                   <p className="text-xs text-red-600">A team with this name already exists.</p>
+                )}
+                {createError && (
+                  <p className="text-xs text-red-600">{createError}</p>
                 )}
                 <button type="submit" disabled={saving || (isSchool ? !canAddSchool : !canAddClub) || !!isDupe}
                   className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-bold text-sm uppercase tracking-wider rounded-lg py-2.5 transition-colors">
