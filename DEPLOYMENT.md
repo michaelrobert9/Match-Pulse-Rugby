@@ -6,11 +6,14 @@ sitemap and a PayFast webhook), with **Cloud Firestore** rules/indexes and **Clo
 Storage** rules. This guide covers both automated (CI) and manual deployment, and the
 **IAM permissions** the CI service account needs.
 
-- **Firebase project:** created per deployment — the rugby platform runs on its
-  OWN Firebase project (not decided yet). Everywhere below, `<project-id>` means
-  that project's id, configured via the `FIREBASE_PROJECT_ID` GitHub secret and
-  `.firebaserc`.
+- **Firebase project:** `match-pulse-rugby` — pinned in `.firebaserc` and in the
+  deploy workflow, so no `FIREBASE_PROJECT_ID` secret is needed. (`<project-id>`
+  below means `match-pulse-rugby`.)
 - **CI workflow:** `.github/workflows/firebase-deploy.yml` (runs on push to `main`)
+- **Required GitHub secrets:** `FIREBASE_SERVICE_ACCOUNT` (deploy credential) and
+  the six `VITE_FIREBASE_*` web-config values (see `.env.example`). Optional:
+  `PUBLIC_BASE_URL`. This mirrors the hockey repo's secrets, with this project's
+  values.
 
 > ### ⚠️ Do NOT use Firebase App Hosting
 >

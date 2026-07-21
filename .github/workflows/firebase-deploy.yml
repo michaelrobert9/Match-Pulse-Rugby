@@ -79,7 +79,7 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx --yes firebase-tools@latest deploy \
             --only hosting,firestore:rules,firestore:indexes,storage \
-            --project "${{ secrets.FIREBASE_PROJECT_ID }}" \
+            --project match-pulse-rugby \
             --non-interactive
           rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
 
@@ -102,6 +102,6 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx --yes firebase-tools@latest deploy \
             --only functions \
-            --project "${{ secrets.FIREBASE_PROJECT_ID }}" \
+            --project match-pulse-rugby \
             --non-interactive
           rm -f "$GOOGLE_APPLICATION_CREDENTIALS"

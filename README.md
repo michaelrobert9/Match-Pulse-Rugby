@@ -69,11 +69,13 @@ The rugby platform deploys to its **own** Firebase project and (eventually)
 its own domain — neither exists yet, and nothing in this repo hardcodes
 either. See `DEPLOYMENT.md` for the full runbook. In short:
 
-1. Create a Firebase project on the **Blaze** plan (Firestore, Auth, Storage,
-   Hosting, Functions — 2nd-gen functions need Blaze).
-2. Put its id in `.firebaserc` and the `FIREBASE_PROJECT_ID` GitHub secret.
-3. Add the `VITE_FIREBASE_*` web-config secrets (names in `.env.example`) and
-   the `FIREBASE_SERVICE_ACCOUNT` deploy credential (IAM roles in `DEPLOYMENT.md`).
+1. Create a Firebase project (the project id is pinned to `match-pulse-rugby`
+   in `.firebaserc` and the deploy workflow). Blaze plan only needed for the
+   optional Cloud Functions.
+2. Add the `FIREBASE_SERVICE_ACCOUNT` deploy credential (IAM roles in
+   `DEPLOYMENT.md`) and the `VITE_FIREBASE_*` web-config secrets (names in
+   `.env.example`) to the GitHub repo — the same set you set for hockey, with
+   this project's values.
 4. When the public domain is decided, set the `PUBLIC_BASE_URL` GitHub secret
    (drives canonical URLs, OG tags and the sitemap), the same variable in
    `functions/.env`, and the absolute `Sitemap:` line in `public/robots.txt`.
