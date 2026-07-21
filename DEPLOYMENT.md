@@ -30,24 +30,28 @@ Storage** rules. This guide covers both automated (CI) and manual deployment, an
 
 ## What gets deployed
 
-| Artifact | Source | Deploy target |
-|---|---|---|
-| Static site | `dist/` (from `npm run build`) | Firebase Hosting |
-| Cloud Functions (renderer, sitemap, payfastITN, email, scheduled jobs, stats) | `functions/` | Cloud Functions (2nd gen) |
-| Firestore security rules | `firestore.rules` | Cloud Firestore |
-| Firestore composite indexes | `firestore.indexes.json` | Cloud Firestore |
-| Storage rules | `storage.rules` | Cloud Storage |
+| Artifact | Source | Deploy target | Required? |
+|---|---|---|---|
+| Static site | `dist/` (from `npm run build`) | Firebase Hosting | **Yes** — this is the site |
+| Firestore security rules | `firestore.rules` | Cloud Firestore | **Yes** |
+| Firestore composite indexes | `firestore.indexes.json` | Cloud Firestore | **Yes** |
+| Storage rules | `storage.rules` | Cloud Storage | **Yes** |
+| Cloud Functions (email, scheduled fixture sweeps, automatic stats recompute, PayFast webhook) | `functions/` | Cloud Functions (2nd gen) | Optional |
 
-**Functions are not optional.** `firebase.json` rewrites every page request (`**`),
-plus `/sitemap.xml` and `/payfast/itn`, to Cloud Functions. If Hosting is deployed
-without Functions, the site returns 500 on every page. The CI workflow therefore runs
-a single `firebase deploy` covering hosting + functions + firestore + storage together.
+**The site is a plain static SPA.** `firebase.json` serves `dist/` and rewrites
+unknown paths to `/index.html` (`** -> /index.html`) — no Cloud Function sits in the
+page-request path, so Hosting works entirely on its own. The CI workflow deploys the
+site + rules in one step, then deploys Functions in a separate **non-blocking** step.
 
-Server-side secrets (Resend API key, Turnstile secret, `PUBLIC_BASE_URL`, contact
-inbox) are read from `functions/.env` (see `functions/.env.example`). They are
-deliberately **not** declared as Secret Manager secrets, so a fresh pre-launch deploy
-succeeds before any of them exist — the relevant handlers no-op gracefully until the
-values are provided.
+**Cloud Functions are optional.** They add automatic stats recompute on result
+finalisation, scheduled fixture sweeps (auto-flip to live, retire abandoned matches),
+invite/contact email, and the PayFast payment webhook. The website loads and is fully
+browsable without them; deploy them once the project is on the Blaze plan and the CI
+service account has the functions roles below. Their keys (Resend, Turnstile,
+`PUBLIC_BASE_URL`, contact inbox) come from `functions/.env` (see
+`functions/.env.example`) and are deliberately **not** Secret Manager secrets, so a
+pre-launch functions deploy succeeds before any of them exist — the handlers no-op
+gracefully until the values are provided.
 
 ---
 

@@ -56,25 +56,18 @@ jobs:
           VITE_FIREBASE_APP_ID:              ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_PUBLIC_BASE_URL:              ${{ secrets.PUBLIC_BASE_URL }}
 
-      # One full deploy — Hosting, Functions, Firestore rules+indexes, Storage.
+      # Core deploy — the website plus its data rules. This is all the site
+      # needs to work: firebase.json serves dist/ as a plain static SPA
+      # (** -> /index.html), with no Cloud Function in the request path.
+      # (This app uses classic Firebase Hosting — do NOT create a Firebase App
+      # Hosting backend for it; that product runs the repo as a web server on
+      # $PORT, which a static Vite SPA never does. See DEPLOYMENT.md.)
       #
-      # Functions are NOT optional here: firebase.json rewrites every page
-      # request (`**`), plus /sitemap.xml and /payfast/itn, to Cloud Functions,
-      # so Hosting without Functions would 500 on every load. Deploying them
-      # together in a single operation keeps the rewrites and their targets in
-      # step. (This app uses classic Firebase Hosting — do NOT create a Firebase
-      # App Hosting backend for it; that product runs the repo as a web server
-      # on $PORT, which a static Vite SPA never does. See DEPLOYMENT.md.)
-      #
-      # IAM: the FIREBASE_SERVICE_ACCOUNT must have these roles, or this step
-      # fails with a serviceusage.googleapis.com permission-denied error:
-      #   - Firebase Admin              (roles/firebase.admin)
-      #   - Cloud Datastore Owner       (roles/datastore.owner)
-      #   - Cloud Functions Admin       (roles/cloudfunctions.admin)
-      #   - Service Account User        (roles/iam.serviceAccountUser)
-      #   - Service Usage Viewer        (roles/serviceusage.serviceUsageViewer)
+      # IAM: the FIREBASE_SERVICE_ACCOUNT must have at least Firebase Admin
+      # (roles/firebase.admin) + Cloud Datastore Owner (roles/datastore.owner)
+      # + Service Usage Viewer (roles/serviceusage.serviceUsageViewer).
       # See DEPLOYMENT.md -> "CI service account - required IAM roles".
-      - name: Deploy to Firebase (hosting, functions, firestore, storage)
+      - name: Deploy site & data rules (hosting, firestore, storage)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -85,7 +78,30 @@ jobs:
           fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx --yes firebase-tools@latest deploy \
-            --only hosting,functions,firestore:rules,firestore:indexes,storage \
+            --only hosting,firestore:rules,firestore:indexes,storage \
+            --project "${{ secrets.FIREBASE_PROJECT_ID }}" \
+            --non-interactive
+          rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      # Optional backend functions — automatic stats recompute, scheduled
+      # fixture sweeps, invite/contact email. The site serves fine without
+      # them, so this step is best-effort: a failure (e.g. Blaze plan or IAM
+      # not yet set up) does NOT fail the deploy. Enable them by making sure the
+      # service account has Cloud Functions Admin + Service Account User and the
+      # project is on the Blaze plan; keys come from functions/.env.
+      - name: Deploy Cloud Functions (optional, non-blocking)
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT not set — skipping functions deploy."
+            exit 0
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          npx --yes firebase-tools@latest deploy \
+            --only functions \
             --project "${{ secrets.FIREBASE_PROJECT_ID }}" \
             --non-interactive
           rm -f "$GOOGLE_APPLICATION_CREDENTIALS"

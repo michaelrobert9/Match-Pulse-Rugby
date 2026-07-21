@@ -9,8 +9,8 @@ dependencies, backend services or deployment pipeline.
 ## Stack
 
 - **Frontend:** React 18 + Vite 5 + Tailwind CSS 3, react-router 6, lucide-react
-- **Backend:** Firebase — Firestore (offline-persistent), Auth, Storage,
-  Cloud Functions (SSR/OG renderer, sitemap, stats engine, email), FCM push
+- **Backend:** Firebase — Firestore (offline-persistent), Auth, Storage, FCM push;
+  optional Cloud Functions for stats recompute, scheduled fixture sweeps and email
 - **PWA:** installable, offline-capable live scoring (see `public/manifest.json`)
 - **CI/CD:** GitHub Actions → Firebase Hosting (`.github/workflows/firebase-deploy.yml`)
 
@@ -80,11 +80,13 @@ either. See `DEPLOYMENT.md` for the full runbook. In short:
 5. Configure the server-side email/billing settings in `functions/.env`
    (template: `functions/.env.example`).
 
-Pushes to `main` build and deploy via the GitHub Actions workflow — a single
-`firebase deploy` of Hosting **+ Functions** + Firestore rules/indexes + Storage.
-Functions are not optional: `firebase.json` routes every page request through
-the `renderer` function (plus `/sitemap.xml` and `/payfast/itn`), so Hosting
-without Functions 500s on every load.
+Pushes to `main` build and deploy via the GitHub Actions workflow: the site
+(Hosting + Firestore rules/indexes + Storage) deploys in one step, then Cloud
+Functions deploy in a separate **optional, non-blocking** step. The site is a
+plain static SPA (`firebase.json` rewrites `** -> /index.html`) — no Cloud
+Function sits in the page-request path, so it loads on its own. Functions add
+automatic stats recompute, scheduled fixture sweeps, and email; deploy them once
+the project is on Blaze (see `DEPLOYMENT.md`).
 
 > **Use classic Firebase Hosting, not Firebase App Hosting.** This is a static
 > SPA served from `dist/`; it does not run a web server. App Hosting expects a
