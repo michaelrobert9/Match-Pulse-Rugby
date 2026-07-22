@@ -1,573 +1,341 @@
 # MatchPulse Design System
-**Version 1.0 · June 2026**
+**Version 2.0 · July 2026 · Light theme · Rugby**
+
+> Rewritten to match the shipped product. Supersedes v1.0 (June 2026), which described a
+> dark, emerald-live theme that was never built. Every token below was read from the
+> live code (`tailwind.config.js`, `index.css`, `Home.jsx`, `StatusBadge.jsx`,
+> `TeamIdentity.jsx`). Sections 3–9 are shared byte-for-byte with the Hockey app;
+> Section 10 is the rugby skin.
 
 ---
 
-## 1. Audit Summary
+## 1. What this document is
 
-### What was read
+This is the **shared MatchPulse design system**. It describes the visual language of
+the product *as it is actually built* — the light theme, the semantic colour palette,
+the card and typography systems, and the layout rules — read directly from the shipped
+components (`Home.jsx`, `StatusBadge.jsx`, `TeamIdentity.jsx`, `tailwind.config.js`,
+`index.css`).
 
-Every shared component, all public pages, all manage/admin pages, and the AI Studio inspiration version were reviewed before this document was written.
+MatchPulse ships as two apps — **Rugby** and **Hockey** — from two repositories that
+share one design. The rule is:
 
-### What MatchPulse feels like today
+> **One shared design, two sport skins.**
+> Every visual token, component, and layout in Sections 3–9 is **identical** in both
+> repositories. The two apps differ *only* in the sport-specific seam described in
+> Section 10 — terminology, scoring, formats, positions, and copy. There is **no
+> colour or layout divergence** between rugby and hockey.
 
-A **functional dark-mode database tool** that happens to track rugby. The interaction patterns are clean and consistent, but the visual hierarchy is flat. A fixture looks the same as a settings field. A live score looks the same as a competition name. A school looks the same as any other row.
-
-### What MatchPulse should feel like
-
-A **live sports companion**. Matches are the heartbeat. Schools and clubs are protagonists. Every page should feel like it belongs to a sport — not to software.
+When you change anything in Sections 3–9, apply the identical change to **both** repos
+in the same design branch. When you change something in Section 10, change only the
+sport it applies to.
 
 ---
 
-## 2. Inconsistency Audit
+## 2. What MatchPulse feels like
 
-The following conflicts were found between files. Each is a concrete problem to resolve, not a stylistic preference.
+A **light, mobile-first live sports companion**. The product is a clean white column of
+cards on a soft slate canvas. Matches are the heartbeat: a live match glows **red**,
+scores are set in heavy tabular mono, and everything else — competitions, schools,
+clubs, players — is a calm, legible list that gets out of the way.
 
-### 2.1 Multiple StatusBadge implementations
-
-There are **three** separate ways status is communicated:
-
-| Location | Implementation |
-|---|---|
-| `OrgManage.jsx` | `StatusBadge` component with `bg-sky-950/40 text-sky-400` (upcoming), `bg-emerald-950/40 text-emerald-400` (active/live), `bg-slate-800 text-slate-500` (final) |
-| `Home.jsx` CompetitionCard | Inline JSX: `bg-emerald-950/50 text-emerald-400` (live), `bg-slate-800 text-slate-500` (final), `bg-slate-800 text-sky-400` (upcoming) |
-| `MatchDetail.jsx` | Inline text only: `text-emerald-400` (live), `text-slate-500` (others) |
-
-**Resolution:** One `StatusBadge` component, one set of tokens.
-
-### 2.2 Card border-radius mixing
-
-All cards use `rounded-xl` throughout the app. The `OrgManage.jsx` section container uses `rounded-xl`. The manage hub cards use `rounded-xl`. This is technically *consistent* but the radius is too small for the premium sports-media aesthetic — it reads as functional software, not a destination product.
-
-**Resolution:** Upgrade the primary card radius to `rounded-2xl`. Reserve `rounded-xl` for inline elements (badges, inputs, buttons).
-
-### 2.3 Page max-width inconsistency
-
-| Page | Max-width |
-|---|---|
-| Home, OrgList, Browse, CompetitionsList | `max-w-7xl` |
-| OrgDetail, TeamDetail, CompetitionOverview | `max-w-3xl` |
-| OrgManage, CreateOrg | `max-w-2xl` |
-| MatchDetail | **no wrapper** — full bleed |
-| PersonCareer | `max-w-3xl` |
-| Admin pages | Inside AdminLayout sidebar — variable |
-
-MatchDetail has no container at all on desktop, which causes text to span the full viewport width. Manage pages use `max-w-2xl` while adjacent public pages use `max-w-7xl`, creating a jarring context shift.
-
-**Resolution:** Define three layout tiers (see Section 7).
-
-### 2.4 Button inconsistency
-
-Primary buttons in forms: `uppercase tracking-wider rounded-lg py-2.5 text-sm font-bold`  
-Error retry buttons: `rounded-lg px-4 py-2 text-sm` (no uppercase)  
-Nav action links: `text-[10px] font-bold uppercase tracking-widest` (micro-label style)  
-QuickActions buttons in OrgManage: three different visual weights with no clear secondary/tertiary system
-
-**Resolution:** Define three button tiers (see Section 6).
-
-### 2.5 Match cards have no consistent visual identity
-
-The same "match" is rendered four different ways:
-- **Home page** (`MatchResultCard`): horizontal flex, score on right, team names left
-- **Home page** (`UpcomingMatchCard`): team names inline with "vs", date below
-- **Home page** (`LiveMatchCard`): score large in centre, teams either side
-- **OrgManage** (`UpcomingFixturesSection` row): team names with "vs", status badge, date
-- **MatchDetail** header: full-width score panel with team colour strips
-
-There is no shared "match card" component or token set. Live matches do not look more important than upcoming ones. Final scores are not visually prominent.
-
-**Resolution:** Define a Match Card system (see Section 5.1).
-
-### 2.6 Manage pages look like admin software
-
-`OrgManage.jsx` renders sections (`Upcoming Fixtures`, `Teams`, `Staff`) as database-style row lists inside `bg-surface rounded-xl border border-slate-800` containers with header labels. This is identical to how the admin panel at `/admin` looks. There is no visual difference between "managing your school's fixtures" and "an admin editing a database record."
-
-The public `OrgDetail.jsx` page (school/club public profile) is also just a list of teams in rows — there is no hero, no recent results, no upcoming fixture, no sense of a living organisation.
-
-**Resolution:** Manage screens and public org pages share the same card/layout language as the rest of the product. Section 9 defines the priority upgrade path.
-
-### 2.7 Form inputs use a hardcoded colour
-
-Inputs use `bg-[#0A0C10]` (a hardcoded hex matching `canvas`) instead of a token. If the canvas colour changes, inputs break visually.
-
-**Resolution:** Replace with `bg-canvas` token reference.
-
-### 2.8 Micro-label colour is inconsistent
-
-`.micro-label` utility sets `text-slate-500` but `OrgManage.jsx`'s `Section` component header sets `text-slate-400`. Both render as section headings but at different contrast levels.
-
-**Resolution:** Standardise `micro-label` at `text-slate-500`.
-
-### 2.9 The hero question: dark vs. light
-
-The AI Studio inspiration uses light card bodies (`bg-white`) on a light page with a single dark hero. The current app is dark end-to-end. The brief says: "dark hero sections, light content areas."
-
-**Recommendation: do not flip to light mode.** The dark canvas is a strong, distinctive choice that fits a live sports companion better than a light app. What the dark theme lacks today is *contrast and hierarchy* — cards blend into each other because `bg-surface` and `bg-canvas` are only `#0A0C10` vs `#0F1219`. The fix is not light mode; it is better surface differentiation and stronger use of the emerald accent.
-
-Adopt instead: **Dark canvas · Elevated surfaces · Emerald energy**.
+The emotional job of the design is *clarity under time pressure*. A parent glancing at
+their phone on the sideline should read the score, the status, and "who's playing" in
+under a second. That is why status is colour-coded, scores are oversized, and the
+column is narrow even on desktop.
 
 ---
 
 ## 3. Colour System
 
-### 3.1 Background scale
+### 3.1 Neutral scale (Tailwind slate + config tokens)
+
+The base is a **light** neutral scale. Named tokens live in `tailwind.config.js`:
 
 ```
-canvas    #0A0C10   — page background (body)
-surface   #0F1219   — default card/panel background
-elevated  #161B22   — raised card (formerly table-row), modal
-overlay   #1C2230   — hover states, active rows
+canvas    #F8FAFC   — page background (slate-50)      → class: bg-canvas
+surface   #FFFFFF   — default card / panel background → class: bg-surface (== bg-white)
+elevated  #F1F5F9   — raised / inset panels (slate-100)→ class: bg-elevated
 ```
 
-No changes to canvas or surface token names. Add `elevated` (currently named `table-row` — rename it).
+In practice components use `bg-white` for cards and Tailwind slate utilities for
+everything else. Prefer the token classes for panels; `bg-white` is acceptable and
+widespread for cards.
 
 ### 3.2 Border scale
 
 ```
-border-faint    slate-800/50   — very subtle dividers
-border-default  slate-800      — default card borders
-border-strong   slate-700      — hover / focus borders
-border-active   slate-600      — active / selected state
+border-slate-200   — default card / divider border   (the workhorse)
+border-slate-300   — hover / stronger border
 ```
+
+Cards sit at `border-slate-200` and move to `border-slate-300` on hover.
 
 ### 3.3 Text scale
 
 ```
-text-primary    white           — headlines, active labels
-text-secondary  slate-300       — body copy
-text-muted      slate-400       — supporting info
-text-faint      slate-500       — metadata, micro-labels
-text-ghost      slate-600       — placeholder, secondary metadata
+text-slate-900   — primary: headlines, team names, scores, active labels
+text-slate-700   — strong body / emphasised meta
+text-slate-600   — body copy
+text-slate-500   — supporting / secondary meta
+text-slate-400   — micro-labels, timestamps, ghost meta
+text-slate-300   — dividers-as-text (e.g. the "–" between scores)
 ```
 
-### 3.4 Emerald palette (primary accent)
+### 3.4 Emerald — brand & action (NOT live)
+
+Emerald is the MatchPulse brand colour. It marks **actions and affordances**, never
+"live". Use it for primary buttons, links, "All →" affordances, the create-org CTA, and
+positive/"today" context.
 
 ```
-emerald-950/30   — subtle emerald wash (CTA backgrounds)
-emerald-900/50   — live match card border
-emerald-800      — emerald border, focus rings
-emerald-700      — emerald text on light emerald bg
-emerald-600      — nav link hover, secondary emerald
-emerald-500      — primary action, live dot, active badge
-emerald-400      — live indicators, icons on dark backgrounds
+emerald-50    — CTA / positive tint background
+emerald-100   — CTA icon chip background, hover tint
+emerald-200   — CTA / positive border
+emerald-300   — button outline, stronger border, focus ring (ring-emerald-500)
+emerald-500   — hover text on links
+emerald-600   — primary link/action text, focus ring
+emerald-700   — emerald text on emerald tint (monograms, sub-labels)
 ```
 
-### 3.5 Status colours
+### 3.5 Semantic status palette
 
-| Status | Background | Text | Use |
-|---|---|---|---|
-| Live | `bg-emerald-500/15 border-emerald-500/30` | `text-emerald-400` | Live matches, active competitions |
-| Upcoming | `bg-sky-500/10 border-sky-500/20` | `text-sky-400` | Scheduled fixtures |
-| Final | `bg-slate-800 border-slate-700` | `text-slate-400` | Completed matches |
-| Paused / HT | `bg-sky-950/40 border-sky-800/30` | `text-sky-400` | Half-time |
+Status is the most important colour signal in the product. It is a **five-hue** system,
+implemented once in `StatusBadge.jsx` and echoed by the home-page pills. Always route
+status colour through these — never invent a one-off.
 
-### 3.6 Team identity
+| Status | Hue | Background · Border · Text |
+|---|---|---|
+| **Live / Active** | Red | `bg-red-50 border-red-200 text-red-600` · dot `bg-red-500 animate-pulse` |
+| **Scheduled / Upcoming** | Sky | `bg-sky-50 border-sky-200 text-sky-600` |
+| **Paused / Awaiting result** | Amber | `bg-amber-50 border-amber-200 text-amber-600` |
+| **Postponed** | Violet | `bg-violet-50 border-violet-200 text-violet-600` |
+| **Final / Completed / Draft / Unpublished** | Slate | `bg-slate-100 border-slate-200 text-slate-500` |
+| **Cancelled** | Slate + strike | `bg-slate-100 border-slate-200 text-slate-400 line-through` |
 
-Team identity is always expressed with the team's `primaryColor`. Use `primaryColor + '20'` for background tint and the raw `primaryColor` for border and icon. Never use a fixed colour for team identity elements.
+Rules:
+- **Live is red, and red is only live.** Red never appears as a decorative or error-only
+  colour on match surfaces; a red pulse always means a match is in progress.
+- The "today" home-page pill is **emerald** (`bg-emerald-50 border-emerald-200
+  text-emerald-600`) because "today" is positive context, not live status.
+- Amber additionally marks the platform-admin shortcut (an operational, not a match,
+  signal).
+
+### 3.6 Team identity colour
+
+Team identity is always the team's own `primaryColor`, never a fixed hue. The pattern,
+used by `TeamCrest` / `OrgBadge`:
+
+```
+background: primaryColor + '20'      // ~12% tint
+border:     1.5px solid primaryColor
+text/icon:  primaryColor
+```
+
+When a team has a logo, the crest shows the logo on white with a hairline
+`border rgba(15,23,42,0.08)`; otherwise it shows the name monogram on the solid
+`primaryColor`.
 
 ---
 
 ## 4. Typography
 
-### 4.1 Font stack (unchanged from current)
+### 4.1 Font stack (`tailwind.config.js`)
 
 ```
-font-display  Space Grotesk  — page titles, hero copy, team names
-font-sans     Inter          — body, labels, buttons, UI text
-font-mono     JetBrains Mono — scores, stats, badges, timestamps
+font-display   Space Grotesk   — page titles, team & competition names, monograms
+font-sans      Inter           — body, labels, buttons, all UI text
+font-mono      Roboto          — scores, badges, timestamps, any tabular-nums figure
 ```
 
-### 4.2 Type scale
+> Note: `font-mono` is mapped to **Roboto** in the config (not a true monospace). It is
+> used everywhere `tabular-nums` matters — scores and clocks — so figures still align.
+> If you ever want genuinely fixed-width digits, that is the one token to revisit.
 
-| Role | Tag | Classes |
-|---|---|---|
-| Page title | h1 | `font-display font-bold text-white text-2xl sm:text-3xl` |
-| Section title | h2 | `font-display font-bold text-white text-xl` |
-| Card title | — | `font-display font-bold text-white text-base leading-tight` |
-| Body | p | `font-sans text-sm text-slate-300 leading-relaxed` |
-| Supporting | span | `font-sans text-xs text-slate-400` |
-| Micro-label | — | `font-sans text-[10px] font-bold uppercase tracking-widest text-slate-500` |
-| Score · large | — | `font-mono font-black text-4xl tabular-nums text-white leading-none` |
-| Score · medium | — | `font-mono font-bold text-2xl tabular-nums text-white` |
-| Score · inline | — | `font-mono font-bold text-lg tabular-nums text-white` |
-| Stat number | — | `font-mono font-black text-white tabular-nums` |
-| Timestamp | — | `font-mono text-xs text-slate-500 tabular-nums` |
-| Badge text | — | `font-mono text-[9px] font-bold uppercase tracking-widest` |
+### 4.2 Type roles (as used in code)
 
-### 4.3 Hero tagline
+| Role | Classes |
+|---|---|
+| Page title | `font-display font-bold text-slate-900 text-2xl` |
+| Card / competition title | `font-display font-bold text-slate-900 text-sm leading-snug` |
+| Team name (row) | `font-semibold text-slate-900 text-[13px] leading-snug` |
+| Team name (feature) | `font-semibold text-slate-900 text-sm leading-snug` |
+| Body | `text-sm text-slate-600 leading-relaxed` |
+| Supporting meta | `text-[11px] text-slate-500` |
+| Micro-label | `text-[10px] font-bold uppercase tracking-widest text-slate-400` |
+| Section label | `text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400` |
+| Live section label | `text-[11px] font-bold uppercase tracking-[0.1em] text-red-500` |
+| Score · feature | `font-mono font-black tabular-nums text-slate-900` at `clamp(36px,7vw,52px)` |
+| Score · row | `font-mono font-black text-base tabular-nums text-slate-900` |
+| Badge text | `font-mono text-[9px] font-bold uppercase tracking-widest` |
+| Timestamp | `font-mono text-[10px] text-slate-400 uppercase tracking-widest` |
 
-The product tagline — "The easiest way to create, score and publish school and club rugby fixtures." — should appear on the Home hero in `font-sans text-base text-slate-400 leading-relaxed`. The main headline uses `font-display`.
+Two utility classes in `index.css` back this up: `.micro-label` and `.stat-number`
+(`font-mono font-black text-slate-900 tabular-nums`).
 
 ---
 
 ## 5. Card System
 
-All cards share a base. Variants extend it.
+All cards share a base and step up for feature moments.
 
-### 5.1 Base card
+### 5.1 Base card (lists, rows, org/competition cards)
 
 ```
-bg-surface rounded-2xl border border-slate-800
+bg-white rounded-xl border border-slate-200 shadow-sm
 ```
+Interactive cards add hover + lift:
+```
+hover:border-slate-300 card-lift        // card-lift: transition + hover -translate-y-px shadow-md
+```
+Row cards keep a comfortable tap target: `min-h-[44px]`, padding `px-3.5 py-3` to
+`px-5 py-4`.
 
-Hover state: `hover:border-slate-700 transition-colors`  
-Active/selected: `border-emerald-500/40 bg-emerald-950/10`
+### 5.2 Feature card (live match, CTAs)
 
-**Breaking change from current app:** `rounded-xl` → `rounded-2xl` on all primary cards. `rounded-xl` reserved for sub-elements (badges, inputs, icon containers).
+Feature moments step the radius up to `rounded-2xl` and carry a coloured accent:
+
+**Featured live match** (`FeaturedLiveCard`)
+```
+relative overflow-hidden bg-white rounded-2xl border border-red-200
+px-5 py-4 hover:border-red-300 shadow-sm card-lift
+```
+- Left accent strip: `absolute left-0 inset-y-0 w-1 bg-red-500 rounded-l-2xl`
+- Live pill: red badge with `animate-pulse` dot, plus `currentPeriod` and `KO {time}` meta
+- Score: `font-mono font-black tabular-nums` at `clamp(36px,7vw,52px)`, dash in `text-slate-300`
+- Layout: `[crest + name] · [score] · [name + crest]`, crests at 36px
+
+**CTA card** (create org, admin shortcut)
+```
+flex items-center gap-3 rounded-xl px-4 py-3.5
+bg-emerald-50 border border-emerald-200 hover:bg-emerald-100     // positive CTA
+bg-amber-50  border border-amber-200  hover:bg-amber-100         // admin/operational
+```
+Leading icon sits in a `w-9 h-9 rounded-xl` tinted chip; trailing `ChevronRight`.
+
+### 5.3 Match row (`MatchRow`)
+
+The workhorse for today's fixtures and recent results. A **three-column grid** that never
+lets long names collide with the centre:
+```
+grid grid-cols-[1fr_72px_1fr] items-center gap-x-2
+bg-white rounded-xl border border-slate-200 px-3 py-3 hover:border-slate-300 shadow-sm card-lift
+```
+- Home zone: crest (28px) left of name
+- Centre (fixed 72px): result → `score` + `FT`; upcoming → kickoff time + pitch
+- Away zone: name left of crest, right-aligned
+
+### 5.4 Skeletons
+
+Loading state mirrors the card it replaces: `bg-white rounded-xl border border-slate-200
+animate-pulse` at the row (`h-14`) or card (`h-28`) height.
 
 ---
 
-### 5.2 Match Card system
+## 6. Buttons & Actions
 
-Match cards are the most important visual element. They must express the *drama* of sport.
-
-**Live Match Card**
-```
-bg-surface rounded-2xl border border-emerald-800/60 p-4
-relative overflow-hidden
-```
-- Left accent strip: `absolute left-0 top-0 bottom-0 w-1 bg-emerald-500`
-- Live pill: emerald with animate-pulse dot
-- Score: `font-mono font-black text-4xl tabular-nums` centred between team badges
-- Team badges: coloured `rounded-xl` swatch with short code
-
-**Result Card**
-```
-bg-surface rounded-2xl border border-slate-800 p-4
-hover:border-slate-700
-```
-- Final badge: `bg-slate-800 text-slate-400 font-mono text-[9px] uppercase tracking-widest rounded-full`
-- Winner team name: `text-white font-semibold`, loser: `text-slate-500`
-- Score: `font-mono font-bold text-xl tabular-nums` right-aligned column
-
-**Upcoming Fixture Card**
-```
-bg-surface rounded-2xl border border-slate-800 px-4 py-3
-hover:border-slate-700
-```
-- Date/time in `text-emerald-400 font-mono text-[10px] uppercase tracking-widest`
-- Teams: `text-white text-sm font-medium`
-- Venue: `text-slate-500 text-xs`
-
----
-
-### 5.3 School / Club Card
-
-```
-bg-surface rounded-2xl border border-slate-800 px-4 py-3
-hover:border-slate-700
-```
-- Identity swatch: `w-10 h-10 rounded-xl` with `primaryColor + '20'` bg and `primaryColor` border
-- Name: `font-sans text-sm font-semibold text-white`
-- Region / sub-label: micro-label
-
-On School/Club detail pages (public profile), the card upgrades to a **hero card**:
-```
-bg-surface rounded-2xl border border-slate-800 overflow-hidden
-```
-With a `h-2` colour-bar gradient header, `p-5` body, and logo at `w-16 h-16 rounded-xl`.
-
----
-
-### 5.4 Team Card
-
-```
-bg-surface rounded-2xl border border-slate-800 px-4 py-3
-```
-- Badge swatch: `w-8 h-8 rounded-lg` with team colour
-- Name: `text-white text-sm font-semibold`
-- Competition: micro-label
-
----
-
-### 5.5 Player Card
-
-```
-bg-surface rounded-2xl border border-slate-800 p-3
-hover:border-slate-700
-```
-- Avatar: `w-10 h-10 rounded-xl bg-slate-800 border border-slate-700`
-- Name: `font-sans font-semibold text-sm text-white`
-- Stats: `font-mono text-xs text-emerald-400` (caps) / `text-slate-400` (tries, points)
-
----
-
-### 5.6 Section / Panel Card (Manage + public detail pages)
-
-Used for grouping content on detail and manage pages. Same visual language — not a separate "admin" style.
-
-```
-bg-surface rounded-2xl border border-slate-800 overflow-hidden
-```
-Header bar (inside card):
-```
-flex items-center justify-between px-4 py-3 border-b border-slate-800
-```
-Header label: micro-label (`text-[10px] font-bold uppercase tracking-widest text-slate-500`)
-
----
-
-## 6. Button Hierarchy
-
-### Primary — Emerald
-
-Use for the single most important action on a screen (Create fixture, Save, Sign in).
-
-```
-bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600
-text-white font-bold text-sm
-rounded-xl px-4 py-2.5
-transition-colors
-disabled:opacity-50 disabled:cursor-not-allowed
-```
-
-Full-width variant: add `w-full` and `uppercase tracking-wider`.
-
-### Secondary — Surface
-
-Use for supporting actions (Add team, Cancel, Browse all).
-
-```
-bg-surface border border-slate-700 hover:border-slate-500
-text-slate-300 hover:text-white
-font-medium text-sm
-rounded-xl px-4 py-2.5
-transition-colors
-```
-
-### Tertiary — Ghost
-
-Use for low-priority or destructive-path actions (Settings, Add competition, Delete).
-
-```
-border border-transparent hover:border-slate-700 hover:bg-white/5
-text-slate-500 hover:text-slate-300
-font-medium text-sm
-rounded-xl px-4 py-2.5
-transition-colors
-```
-
-### Destructive
-
-```
-text-slate-600 hover:text-red-400
-transition-colors p-1
-```
-Icon-only. Never a full-width button.
-
-### Link button
-
-```
-text-[10px] font-bold uppercase tracking-widest
-text-emerald-600 hover:text-emerald-400
-transition-colors
-```
-Used for "View all →", "+ New", "Cancel" in section headers.
-
-### CTA card button
-
-Full-card emerald CTA (e.g. "Create your school or club"):
-```
-flex items-center gap-3
-bg-emerald-950/30 border border-emerald-800/40
-rounded-2xl px-4 py-4
-hover:bg-emerald-950/50 transition-colors
-```
-
----
-
-## 7. Spacing & Layout
-
-### 7.1 Layout tiers
-
-| Tier | Constraint | Used for |
+| Tier | Use | Classes |
 |---|---|---|
-| Wide | `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8` | Home, Browse, OrgList, CompetitionsList — discovery pages |
-| Content | `max-w-3xl mx-auto px-4 sm:px-6` | OrgDetail, TeamDetail, PersonCareer, CompetitionOverview — detail pages |
-| Focused | `max-w-2xl mx-auto px-4` | OrgManage, MatchDetail — task/action pages |
+| **Primary** | The one key action | `bg-emerald-600 text-white font-bold text-sm rounded-lg px-4 py-2.5 hover:bg-emerald-500 transition-colors disabled:opacity-50` |
+| **Secondary / outline** | Retry, supporting | `text-emerald-600 border border-emerald-300 rounded-lg px-4 py-2 hover:bg-emerald-50 transition-colors` |
+| **Link action** | "All →", "+ New" | `text-[11px] font-bold uppercase tracking-[0.1em] text-emerald-600 hover:text-emerald-500` |
+| **CTA card** | Full-width entry point | see §5.2 CTA card |
 
-**MatchDetail fix:** wrap content in `max-w-2xl mx-auto` — currently unwrapped.
-
-### 7.2 Page padding
-
-- Top: `py-6`
-- Bottom: `pb-12` (public), `pb-8` (manage/admin)
-- Section spacing: `space-y-6` between major sections, `space-y-4` within sections
-- Card internal: `px-4 py-3` (list rows), `p-4` or `p-5` (feature cards)
-
-### 7.3 Page structure rule
-
-Every page follows this order:
-1. **Hero / Header** — page title, identity (logo, colour bar), status indicator
-2. **Key Actions** — primary CTA (Create fixture / Edit / Share)
-3. **Primary Content** — the thing that brought the user here (fixtures, results, teams)
-4. **Secondary Content** — supporting context (competitions, settings, staff)
-
-This is a structural rule, not a layout constraint. It applies to OrgDetail, OrgManage, MatchDetail, and TeamDetail equally.
+Focus is handled globally in `index.css`: `:focus-visible` gets
+`ring-2 ring-emerald-500 ring-offset-2`. Do not add per-component focus rings.
 
 ---
 
-## 8. Component Tokens
+## 7. Layout & Spacing
 
-### StatusBadge (single implementation)
+### 7.1 The column
 
-```jsx
-const STATUS = {
-  live:     'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400',
-  upcoming: 'bg-sky-500/10 border border-sky-500/20 text-sky-400',
-  paused:   'bg-sky-950/40 border border-sky-800/30 text-sky-400',
-  final:    'bg-slate-800 border border-slate-700 text-slate-400',
-  active:   'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400',
-}
-// className: `font-mono text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full`
+MatchPulse is **mobile-first and stays narrow on desktop**. The primary content column is:
 ```
-
-### LiveDot
-
-```jsx
-<span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+max-w-2xl mx-auto px-5 py-6 pb-12
 ```
+Home stacks its sections with `space-y-8`; within a section, cards stack with
+`space-y-2` (rows) to `space-y-3` (feature cards). This single-column model is the
+default for the whole product — discovery, detail, and manage pages alike. Wider
+multi-column tables (standings, admin) may exceed it, but the reading column does not.
 
-### TeamSwatch (coloured identity badge)
+### 7.2 Page entrance
 
-```jsx
-// size = 'sm' | 'md' | 'lg'
-// sm: w-6 h-6 rounded-lg — inline references
-// md: w-9 h-9 rounded-xl — list cards
-// lg: w-14 h-14 rounded-xl — page headers
-style={{ backgroundColor: color + '20', border: `1.5px solid ${color}` }}
-```
+Top-level page containers add `page-enter` (`index.css`): a 0.18s fade + 6px rise. Use it
+on the outermost page `div`.
 
-### MicroLabel
+### 7.3 Section rhythm
 
-```jsx
-<span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-```
+Every page reads top-to-bottom in priority order:
+1. **Operational shortcuts** (admin/create CTAs) — only when relevant
+2. **Live now** — red, first, impossible to miss
+3. **Primary content** — competitions / fixtures / results
+4. **Discovery** — browse schools & clubs
 
-(The `.micro-label` utility in `index.css` already covers this — use it consistently.)
-
-### Spinner
-
-```jsx
-<div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-```
-
-### EmptyState
-
-```jsx
-<div className="bg-surface rounded-2xl border border-slate-800 px-4 py-10 text-center">
-  <p className="text-slate-500 text-sm">{message}</p>
-  {sub && <p className="text-slate-600 text-xs mt-1">{sub}</p>}
-  {cta}
-</div>
-```
-
-### Input / Select / Textarea
-
-```
-bg-canvas border border-slate-700 rounded-xl
-px-3 py-2.5 text-white text-sm placeholder-slate-600
-focus:outline-none focus:border-emerald-500 transition-colors
-```
-
-Change `bg-[#0A0C10]` → `bg-canvas` throughout. Add `rounded-xl` (currently `rounded-lg`).
+Each section opens with a `SectionHead`: a micro uppercase label (left) and an optional
+action link (right); the live label carries a pulsing red dot.
 
 ---
 
-## 9. Screen Priority Recommendations
+## 8. Iconography
 
-Prioritised by impact-to-effort ratio. Do not redesign everything at once.
-
-### Priority 1 — Foundation (one-time, high leverage)
-
-**Tailwind config:** Add `elevated` colour token, rename `table-row`.  
-**`index.css`:** Add utility classes for the card base, status badge, score display.  
-**StatusBadge:** Create a single `src/components/StatusBadge.jsx` and replace all three current implementations.
-
-*Effort: small. Impact: removes the most glaring inconsistency immediately.*
+MatchPulse uses **`lucide-react`** for UI icons (e.g. `ChevronRight`, `Plus`,
+`Settings2`). Keep icons at `w-4 h-4` inline and tint them to match their context
+(`text-slate-400` in neutral rows, `text-emerald-500`/`text-amber-500` in tinted CTAs).
+Crests and identity swatches are **not** icons — they are colour/logo/monogram blocks
+(§3.6), rendered by `TeamCrest` / `OrgBadge`.
 
 ---
 
-### Priority 2 — Match Cards (highest visible impact)
+## 9. Shared Components (source of truth)
 
-**`src/pages/Home.jsx`** — `LiveMatchCard`, `MatchResultCard`, `UpcomingMatchCard`:
-- Upgrade to `rounded-2xl`
-- `LiveMatchCard`: add left emerald accent strip, enlarge score to `text-4xl`, add team colour swatches
-- `MatchResultCard`: enlarge score column, bold winner team name
+These components implement the system above. Treat them as the single source of truth and
+reuse them rather than re-styling inline:
 
-**`src/pages/MatchDetail.jsx`** — score panel:
-- Wrap in `max-w-2xl mx-auto`
-- Score to `text-5xl font-mono font-black`
-- Team colour strips → full gradient `h-1.5` bar (already there, good)
+- `StatusBadge.jsx` — the semantic status palette (§3.5). One implementation, every status.
+- `TeamIdentity.jsx` — `TeamIdentity`, `TeamCrest`, `MatchTeamIdentity`, `MatchTeamCrest`,
+  `MatchVersus`. All team/org identity rendering.
+- `Nav.jsx` / `BottomNav` / `Layout.jsx` — chrome and the content column.
+- `CompetitionStatusBadge.jsx`, `StandingsTable.jsx`, `FixtureBanner.jsx` — competition surfaces.
+- `index.css` utilities — `.micro-label`, `.stat-number`, `.card-lift`, `.page-enter`.
 
-*Effort: medium. Impact: highest — match cards are the dominant visual element on every page.*
-
----
-
-### Priority 3 — School & Club Detail Pages
-
-**`src/pages/OrgDetail.jsx`** — currently just a header card + team list:
-- Add Upcoming Fixtures section (top 3, from Firestore, same card pattern as Home)
-- Add Recent Results section (top 3)
-- Make it feel like a mini sports website, not an organisation record
-
-*Effort: medium-high (requires data fetching). Impact: very high — these are the destination pages for public discovery.*
+If you find a fourth way to render a status, a score, or a team name, that is a bug in the
+system — fold it back into these components.
 
 ---
 
-### Priority 4 — Manage Pages
+## 10. Sport skin — Rugby
 
-**`src/pages/manage/OrgManage.jsx`**:
-- Upgrade section cards from `rounded-xl` to `rounded-2xl`
-- Replace the Section component's header label from `text-slate-400` to `.micro-label` (`text-slate-500`)
-- The UpcomingFixturesSection and RecentResultsSection match rows should use the same card tokens as the public match cards — not plain `divide-y` rows
+The shared design (Sections 3–9) is **identical** to the Hockey app. Rugby differs only in
+this seam. Keep every change here inside the files listed below so the visual layer stays
+in sync across both repositories.
 
-*Effort: small-medium. Impact: closes the visual gap between public and manage.*
+### 10.1 Terminology
 
----
+- **Unit of scoring:** points. A match score is a point total (e.g. `24–17`).
+- **Scoring events:** try (5), conversion (2), penalty (3), drop goal (3).
+- **Roster:** a squad of 15 plus replacements; positions split forwards / backs.
+- **Period language:** halves; "HT" at the break, "FT" at full time.
+- **Tagline:** "The easiest way to create, score and publish school and club **rugby**
+  fixtures."
 
-### Priority 5 — Nav & Logo
+### 10.2 Scoring & rules code
 
-**`src/components/Nav.jsx`**:
-- Increase logo size slightly (currently `text-lg`)
-- Add a `w-2 h-2 rounded-full bg-emerald-400 animate-pulse` live indicator next to the logo mark (communicates "live platform" at all times)
+- `src/lib/rugbyScoring.js` — event → points mapping and score derivation.
+- `StandingsTable.jsx` — includes rugby **bonus points** (4-try bonus, losing bonus)
+  columns. This is the main structural difference from Hockey's standings.
+- `FormatSelector.jsx` — rugby match formats (15s, 10s, 7s).
+- `SquadManager.jsx` — rugby positions and squad size.
 
-**`src/components/BottomNav.jsx`**:
-- Already clean. Upgrade active tab indicator from `text-emerald-400` to include a `bg-emerald-500/10 rounded-lg` pill around the active tab icon.
+### 10.3 Copy & metadata
 
-*Effort: very small. Impact: immediate brand lift.*
+- SEO/meta copy and `useSeoMeta` strings, `package.json` name, PWA manifest, and any
+  "rugby" wording in `Nav` / `Layout`.
 
----
-
-### Priority 6 — Team Detail & Person Career
-
-**`src/pages/TeamDetail.jsx`** and **`src/pages/PersonCareer.jsx`**:
-- Add hero headers following the same pattern as OrgDetail (colour bar, identity swatch, name, region)
-- Cards and sections upgrade to `rounded-2xl`
-
-*Effort: small. Impact: medium — completion of the public surface.*
-
----
-
-### Defer
-
-- Full OrgDetail redesign with players section
-- Scorer screen (`ScoreMatch.jsx`) — functional requirement, low design priority
-- Admin pages — internal tool, last priority
+Everything not in this section — colours, cards, typography, layout, icons, shared
+components — must match the Hockey app exactly.
 
 ---
 
-## 10. What This Is Not
-
-This design system does not introduce:
-- Light mode or white card bodies (keep dark canvas)
-- An icon library dependency (keep inline SVG)
-- Animation library (keep CSS transitions only)
-- New layout paradigms (keep the current page structure, upgrade details)
-- New data dependencies on any page before Priority 3
-
-The goal is **refinement of what exists**, not a rewrite. Every change should make the platform feel more like a sports destination and less like database software — by sharpening contrast, enlarging scores, upgrading match cards, and bringing manage pages into the same visual language as public pages.
-
----
-
-*End of MatchPulse Design System v1.0*
+*End of MatchPulse Design System v2.0 (Rugby). The Hockey repository carries an identical
+document differing only in Section 10.*
