@@ -11,6 +11,8 @@ import { matchUrl, competitionUrl, orgUrl } from '../lib/slugify'
 import { competitionLifecycle } from '../lib/competitionRules'
 import { prefetchMatchTeams } from '../lib/teamIdentity'
 import { MatchTeamIdentity, MatchTeamCrest } from '../components/TeamIdentity'
+import StatusBadge from '../components/StatusBadge'
+import { BADGE_BASE, LIVE_DOT, ACTIVITY_STYLES } from '../lib/statusStyles'
 import { monogram } from '../lib/names'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -73,7 +75,7 @@ function SectionHead({ label, action, dot }) {
   return (
     <div className="flex items-center justify-between mb-3">
       <div className="flex items-center gap-2">
-        {dot && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />}
+        {dot && <span className={LIVE_DOT} />}
         <span className={dot ? 'text-[11px] font-bold uppercase tracking-[0.1em] text-red-500' : LABEL_CLS}>
           {label}
         </span>
@@ -92,18 +94,14 @@ function AllLink({ to }) {
 }
 
 // ── Activity pill (competition context) ───────────────────────────────────────
+// Colour tokens live in lib/statusStyles.js so the palette is defined once.
 
-const PILL = {
-  live:     'bg-red-50 border-red-200 text-red-600',
-  today:    'bg-emerald-50 border-emerald-200 text-emerald-600',
-  upcoming: 'bg-sky-50 border-sky-200 text-sky-600',
-}
 const PILL_LABEL = { live: 'Live', today: 'Today', upcoming: 'Upcoming' }
 
 function ActivityPill({ variant }) {
   return (
-    <span className={`inline-flex items-center gap-1 font-mono text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${PILL[variant] ?? PILL.upcoming}`}>
-      {variant === 'live' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />}
+    <span className={`${BADGE_BASE} ${ACTIVITY_STYLES[variant] ?? ACTIVITY_STYLES.upcoming}`}>
+      {variant === 'live' && <span className={LIVE_DOT} />}
       {PILL_LABEL[variant] ?? variant}
     </span>
   )
@@ -167,10 +165,7 @@ function FeaturedLiveCard({ match }) {
       <div className="absolute left-0 inset-y-0 w-1 bg-red-500 rounded-l-2xl" />
 
       <div className="flex items-center gap-2 mb-4">
-        <span className="inline-flex items-center gap-1 font-mono text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-600">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-          Live
-        </span>
+        <StatusBadge status="live" />
         {match.currentPeriod && (
           <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest">{match.currentPeriod}</span>
         )}

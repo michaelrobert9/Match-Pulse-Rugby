@@ -1,11 +1,16 @@
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, configured } from '../firebase'
+import { SPORT } from './sport'
 
+// Sport-specific defaults (tagline / description / keywords) come from the
+// sport skin in lib/sport.js, so this file is identical across the Rugby and
+// Hockey repos and the two apps can never drift apart here. Admin overrides
+// saved to settings/seo still win at runtime.
 export const DEFAULT_SEO = {
   siteTitle:                      'MatchPulse',
-  siteTagline:                    'School & Club Rugby',
-  siteDescription:                'Live scores, fixtures, results and player records for school and club rugby in South Africa.',
-  keywords:                       'rugby, school rugby, club rugby, live scores, fixtures, results, players, South Africa',
+  siteTagline:                    SPORT.tagline,
+  siteDescription:                SPORT.description,
+  keywords:                       SPORT.keywords,
   googleAnalyticsId:              '',
   googleSearchConsoleVerification:'',
   statCounterProject:             '',
