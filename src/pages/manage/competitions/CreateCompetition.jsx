@@ -11,7 +11,7 @@ import { slugify } from '../../../lib/slugify'
 const PERSONAL = '__personal__'
 import {
   COMPETITION_TYPES, COMPETITION_TYPE_ORDER,
-  DEFAULT_POINTS, POINTS_PRESETS, DEFAULT_TIE_BREAKERS, defaultRulesForType,
+  DEFAULT_POINTS, POINTS_PRESETS, DEFAULT_BONUS_POINTS, DEFAULT_TIE_BREAKERS, defaultRulesForType,
 } from '../../../lib/competitionRules'
 
 const GENDERS    = [{ value: '', label: 'Any' }, { value: 'men', label: 'Men' }, { value: 'women', label: 'Women' }, { value: 'boys', label: 'Boys' }, { value: 'girls', label: 'Girls' }]
@@ -107,8 +107,15 @@ export default function CreateCompetition() {
   const [gender, setGender] = useState('')
   const [ageGroup, setAgeGroup] = useState('')
 
-  const [pointsKey, setPointsKey] = useState('3-1-0')
+  const [pointsKey, setPointsKey] = useState('4-2-0')
   const [customPoints, setCustomPoints] = useState({ ...DEFAULT_POINTS })
+
+  // Bonus points — the standard rugby system, shown on by default so activation
+  // is explicit at creation rather than a hidden default.
+  const [tryBonus,          setTryBonus]          = useState(DEFAULT_BONUS_POINTS.tryBonus)
+  const [tryBonusThreshold, setTryBonusThreshold] = useState(String(DEFAULT_BONUS_POINTS.tryBonusThreshold))
+  const [losingBonus,       setLosingBonus]       = useState(DEFAULT_BONUS_POINTS.losingBonus)
+  const [losingBonusMargin, setLosingBonusMargin] = useState(String(DEFAULT_BONUS_POINTS.losingBonusMargin))
 
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
@@ -170,12 +177,28 @@ export default function CreateCompetition() {
         gender:     gender || null,
         ageGroup:   ageGroup || null,
       })
-      // Custom points: apply via an update so rulesHash is recomputed correctly
-      // by the data layer (it never desyncs the hash this way).
-      if (!isDefaultPoints) {
+      // Points and bonus points chosen at creation are applied via an update so
+      // rulesHash is recomputed correctly by the data layer (it never desyncs the
+      // hash this way). Festivals have no log, so bonus points don't apply there.
+      const bonusChosen = type !== 'festival' && {
+        tryBonus,
+        tryBonusThreshold: Math.max(1, Number(tryBonusThreshold) || DEFAULT_BONUS_POINTS.tryBonusThreshold),
+        losingBonus,
+        losingBonusMargin: Math.max(1, Number(losingBonusMargin) || DEFAULT_BONUS_POINTS.losingBonusMargin),
+      }
+      const bonusDiffers = bonusChosen && (
+        bonusChosen.tryBonus          !== DEFAULT_BONUS_POINTS.tryBonus ||
+        bonusChosen.tryBonusThreshold !== DEFAULT_BONUS_POINTS.tryBonusThreshold ||
+        bonusChosen.losingBonus       !== DEFAULT_BONUS_POINTS.losingBonus ||
+        bonusChosen.losingBonusMargin !== DEFAULT_BONUS_POINTS.losingBonusMargin
+      )
+      if (!isDefaultPoints || bonusDiffers) {
         const rules = defaultRulesForType(type)
-        rules.points = { win: Number(points.win), draw: Number(points.draw), loss: Number(points.loss) }
-        await updateManagedCompetition(ref.id, { rules }, { reason: 'Points configured at creation' })
+        if (!isDefaultPoints) {
+          rules.points = { win: Number(points.win), draw: Number(points.draw), loss: Number(points.loss) }
+        }
+        if (bonusChosen) rules.bonusPoints = bonusChosen
+        await updateManagedCompetition(ref.id, { rules }, { reason: 'Scoring configured at creation' })
       }
       // Decrement event credit for one-off plans (from the user or the org).
       if (entitlement?.tier === 'event') {
@@ -330,6 +353,58 @@ export default function CreateCompetition() {
                 <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <p className="text-[12px] text-slate-500 leading-relaxed">Festivals have no standings or points — results are recorded for display only.</p>
               </div>
+            </section>
+          )}
+
+          {/* 3b — Bonus points */}
+          {type !== 'festival' && (
+            <section>
+              <MicroLabel>Bonus points</MicroLabel>
+              <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+                {/* Try bonus */}
+                <div className="px-3 py-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input type="checkbox" checked={tryBonus} onChange={e => setTryBonus(e.target.checked)}
+                      className="accent-emerald-600 w-4 h-4 shrink-0" />
+                    <span className="text-sm font-medium text-slate-700 flex-1">Try bonus</span>
+                    <span className={`text-[9px] font-bold uppercase tracking-widest rounded px-1.5 py-0.5 ${tryBonus ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 bg-slate-100'}`}>
+                      {tryBonus ? 'On' : 'Off'}
+                    </span>
+                  </label>
+                  {tryBonus && (
+                    <div className="flex items-center gap-2 mt-2 pl-6">
+                      <span className="text-xs text-slate-500">1 point for scoring</span>
+                      <input type="number" min="1" max="20" value={tryBonusThreshold}
+                        onChange={e => setTryBonusThreshold(e.target.value)}
+                        className="w-16 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-slate-900 text-sm focus:outline-none focus:border-emerald-500" />
+                      <span className="text-xs text-slate-500">or more tries</span>
+                    </div>
+                  )}
+                </div>
+                {/* Losing bonus */}
+                <div className="px-3 py-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input type="checkbox" checked={losingBonus} onChange={e => setLosingBonus(e.target.checked)}
+                      className="accent-emerald-600 w-4 h-4 shrink-0" />
+                    <span className="text-sm font-medium text-slate-700 flex-1">Losing bonus</span>
+                    <span className={`text-[9px] font-bold uppercase tracking-widest rounded px-1.5 py-0.5 ${losingBonus ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 bg-slate-100'}`}>
+                      {losingBonus ? 'On' : 'Off'}
+                    </span>
+                  </label>
+                  {losingBonus && (
+                    <div className="flex items-center gap-2 mt-2 pl-6">
+                      <span className="text-xs text-slate-500">1 point for losing by</span>
+                      <input type="number" min="1" max="50" value={losingBonusMargin}
+                        onChange={e => setLosingBonusMargin(e.target.value)}
+                        className="w-16 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-slate-900 text-sm focus:outline-none focus:border-emerald-500" />
+                      <span className="text-xs text-slate-500">points or fewer</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                Standard rugby bonus points, applied to the log table. You can change these later in the competition’s configuration.
+              </p>
             </section>
           )}
 
