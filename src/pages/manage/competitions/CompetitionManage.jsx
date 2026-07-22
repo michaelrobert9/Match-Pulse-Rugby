@@ -28,7 +28,7 @@ import { userDisplayName, userInitial } from '../../../lib/names'
 import { useAuth } from '../../../contexts/AuthContext'
 import { matchSlug as buildMatchSlug } from '../../../lib/slugify'
 import { fetchCompetitionPools, fetchCompetitionKnockout, fetchCompetitionFixtureMembers, fetchAwaitingResultMatchesForCompetition, fetchCompetitionAuditLog, toDate } from '../../../lib/queries'
-import { POINTS_PRESETS, competitionLifecycle } from '../../../lib/competitionRules'
+import { POINTS_PRESETS, DEFAULT_BONUS_POINTS, competitionLifecycle } from '../../../lib/competitionRules'
 import { isScheduled } from '../../../lib/fixtureStatus'
 import StatusBadge from '../../../components/StatusBadge'
 import CompetitionStatusBadge from '../../../components/CompetitionStatusBadge'
@@ -854,15 +854,33 @@ function BasicCard({ competition, onSaved }) {
 
 function ScoringCard({ competition, onSaved }) {
   const rules    = competition.rules ?? {}
-  const points   = rules.points ?? { win: 3, draw: 1, loss: 0 }
-  const walkover = rules.walkoverScore ?? { concedingTeam: 0, opposingTeam: 5 }
+  const points   = rules.points ?? { win: 4, draw: 2, loss: 0 }
+  const walkover = rules.walkoverScore ?? { concedingTeam: 0, opposingTeam: 28 }
+  const bonus    = rules.bonusPoints ?? DEFAULT_BONUS_POINTS
+  // A festival has no log table, so bonus points are meaningless there.
+  const bonusApplies = competition.type !== 'festival'
 
   const [editing, setEditing] = useState(false)
   const [saving, setSaving]   = useState(false)
   const [form, setForm] = useState({
-    win: String(points.win ?? 3), draw: String(points.draw ?? 1), loss: String(points.loss ?? 0),
+    win: String(points.win ?? 4), draw: String(points.draw ?? 2), loss: String(points.loss ?? 0),
+    tryBonus:          bonus.tryBonus !== false,
+    tryBonusThreshold: String(bonus.tryBonusThreshold ?? 4),
+    losingBonus:       bonus.losingBonus !== false,
+    losingBonusMargin: String(bonus.losingBonusMargin ?? 7),
   })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  function startEdit() {
+    setForm({
+      win: String(points.win ?? 4), draw: String(points.draw ?? 2), loss: String(points.loss ?? 0),
+      tryBonus:          bonus.tryBonus !== false,
+      tryBonusThreshold: String(bonus.tryBonusThreshold ?? 4),
+      losingBonus:       bonus.losingBonus !== false,
+      losingBonusMargin: String(bonus.losingBonusMargin ?? 7),
+    })
+    setEditing(true)
+  }
 
   const activePreset = POINTS_PRESETS.find(p =>
     String(p.points.win) === form.win && String(p.points.draw) === form.draw && String(p.points.loss) === form.loss)
@@ -873,6 +891,14 @@ function ScoringCard({ competition, onSaved }) {
       const newRules = {
         ...rules,
         points: { win: Number(form.win) || 0, draw: Number(form.draw) || 0, loss: Number(form.loss) || 0 },
+        ...(bonusApplies ? {
+          bonusPoints: {
+            tryBonus:          form.tryBonus,
+            tryBonusThreshold: Math.max(1, Number(form.tryBonusThreshold) || 4),
+            losingBonus:       form.losingBonus,
+            losingBonusMargin: Math.max(1, Number(form.losingBonusMargin) || 7),
+          },
+        } : {}),
       }
       await updateCompetition(competition.id, { rules: newRules })
       onSaved({ ...competition, rules: newRules })
@@ -881,22 +907,52 @@ function ScoringCard({ competition, onSaved }) {
   }
 
   return (
-    <Card title="Scoring" action={<EditButton editing={editing} onClick={() => setEditing(e => !e)} />}>
+    <Card title="Scoring"
+      subtitle="Log points for each result, plus optional rugby bonus points"
+      action={<EditButton editing={editing} onClick={() => editing ? setEditing(false) : startEdit()} />}>
       {!editing ? (
-        <div className="flex gap-8 mb-4">
-          {[['Win', points.win], ['Draw', points.draw], ['Loss', points.loss]].map(([lbl, val]) => (
-            <div key={lbl} className="text-center">
-              <div className="text-2xl font-black text-slate-900">{val ?? '—'}</div>
-              <div className="micro-label mt-0.5">{lbl}</div>
+        <>
+          <div className="flex gap-8 mb-4">
+            {[['Win', points.win], ['Draw', points.draw], ['Loss', points.loss]].map(([lbl, val]) => (
+              <div key={lbl} className="text-center">
+                <div className="text-2xl font-black text-slate-900">{val ?? '—'}</div>
+                <div className="micro-label mt-0.5">{lbl}</div>
+              </div>
+            ))}
+          </div>
+          {bonusApplies && (
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-slate-700">Try bonus</div>
+                  <p className="text-[11px] text-slate-400">
+                    {bonus.tryBonus !== false
+                      ? `1 log point for scoring ${bonus.tryBonusThreshold ?? 4} or more tries.`
+                      : 'Not awarded.'}
+                  </p>
+                </div>
+                <BonusPill on={bonus.tryBonus !== false} />
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-slate-700">Losing bonus</div>
+                  <p className="text-[11px] text-slate-400">
+                    {bonus.losingBonus !== false
+                      ? `1 log point for losing by ${bonus.losingBonusMargin ?? 7} points or fewer.`
+                      : 'Not awarded.'}
+                  </p>
+                </div>
+                <BonusPill on={bonus.losingBonus !== false} />
+              </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       ) : (
-        <div className="space-y-3 mb-4">
+        <div className="space-y-3 mb-1">
           <div className="flex gap-2 flex-wrap">
             {POINTS_PRESETS.map(p => (
               <button key={p.label} type="button"
-                onClick={() => setForm({ win: String(p.points.win), draw: String(p.points.draw), loss: String(p.points.loss) })}
+                onClick={() => setForm(f => ({ ...f, win: String(p.points.win), draw: String(p.points.draw), loss: String(p.points.loss) }))}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
                   activePreset?.label === p.label
                     ? 'bg-emerald-600 text-white border-emerald-600'
@@ -914,32 +970,73 @@ function ScoringCard({ competition, onSaved }) {
               </div>
             ))}
           </div>
+
+          {bonusApplies && (
+            <div className="border-t border-slate-100 pt-3 space-y-3">
+              <p className="micro-label">Bonus points</p>
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.tryBonus}
+                  onChange={e => set('tryBonus', e.target.checked)}
+                  className="accent-emerald-600 w-4 h-4 shrink-0" />
+                <span className="text-sm text-slate-700 flex-1">Try bonus — 1 point for scoring enough tries</span>
+              </label>
+              {form.tryBonus && (
+                <div className="flex items-center gap-2 pl-6">
+                  <span className="text-xs text-slate-500">Tries needed</span>
+                  <div className="w-20">
+                    <Input type="number" min={1} max={20} value={form.tryBonusThreshold}
+                      onChange={e => set('tryBonusThreshold', e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.losingBonus}
+                  onChange={e => set('losingBonus', e.target.checked)}
+                  className="accent-emerald-600 w-4 h-4 shrink-0" />
+                <span className="text-sm text-slate-700 flex-1">Losing bonus — 1 point for a narrow loss</span>
+              </label>
+              {form.losingBonus && (
+                <div className="flex items-center gap-2 pl-6">
+                  <span className="text-xs text-slate-500">Losing margin (points)</span>
+                  <div className="w-20">
+                    <Input type="number" min={1} max={50} value={form.losingBonusMargin}
+                      onChange={e => set('losingBonusMargin', e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <SaveRow saving={saving} onSave={save} />
         </div>
       )}
 
-      {/* Settings that exist in the rules schema but are not yet applied by
-          the engine are shown disabled — never as unexplained live settings. */}
-      <div className="space-y-2 border-t border-slate-100 pt-3">
-        <div className="flex items-start gap-3 opacity-60">
-          <div className="flex-1">
-            <div className="text-sm font-medium text-slate-700">Bonus points</div>
-            <p className="text-[11px] text-slate-400">Extra log points for tries scored or narrow losses.</p>
-          </div>
-          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 shrink-0">Coming soon</span>
-        </div>
-        <div className="flex items-start gap-3 opacity-60">
+      {/* Walkover scoreline — applied when a fixture is awarded (forfeit / no-show). */}
+      <div className="border-t border-slate-100 pt-3 mt-3">
+        <div className="flex items-start gap-3">
           <div className="flex-1">
             <div className="text-sm font-medium text-slate-700">Walkover result</div>
             <p className="text-[11px] text-slate-400">
-              Used when a team forfeits or fails to fulfil a fixture.
-              Default scoreline {walkover.opposingTeam}–{walkover.concedingTeam} to the opposing team.
+              Awarded when a team forfeits or fails to fulfil a fixture — default
+              scoreline {walkover.opposingTeam}–{walkover.concedingTeam} to the opposing team.
+              The exact score can be set per fixture.
             </p>
           </div>
-          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 shrink-0">Coming soon</span>
         </div>
       </div>
     </Card>
+  )
+}
+
+function BonusPill({ on }) {
+  return (
+    <span className={`text-[9px] font-bold uppercase tracking-widest rounded px-1.5 py-0.5 shrink-0 ${
+      on ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 bg-slate-100'
+    }`}>
+      {on ? 'On' : 'Off'}
+    </span>
   )
 }
 

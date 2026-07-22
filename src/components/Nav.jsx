@@ -124,8 +124,13 @@ export default function Nav() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-4">
 
         {/* Logo — always links home */}
-        <Link to="/" className="font-display font-bold text-slate-900 text-lg leading-none shrink-0">
-          Match<span className="text-emerald-600">Pulse</span>
+        <Link to="/" className="flex items-center gap-1.5 shrink-0">
+          <span className="font-display font-bold text-slate-900 text-lg leading-none">
+            Match<span className="text-emerald-600">Pulse</span>
+          </span>
+          <span className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 leading-none">
+            Rugby
+          </span>
         </Link>
 
         {/* Desktop nav links */}

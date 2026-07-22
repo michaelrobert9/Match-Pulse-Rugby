@@ -19,7 +19,7 @@ import {
   getElapsedMs, formatClock, nextPeriodAction,
   periodRemainingMs, periodElapsedMs, gameMinuteLabel, isPastExpectedEnd,
 } from '../../lib/matchClock'
-import { SCORE_LABEL, SCORE_POINTS, isTryEvent } from '../../lib/rugbyScoring'
+import { SCORE_LABEL, SCORE_POINTS, isTryEvent, cardTypesForMatch, cardDotClass, cardLabel, cardDurationText } from '../../lib/rugbyScoring'
 import { isLive, isScheduled } from '../../lib/fixtureStatus'
 import { useTeamIdentity } from '../../hooks/useTeamIdentity'
 import { TeamCrest } from '../../components/TeamIdentity'
@@ -74,23 +74,9 @@ const KICK_TYPES = [
   { key: 'penalty',   label: `Penalty (+${SCORE_POINTS.penalty})` },
   { key: 'drop_goal', label: `Drop Goal (+${SCORE_POINTS.drop_goal})` },
 ]
-const CARD_TYPES = [
-  { key: 'yellow', label: 'Yellow Card', dot: 'bg-yellow-400' },
-  { key: 'red',    label: 'Red Card',    dot: 'bg-red-500' },
-]
-const CARD_DOT = { yellow: 'bg-yellow-400', red: 'bg-red-500' }
-const CARD_LABEL = { yellow: 'Yellow Card', red: 'Red Card' }
-// Yellow = sin-bin: 10 minutes in fifteens, 2 in sevens. Red = sent off.
-const CARD_DEFAULT_MIN = { yellow: 10, red: null }
-// Selectable sin-bin lengths for a yellow card.
-const YELLOW_DURATIONS = [2, 10]
-
-// Timeline duration text: stored duration wins, else the colour's default.
-function cardDurationLabel(ev) {
-  if (ev.cardType === 'red') return 'Sent off'
-  const min = ev.durationMinutes ?? CARD_DEFAULT_MIN[ev.cardType]
-  return min != null ? `${min} min sin-bin` : null
-}
+// Card types (Yellow / Red / Permanent Red for fifteens; Yellow / Red for
+// sevens) and their sin-bin durations are format-driven — see cardTypesForMatch
+// in lib/rugbyScoring.
 
 // ── Theme (scoring screen only) ──────────────────────────────────────────────
 // Defaults to bright — the scoring screen is used outdoors in daylight.
@@ -641,16 +627,8 @@ export default function ScoreMatch() {
     lockTap(key)
     setPendingCard({ side, matchTimestamp: getElapsedMs(match), playerName: null, playerPlayerId: null })
   }
-  // Yellow cards carry a sin-bin duration — capture it before writing.
-  // Red is written immediately on colour selection.
-  function applyCardColour(cardType) {
-    if (!pendingCard) return
-    if (cardType === 'yellow') {
-      setPendingCard(pc => ({ ...pc, cardType: 'yellow' }))
-      return
-    }
-    writeCard(cardType, null)
-  }
+  // Card sin-bin length is fixed by the match format (10'/2' yellow, 20' red20,
+  // sent-off red) — the type carries its own duration, written immediately.
   async function writeCard(cardType, durationMinutes) {
     if (!pendingCard) return
     const { side, matchTimestamp, playerName, playerPlayerId } = pendingCard
@@ -1147,15 +1125,15 @@ export default function ScoreMatch() {
                   {ev.kind === 'score' ? (
                     <span className="w-2.5 h-3 rounded-sm shrink-0" style={{ backgroundColor: teamColor(ev.side) }} />
                   ) : (
-                    <span className={`w-2.5 h-3 rounded-sm shrink-0 ${CARD_DOT[ev.cardType] ?? 'bg-slate-400'}`} />
+                    <span className={`w-2.5 h-3 rounded-sm shrink-0 ${cardDotClass(ev.cardType)}`} />
                   )}
                   <span className="text-sm flex-1 min-w-0 truncate">
-                    <span className="font-semibold">{ev.kind === 'score' ? (SCORE_LABEL[ev.scoreType] ?? 'Score') : (CARD_LABEL[ev.cardType] ?? 'Card')}</span>
+                    <span className="font-semibold">{ev.kind === 'score' ? (SCORE_LABEL[ev.scoreType] ?? 'Score') : cardLabel(ev.cardType, match)}</span>
                     {ev.kind === 'score' && <span className="font-mono text-emerald-600"> +{ev.points ?? SCORE_POINTS[ev.scoreType] ?? 0}</span>}
                     {' · '}{teamName(ev.side)}
                     {ev.scorerName && <span className={t.muted}> · {ev.scorerName}</span>}
                     {ev.kind === 'card' && ev.playerName && <span className={t.muted}> · {ev.playerName}</span>}
-                    {ev.kind === 'card' && cardDurationLabel(ev) && <span className={t.muted}> · {cardDurationLabel(ev)}</span>}
+                    {ev.kind === 'card' && <span className={t.muted}> · {cardDurationText(ev, match)}</span>}
                   </span>
                   {!isFinal && (
                     menuFor === ev.id ? (
@@ -1438,68 +1416,42 @@ export default function ScoreMatch() {
         )
       })()}
 
-      {/* Card colour strip (colour required) */}
+      {/* Card sheet: optional player + card type (duration fixed by format) */}
       {pendingCard && (
         <Sheet t={t} title={`Card · ${teamName(pendingCard.side)}`}
           subtitle={`${gameMinuteLabel(match, pendingCard.matchTimestamp)}`}
           color={teamColor(pendingCard.side)} onClose={() => setPendingCard(null)}>
 
-          {pendingCard.cardType === 'yellow' ? (
-            /* Yellow-card sin-bin duration step */
+          {pickerSidePlayers(pendingCard.side).length > 0 && (
             <>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-4 h-5 rounded-sm bg-yellow-400 shrink-0" />
-                <span className="font-bold text-sm">Sin-bin duration</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                {YELLOW_DURATIONS.map(min => (
-                  <button key={min} onClick={() => writeCard('yellow', min)} disabled={saving}
-                    className={`flex items-center justify-center font-bold text-sm rounded-xl border border-slate-300/30 hover:opacity-90 transition-opacity ${t.neutralBtn}`}
-                    style={{ minHeight: 52 }}>
-                    {min} min{min === 10 ? ' (XV)' : ' (7s)'}
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => writeCard('yellow', null)} disabled={saving}
-                className={`w-full text-sm font-bold rounded-xl py-3 transition-colors ${t.muted} hover:opacity-70`}>
-                Skip — no duration
-              </button>
-            </>
-          ) : (
-            /* Player (optional) + colour selection */
-            <>
-              {pickerSidePlayers(pendingCard.side).length > 0 && (
-                <>
-                  <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-2`}>Player (optional)</div>
-                  <div className="space-y-1 max-h-32 overflow-y-auto mb-4">
-                    {pickerSidePlayers(pendingCard.side).map(p => (
-                      <button key={p.id}
-                        onClick={() => setPendingCard(pc => ({ ...pc, playerName: p.personName, playerPlayerId: p.id }))}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left border transition-colors ${
-                          pendingCard.playerPlayerId === p.id ? 'bg-emerald-500/20 border-emerald-500/50' : t.neutralBtn
-                        }`}>
-                        <span className={`font-mono text-xs ${t.muted} w-6 text-right shrink-0`}>{p.shirtNumber ?? '–'}</span>
-                        <PersonAvatar name={p.personName} photoUrl={p.photoUrl} size={24} />
-                        <span className="text-sm flex-1">{p.personName}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-              <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-2`}>Card colour</div>
-              <div className="space-y-2">
-                {CARD_TYPES.map(c => (
-                  <button key={c.key} onClick={() => applyCardColour(c.key)}
-                    className="w-full flex items-center gap-3 px-4 rounded-xl border border-slate-300/30 font-bold text-sm hover:opacity-90 transition-opacity"
-                    style={{ minHeight: 52 }}>
-                    <span className={`w-4 h-5 rounded-sm ${c.dot}`} />
-                    {c.label}
-                    {c.key === 'yellow' && <span className={`ml-auto text-[11px] ${t.muted}`}>Set sin-bin →</span>}
+              <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-2`}>Player (optional)</div>
+              <div className="space-y-1 max-h-32 overflow-y-auto mb-4">
+                {pickerSidePlayers(pendingCard.side).map(p => (
+                  <button key={p.id}
+                    onClick={() => setPendingCard(pc => ({ ...pc, playerName: p.personName, playerPlayerId: p.id }))}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left border transition-colors ${
+                      pendingCard.playerPlayerId === p.id ? 'bg-emerald-500/20 border-emerald-500/50' : t.neutralBtn
+                    }`}>
+                    <span className={`font-mono text-xs ${t.muted} w-6 text-right shrink-0`}>{p.shirtNumber ?? '–'}</span>
+                    <PersonAvatar name={p.personName} photoUrl={p.photoUrl} size={24} />
+                    <span className="text-sm flex-1">{p.personName}</span>
                   </button>
                 ))}
               </div>
             </>
           )}
+          <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-2`}>Card</div>
+          <div className="space-y-2">
+            {cardTypesForMatch(match).map(c => (
+              <button key={c.key} onClick={() => writeCard(c.key, c.minutes)} disabled={saving}
+                className="w-full flex items-center gap-3 px-4 rounded-xl border border-slate-300/30 font-bold text-sm hover:opacity-90 transition-opacity"
+                style={{ minHeight: 52 }}>
+                <span className={`w-4 h-5 rounded-sm ${cardDotClass(c.key)}`} />
+                {c.label}
+                <span className={`ml-auto text-[11px] ${t.muted}`}>{c.duration}</span>
+              </button>
+            ))}
+          </div>
         </Sheet>
       )}
 

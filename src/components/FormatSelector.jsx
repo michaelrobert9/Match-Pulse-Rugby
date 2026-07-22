@@ -1,6 +1,6 @@
-// FormatSelector — fifteens/sevens, halves (2, or 3-4 when a knockout plays
-// extra time), minutes per half (0-60 spinner), and per-break duration between
-// each pair of consecutive halves. onChange receives
+// FormatSelector — fifteens/sevens, halves (1 or 2 — rugby is played in
+// halves), minutes per half (0-60 spinner), and per-break duration between each
+// pair of consecutive halves. onChange receives
 // { periods, periodMinutes, breakMinutes, sevens } where breakMinutes is an
 // array of length (periods - 1).
 
@@ -100,11 +100,12 @@ export default function FormatSelector({ periods, periodMinutes, breakMinutes = 
         </div>
       </div>
 
-      {/* Halves (3-4 model a knockout that plays extra time) */}
+      {/* Halves — rugby is played in halves (2 is a full match, 1 for a
+          shortened/festival game). */}
       <div>
         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Halves</p>
         <div className="flex gap-2">
-          {[1, 2, 3, 4].map(n => (
+          {[1, 2].map(n => (
             <button type="button" key={n}
               onClick={() => setPeriods(n)}
               className={`flex-1 text-sm font-bold py-2 rounded-lg border transition-colors ${
@@ -116,7 +117,7 @@ export default function FormatSelector({ periods, periodMinutes, breakMinutes = 
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-slate-400 mt-1.5">2 is a normal match; 3–4 add extra-time periods for knockouts.</p>
+        <p className="text-[10px] text-slate-400 mt-1.5">2 is a full match; 1 for a single-half or festival game.</p>
       </div>
 
       {/* Minutes per half */}

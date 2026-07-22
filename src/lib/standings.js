@@ -30,8 +30,9 @@ import { DEFAULT_BONUS_POINTS } from './competitionRules.js'
 
 const CONFIRMED = new Set(['accepted', 'admin_approved'])
 
-// Fair play: yellow=1pt, red=3pts. Lower score is better (direction: 'asc').
-const FAIR_PLAY_WEIGHTS = { yellow: 1, red: 3 }
+// Fair play: yellow=1pt, red=3pts. A 20-minute red (red20) counts as a red.
+// Lower score is better (direction: 'asc').
+const FAIR_PLAY_WEIGHTS = { yellow: 1, red20: 3, red: 3 }
 
 function mkStats(teamId) {
   return { teamId, P: 0, W: 0, D: 0, L: 0, PF: 0, PA: 0, PD: 0, TF: 0, BP: 0, Pts: 0, fairPlayScore: 0 }

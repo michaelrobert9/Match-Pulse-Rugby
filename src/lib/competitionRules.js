@@ -109,7 +109,14 @@ export const DEFAULT_BONUS_POINTS = {
 }
 
 // ── Tie-breakers ──────────────────────────────────────────────────────────────
-// Default recommended rugby order. Alphabetical is intentionally absent — it
+// Default recommended rugby order, matching the World Rugby / URC / Six Nations
+// / Currie Cup convention: log points, then head-to-head, then points
+// difference, then tries scored — followed by points for, wins and finally
+// discipline (fair play) before a manual administrator decision.
+//
+// `pointsAgainst` is deliberately NOT a step: once teams are level on points
+// difference AND points for, points against is arithmetically identical, so it
+// could never break a further tie. Alphabetical is intentionally absent — it
 // may only ever be used for display stability, never to decide an outcome. If
 // the chain is exhausted, callers must surface "Manual placement required"
 // rather than inventing a winner (manualDecision is the explicit terminal step).
@@ -119,7 +126,6 @@ export const DEFAULT_TIE_BREAKERS = [
   { key: 'pointsDifference',    label: 'Points difference',             direction: 'desc', scope: 'all_fixtures' },
   { key: 'triesFor',            label: 'Tries scored',                  direction: 'desc', scope: 'all_fixtures' },
   { key: 'pointsFor',           label: 'Points for',                    direction: 'desc', scope: 'all_fixtures' },
-  { key: 'pointsAgainst',       label: 'Points against',                direction: 'asc',  scope: 'all_fixtures' },
   { key: 'wins',                label: 'Wins',                          direction: 'desc', scope: 'all_fixtures' },
   { key: 'fairPlayScore',       label: 'Fair play',                     direction: 'asc',  scope: 'all_fixtures' },
   { key: 'manualDecision',      label: 'Manual administrator decision', direction: null,   scope: 'all_fixtures' },
