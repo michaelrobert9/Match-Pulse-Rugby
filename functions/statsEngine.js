@@ -127,8 +127,11 @@ function deriveSliceTotals(slices, matches) {
     const cardCounts = {}
     for (const c of readCards(m, contrib.countsAllEvents)) {
       if (c.playerName && c.playerName !== 'Unknown' && c.cardType) {
+        // Discipline buckets are yellow vs red; a 20-minute red (red20) and a
+        // permanent red both count as a red.
+        const bucket = c.cardType === 'yellow' ? 'yellow' : 'red'
         const rec = cardCounts[c.playerName] ?? { yellow: 0, red: 0 }
-        rec[c.cardType] = (rec[c.cardType] ?? 0) + 1
+        rec[bucket] = (rec[bucket] ?? 0) + 1
         cardCounts[c.playerName] = rec
       }
     }

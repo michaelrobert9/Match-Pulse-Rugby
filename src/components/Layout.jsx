@@ -12,7 +12,7 @@ export default function Layout() {
       <footer className="border-t border-slate-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-3">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <span className="text-sm text-slate-400">© {year} MatchPulse</span>
+            <span className="text-sm text-slate-400">© {year} MatchPulse Rugby</span>
             <nav className="flex items-center gap-4 text-sm">
               <Link to="/plans" className="text-slate-500 hover:text-slate-900 transition-colors">Plans</Link>
               <Link to="/why-matchpulse" className="text-slate-500 hover:text-slate-900 transition-colors">Why MatchPulse</Link>
