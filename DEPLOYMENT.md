@@ -12,6 +12,18 @@ Storage** rules. This guide covers both automated (CI) and manual deployment, an
   (`<project-id>` below means `match-pulse-4560e`.) Rugby's own Hosting site
   within that project is `match-pulse-4560e-ff0fe`, pinned as `hosting.site` in
   `firebase.json`; its live URL is `https://match-pulse-4560e-ff0fe.web.app`.
+- **Firestore database:** rugby uses a **named** Firestore database, `rugby`,
+  inside the shared project — hockey (and the other MatchPulse sites) use the
+  project's `(default)` database. One project keeps authentication unified; a
+  separate database keeps each sport's data fully isolated. The id is set in
+  three places that must agree: the client `VITE_FIREBASE_DATABASE_ID` secret,
+  the functions `FIRESTORE_DATABASE_ID` env, and `firebase.json`'s
+  `firestore.database` (all default to `rugby`). **This database must be created
+  in the Firebase console before the app works** — Firestore → the database
+  picker → *Add database* → id `rugby`, same location as hockey's default
+  (`africa-south1`). Because `firebase.json` scopes `firestore.database` to
+  `rugby`, the CI rules/indexes deploy targets rugby's database and never
+  overwrites hockey's `(default)` rules.
 - **CI workflow:** `.github/workflows/firebase-deploy.yml` (runs on push to `main`)
 - **Required GitHub secrets:** `FIREBASE_SERVICE_ACCOUNT` (deploy credential) and
   the six `VITE_FIREBASE_*` web-config values (see `.env.example`). Optional:

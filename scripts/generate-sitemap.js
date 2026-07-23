@@ -21,7 +21,11 @@ if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
 }
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
 initializeApp({ credential: cert(serviceAccount) })
-const db = getFirestore()
+// Rugby's data lives in its own named Firestore database inside the shared
+// match-pulse-4560e project (hockey uses (default)); read from that database so
+// the sitemap lists rugby content, never hockey's. Matches the client's
+// VITE_FIREBASE_DATABASE_ID and firebase.json's firestore.database.
+const db = getFirestore(process.env.FIRESTORE_DATABASE_ID || 'rugby')
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -217,4 +221,10 @@ async function run() {
   process.exit(0)
 }
 
-run().catch(err => { console.error(err.message); process.exit(1) })
+// A sitemap is SEO-only and must NEVER block the website deploy. If Firestore
+// is unreachable or the rugby database does not exist yet, warn and exit 0 so
+// the build proceeds (the app ships without a refreshed sitemap this run).
+run().catch(err => {
+  console.warn('Sitemap generation skipped:', err.message)
+  process.exit(0)
+})

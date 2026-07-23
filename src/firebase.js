@@ -24,6 +24,16 @@ const firebaseConfig = {
 
 export const configured = !!firebaseConfig.apiKey
 
+// Rugby's data lives in its OWN named Firestore database inside the shared
+// match-pulse-4560e project — hockey (and the other MatchPulse sites) use the
+// project's (default) database. Sharing ONE project keeps authentication
+// unified across all sites, while a separate database keeps each sport's data
+// fully separate. Every read/write below is scoped to this database, so rugby
+// never touches hockey's data even though they live in the same project.
+// Overridable via VITE_FIREBASE_DATABASE_ID; must match firebase.json's
+// firestore.database and the Cloud Functions' FIRESTORE_DATABASE_ID.
+const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || 'rugby'
+
 let app, db, auth, storage, functions
 
 export const googleProvider = new GoogleAuthProvider()
@@ -35,7 +45,7 @@ if (configured) {
   // Single-tab manager: offline persistence is active in one tab at a time.
   db = initializeFirestore(app, {
     localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }),
-  })
+  }, databaseId)
   auth      = getAuth(app)
   storage   = getStorage(app)
   // Functions are deployed to europe-west1 (africa-south1 is the Firestore
