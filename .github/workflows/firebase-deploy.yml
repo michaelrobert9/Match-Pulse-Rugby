@@ -69,7 +69,7 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
-          projectId: match-pulse-rugby
+          projectId: match-pulse-4560e
 
       # Firestore security rules + indexes and Storage rules. Best-effort: a
       # missing IAM permission (the serviceusage 403 error) or a product that is
@@ -90,7 +90,7 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx --yes firebase-tools@latest deploy \
             --only firestore:rules,firestore:indexes,storage \
-            --project match-pulse-rugby \
+            --project match-pulse-4560e \
             --non-interactive
           rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
 
@@ -113,6 +113,6 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx --yes firebase-tools@latest deploy \
             --only functions \
-            --project match-pulse-rugby \
+            --project match-pulse-4560e \
             --non-interactive
           rm -f "$GOOGLE_APPLICATION_CREDENTIALS"

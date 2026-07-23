@@ -65,12 +65,16 @@ The heart of the adaptation from the hockey codebase:
 
 ## Deployment
 
-The rugby platform deploys to its **own** Firebase project and (eventually)
-its own domain — neither exists yet, and nothing in this repo hardcodes
-either. See `DEPLOYMENT.md` for the full runbook. In short:
+The rugby platform deploys to the **consolidated** `match-pulse-4560e` Firebase
+project (shared by all MatchPulse sites for unified authentication), to its own
+Hosting site `match-pulse-4560e-ff0fe` within that project. Nothing in this repo
+hardcodes the client web config — it comes from the `VITE_FIREBASE_*` secrets.
+See `DEPLOYMENT.md` for the full runbook. In short:
 
-1. Create a Firebase project (the project id is pinned to `match-pulse-rugby`
-   in `.firebaserc` and the deploy workflow). Blaze plan only needed for the
+1. The Firebase project id is pinned to `match-pulse-4560e` (the consolidated
+   project shared by all MatchPulse sites for unified auth) in `.firebaserc` and
+   the deploy workflow; rugby's Hosting site within it is `match-pulse-4560e-ff0fe`
+   (pinned as `hosting.site` in `firebase.json`). Blaze plan only needed for the
    optional Cloud Functions.
 2. Add the `FIREBASE_SERVICE_ACCOUNT` deploy credential (IAM roles in
    `DEPLOYMENT.md`) and the `VITE_FIREBASE_*` web-config secrets (names in
