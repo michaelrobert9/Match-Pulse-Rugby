@@ -6,9 +6,12 @@ sitemap and a PayFast webhook), with **Cloud Firestore** rules/indexes and **Clo
 Storage** rules. This guide covers both automated (CI) and manual deployment, and the
 **IAM permissions** the CI service account needs.
 
-- **Firebase project:** `match-pulse-rugby` — pinned in `.firebaserc` and in the
-  deploy workflow, so no `FIREBASE_PROJECT_ID` secret is needed. (`<project-id>`
-  below means `match-pulse-rugby`.)
+- **Firebase project:** `match-pulse-4560e` — the consolidated project shared by
+  all four MatchPulse sites for unified authentication. Pinned in `.firebaserc`
+  and in the deploy workflow, so no `FIREBASE_PROJECT_ID` secret is needed.
+  (`<project-id>` below means `match-pulse-4560e`.) Rugby's own Hosting site
+  within that project is `match-pulse-4560e-ff0fe`, pinned as `hosting.site` in
+  `firebase.json`; its live URL is `https://match-pulse-4560e-ff0fe.web.app`.
 - **CI workflow:** `.github/workflows/firebase-deploy.yml` (runs on push to `main`)
 - **Required GitHub secrets:** `FIREBASE_SERVICE_ACCOUNT` (deploy credential) and
   the six `VITE_FIREBASE_*` web-config values (see `.env.example`). Optional:
