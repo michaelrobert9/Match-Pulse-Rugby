@@ -29,7 +29,7 @@ import { writeFileSync }       from 'fs'
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
 initializeApp({ credential: cert(serviceAccount) })
-const db    = getFirestore()
+const db    = getFirestore(process.env.FIRESTORE_DATABASE_ID || 'rugby')
 const APPLY = !!process.env.APPLY
 
 // ── Key utilities (mirrors src/lib/teamNaming.js) ─────────────────────────────

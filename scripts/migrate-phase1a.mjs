@@ -23,7 +23,7 @@ import { getAuth } from 'firebase-admin/auth'
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
 initializeApp({ credential: cert(serviceAccount) })
 
-const db      = getFirestore()
+const db      = getFirestore(process.env.FIRESTORE_DATABASE_ID || 'rugby')
 const auth    = getAuth()
 const DRY_RUN = !!process.env.DRY_RUN
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL

@@ -29,7 +29,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
 initializeApp({ credential: cert(serviceAccount) })
 
-const db    = getFirestore()
+const db    = getFirestore(process.env.FIRESTORE_DATABASE_ID || 'rugby')
 const APPLY = process.env.APPLY === '1'
 
 function hasBeenStarted(m) {

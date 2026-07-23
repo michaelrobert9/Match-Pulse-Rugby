@@ -4,12 +4,23 @@ const { onSchedule } = require('firebase-functions/v2/scheduler')
 const logger = require('firebase-functions/logger')
 const { Resend } = require('resend')
 const admin = require('firebase-admin')
+const { getFirestore } = require('firebase-admin/firestore')
 const crypto = require('crypto')
 const { recomputeCompetitionStats, recomputeAllCareerStats, recomputeFriendlyStatsForTeams } = require('./statsEngine')
 const { buildSitemap } = require('./sitemap')
 const { rendererHandler } = require('./renderer')
 
-admin.initializeApp()
+const app = admin.initializeApp()
+
+// Rugby's data lives in its OWN named Firestore database inside the shared
+// match-pulse-4560e project (hockey and the other MatchPulse sites use the
+// project's (default) database). Every read/write and every Firestore trigger
+// below is scoped to this database so the sports never share data while still
+// sharing one project for unified auth. Overridable via FIRESTORE_DATABASE_ID
+// (functions/.env); must match the client's VITE_FIREBASE_DATABASE_ID and
+// firebase.json's firestore.database.
+const DATABASE_ID = process.env.FIRESTORE_DATABASE_ID || 'rugby'
+const db = getFirestore(app, DATABASE_ID)
 
 // Human-readable role labels, mirroring src/lib/capabilities.js ROLE_DISPLAY.
 // Falls back to the raw role string for anything not listed.
@@ -32,7 +43,7 @@ exports.sendInviteEmail = onDocumentCreated(
   // Manager secret so a fresh, pre-launch deploy succeeds before any email
   // provider is configured — the handler no-ops gracefully when the key is
   // absent. Provision the key in functions/.env to enable invite emails.
-  { document: 'invites/{inviteId}' },
+  { document: 'invites/{inviteId}', database: DATABASE_ID },
   async (event) => {
     const snap = event.data
     if (!snap) return
@@ -258,7 +269,7 @@ exports.submitContactForm = onCall(
 // set (Settings → Integration). Signing with a passphrase the account doesn't
 // have — or omitting one it does — produces a signature error / 500.
 async function getPayFastConfig() {
-  const snap = await admin.firestore().doc('_meta/payfastConfig').get()
+  const snap = await db.doc('_meta/payfastConfig').get()
   if (!snap.exists) throw new HttpsError('not-found', 'PayFast is not configured. Set credentials in Admin → Billing.')
   const raw = snap.data()
   const trim = v => (typeof v === 'string' ? v.trim() : v)
@@ -395,7 +406,7 @@ exports.payfastITN = onRequest(
       }
       const [uid, plan] = parts
 
-      const db = admin.firestore()
+      const db = getFirestore(app, DATABASE_ID)
       const userRef = db.doc(`users/${uid}`)
       const userSnap = await userRef.get()
       if (!userSnap.exists) {
@@ -495,7 +506,7 @@ const AUTOFLIP_WINDOW_HOURS = 6
 exports.autoFlipScheduledMatches = onSchedule(
   { schedule: 'every 15 minutes', region: 'europe-west1' },
   async () => {
-    const db = admin.firestore()
+    const db = getFirestore(app, DATABASE_ID)
     const serverTs = admin.firestore.FieldValue.serverTimestamp
     const now = Date.now()
     const windowStart = now - AUTOFLIP_WINDOW_HOURS * 60 * 60 * 1000
@@ -538,7 +549,7 @@ exports.autoFlipScheduledMatches = onSchedule(
 exports.dailyFixtureSweep = onSchedule(
   { schedule: '0 * * * *', region: 'europe-west1' },
   async () => {
-    const db = admin.firestore()
+    const db = getFirestore(app, DATABASE_ID)
     const serverTs = admin.firestore.FieldValue.serverTimestamp
     const cfg = await readSweepConfig(db)
     const cutoffHour = Number(String(cfg.cutoffTime).split(':')[0])
@@ -614,7 +625,7 @@ function statsRelevantChanged(before, after) {
 // final, and on any stat-affecting edit to an already-final fixture. Writes only
 // `players` slices (never the match doc) so it cannot re-trigger itself.
 exports.recomputeCompetitionStatsOnFinal = onDocumentUpdated(
-  { document: 'matches/{matchId}', region: 'europe-west1' },
+  { document: 'matches/{matchId}', region: 'europe-west1', database: DATABASE_ID },
   async (event) => {
     const before = event.data?.before?.data()
     const after  = event.data?.after?.data()
@@ -631,7 +642,7 @@ exports.recomputeCompetitionStatsOnFinal = onDocumentUpdated(
       // stats so friendlies count toward player records too.
       try {
         const res = await recomputeFriendlyStatsForTeams(
-          [after.homeTeamId, after.awayTeamId], admin.firestore())
+          [after.homeTeamId, after.awayTeamId], db)
         logger.info('Friendly stats recomputed', { matchId: event.params.matchId, ...res })
       } catch (err) {
         logger.error('Failed to recompute friendly stats', {
@@ -642,7 +653,7 @@ exports.recomputeCompetitionStatsOnFinal = onDocumentUpdated(
     }
 
     try {
-      const res = await recomputeCompetitionStats(competitionId, admin.firestore())
+      const res = await recomputeCompetitionStats(competitionId, db)
       logger.info('Competition stats recomputed', {
         matchId: event.params.matchId, competitionId, transition: !wasFinal, ...res,
       })
@@ -661,7 +672,7 @@ exports.dailyCareerStatsRecompute = onSchedule(
   { schedule: '0 3 * * *', timeZone: 'Africa/Johannesburg', region: 'europe-west1' },
   async () => {
     try {
-      const res = await recomputeAllCareerStats(admin.firestore())
+      const res = await recomputeAllCareerStats(db)
       logger.info('Daily career stats recompute complete', res)
     } catch (err) {
       logger.error('Daily career stats recompute failed', { message: err.message })
@@ -702,7 +713,7 @@ exports.recalculateCompetitionStats = onCall(
     const { competitionId } = request.data ?? {}
     if (!competitionId) throw new HttpsError('invalid-argument', 'competitionId is required.')
 
-    const db = admin.firestore()
+    const db = getFirestore(app, DATABASE_ID)
     await assertCanAdministerCompetition(db, competitionId, request.auth)
 
     const res = await recomputeCompetitionStats(competitionId, db)
@@ -729,11 +740,11 @@ exports.rebuildAllCareerStats = onCall(
   { region: 'europe-west1', timeoutSeconds: 540, memory: '1GiB' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.')
-    const userSnap = await admin.firestore().doc(`users/${request.auth.uid}`).get()
+    const userSnap = await db.doc(`users/${request.auth.uid}`).get()
     if (!(userSnap.exists && userSnap.data().platformAdmin === true)) {
       throw new HttpsError('permission-denied', 'Platform admin only.')
     }
-    const res = await recomputeAllCareerStats(admin.firestore())
+    const res = await recomputeAllCareerStats(db)
     logger.info('Manual wholesale career rebuild', { uid: request.auth.uid, ...res })
     return res
   }
@@ -754,7 +765,7 @@ exports.sitemap = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
     try {
-      const xml = await buildSitemap(admin.firestore(), logger)
+      const xml = await buildSitemap(db, logger)
       res.set('Content-Type', 'application/xml; charset=utf-8')
       res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600')
       res.status(200).send(xml)

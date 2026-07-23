@@ -20,7 +20,12 @@
 // match takes priority over rewrites), so the internal fetch never loops.
 
 const admin = require('firebase-admin')
+const { getFirestore } = require('firebase-admin/firestore')
 const logger = require('firebase-functions/logger')
+
+// Rugby's SSR renderer reads from the same named Firestore database as the rest
+// of the functions (see functions/index.js) — never the shared (default) DB.
+const DATABASE_ID = process.env.FIRESTORE_DATABASE_ID || 'rugby'
 
 // Static Support Centre content (built from markdown by
 // scripts/build-support-content.mjs). Used to render real head + body HTML for
@@ -683,7 +688,7 @@ async function rendererHandler(req, res) {
   // Bot: build and inject per-route metadata.
   try {
     const route  = parseRoute(path)
-    const db     = admin.firestore()
+    const db     = getFirestore(admin.app(), DATABASE_ID)
     const entity = await fetchEntity(db, route)
     const meta   = buildMeta({ kind: route.kind, entity, path })
     const ldStr  = jsonLd(route.kind, entity, path)
