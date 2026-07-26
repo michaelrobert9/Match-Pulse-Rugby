@@ -66,7 +66,7 @@ function seasonYear(comp) {
 }
 
 // ── buildMeta ────────────────────────────────────────────────────────────────
-// type: 'home' | 'plans' | 'competition' | 'team' | 'player' | 'org' | 'match'
+// type: 'home' | 'competition' | 'team' | 'player' | 'org' | 'match'
 //       | 'competitions' | 'players' | 'schools' | 'clubs' | 'generic'
 // entity: the domain object (comp/team/person/match/org); optional for static.
 // path: explicit route path; falls back to the entity's canonical URL.
@@ -84,13 +84,6 @@ export function buildMeta({ type, entity = null, path = null } = {}) {
       description = SITE.description
       h1          = 'Live rugby scores, fixtures & results'
       canonical   = '/'
-      break
-
-    case 'plans':
-      core        = 'MatchPulse Pricing — Rugby League Management Software'
-      description = 'Run your rugby competition on MatchPulse. Free for supporters, Plus from R2,000 once-off, Pro at R15,000/yr. You pay for what you host.'
-      h1          = 'Plans & pricing'
-      canonical   = '/plans'
       break
 
     case 'competitions':

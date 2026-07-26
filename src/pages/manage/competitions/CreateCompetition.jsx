@@ -283,7 +283,7 @@ export default function CreateCompetition() {
                 <Lock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                 <p className="text-sm text-amber-800">
                   Hosting a competition requires a Plus or Pro plan.{' '}
-                  <Link to="/plans" className="font-semibold underline hover:text-amber-900">See Plans</Link>
+                  <a href="https://matchpulse.co.za" target="_blank" rel="noopener noreferrer" className="font-semibold underline hover:text-amber-900">See Plans</a>
                 </p>
               </div>
             )}

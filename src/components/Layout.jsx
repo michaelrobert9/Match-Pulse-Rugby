@@ -14,8 +14,7 @@ export default function Layout() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <span className="text-sm text-slate-400">© {year} MatchPulse Rugby</span>
             <nav className="flex items-center gap-4 text-sm">
-              <Link to="/plans" className="text-slate-500 hover:text-slate-900 transition-colors">Plans</Link>
-              <Link to="/why-matchpulse" className="text-slate-500 hover:text-slate-900 transition-colors">Why MatchPulse</Link>
+              <a href="https://matchpulse.co.za" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-slate-900 transition-colors">Plans</a>
               <Link to="/support" className="text-slate-500 hover:text-slate-900 transition-colors">Support</Link>
               <Link to="/contact" className="text-slate-500 hover:text-slate-900 transition-colors">Contact</Link>
             </nav>
@@ -26,7 +25,7 @@ export default function Layout() {
             <Link to="/legal/privacy" className="text-slate-400 hover:text-slate-700 transition-colors">Privacy Policy</Link>
             <Link to="/legal/cookies" className="text-slate-400 hover:text-slate-700 transition-colors">Cookie Policy</Link>
             <Link to="/legal/acceptable-use" className="text-slate-400 hover:text-slate-700 transition-colors">Acceptable Use</Link>
-            <Link to="/plans" className="text-slate-400 hover:text-slate-700 transition-colors">Pricing</Link>
+            <a href="https://matchpulse.co.za" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-slate-700 transition-colors">Pricing</a>
           </nav>
         </div>
       </footer>

@@ -344,7 +344,7 @@ exports.initPayFastPayment = onCall(
       merchant_id:   cfg.merchantId,
       merchant_key:  cfg.merchantKey,
       return_url:    cfg.returnUrl  || `${(process.env.PUBLIC_BASE_URL || `https://${process.env.GCLOUD_PROJECT}.web.app`).replace(/\/$/, '')}/portal`,
-      cancel_url:    cfg.cancelUrl  || `${(process.env.PUBLIC_BASE_URL || `https://${process.env.GCLOUD_PROJECT}.web.app`).replace(/\/$/, '')}/plans`,
+      cancel_url:    cfg.cancelUrl  || 'https://matchpulse.co.za',
       notify_url:    cfg.notifyUrl  || '',
       email_address: request.auth.token.email || '',
       m_payment_id:  mPaymentId,

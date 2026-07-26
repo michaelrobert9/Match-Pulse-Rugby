@@ -842,7 +842,7 @@ export default function BillingSettings() {
             <TextInput value={form.returnUrl} onChange={set('returnUrl')} placeholder="https://<your-domain>/portal" mono />
           </Field>
           <Field label="Cancel URL" hint="Where PayFast redirects if the buyer cancels payment.">
-            <TextInput value={form.cancelUrl} onChange={set('cancelUrl')} placeholder="https://<your-domain>/plans" mono />
+            <TextInput value={form.cancelUrl} onChange={set('cancelUrl')} placeholder="https://matchpulse.co.za" mono />
           </Field>
         </Section>
 

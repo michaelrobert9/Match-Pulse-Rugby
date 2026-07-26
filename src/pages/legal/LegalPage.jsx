@@ -21,7 +21,7 @@ export default function LegalPage() {
 
   if (!entry) return <Navigate to="/legal/terms" replace />
 
-  // Internal links in the body (e.g. /plans, /legal/privacy, /contact) navigate
+  // Internal links in the body (e.g. /legal/privacy, /contact) navigate
   // client-side. External links (mailto:, https:) fall through to the browser.
   function onBodyClick(e) {
     const a = e.target.closest('a')
@@ -49,7 +49,7 @@ export default function LegalPage() {
           {LEGAL_LINKS.filter(l => l.slug !== doc).map(l => (
             <Link key={l.slug} to={l.path}>{l.title}</Link>
           ))}
-          <Link to="/plans">Pricing</Link>
+          <a href="https://matchpulse.co.za" target="_blank" rel="noopener noreferrer">Pricing</a>
         </nav>
       </div>
     </div>
