@@ -72,7 +72,6 @@ const staticUrls = [
   url('/schools',        { priority: '0.8', changefreq: 'daily'   }),
   url('/clubs',          { priority: '0.8', changefreq: 'daily'   }),
   url('/players',        { priority: '0.8', changefreq: 'daily'   }),
-  url('/why-matchpulse', { priority: '0.6', changefreq: 'monthly' }),
   url('/contact',        { priority: '0.4', changefreq: 'yearly'  }),
   url('/legal/terms',           { priority: '0.3', changefreq: 'yearly' }),
   url('/legal/privacy',         { priority: '0.3', changefreq: 'yearly' }),

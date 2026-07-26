@@ -71,7 +71,7 @@ const RESERVED_TOP = new Set([
   'login', 'signup', 'portal', 'admin', 'manage', 'score', 'fixtures',
   'profile', 'people', 'team', 'match', 'matches', 'player', 'players',
   'competition', 'competitions', 'schools', 'clubs', 'associations',
-  'plans', 'why-matchpulse', 'browse', 'support', 'legal', 'contact',
+  'browse', 'support', 'legal', 'contact',
 ])
 
 function parseRoute(pathname) {
@@ -80,8 +80,6 @@ function parseRoute(pathname) {
   const seg = p.split('/').filter(Boolean)   // e.g. ['competitions','2026','north-coast']
 
   if (p === '/')              return { kind: 'home' }
-  if (p === '/plans')         return { kind: 'plans' }
-  if (p === '/why-matchpulse')return { kind: 'why' }
   if (p === '/contact')       return { kind: 'contact' }
   if (p === '/support')       return { kind: 'support_index' }
   if (seg[0] === 'support' && seg.length >= 3) {
@@ -191,16 +189,6 @@ function buildMeta({ kind, entity = null, path = '' }) {
       core = `${SITE_NAME} — Live Rugby Scores, Fixtures & Results SA`
       desc = 'Follow live scores, fixtures, log tables and player records for South African school and club rugby. Free to follow every competition.'
       h1   = 'Live rugby scores, fixtures & results'
-      break
-    case 'plans':
-      core = 'MatchPulse Pricing — Rugby League Management Software'
-      desc = 'Run your rugby competition on MatchPulse. Free for supporters, Plus from R2,000 once-off, Pro at R15,000/yr. You pay for what you host.'
-      h1   = 'Plans & pricing'; canonical = abs('/plans')
-      break
-    case 'why':
-      core = `Why ${SITE_NAME}? — Rugby League Management for South Africa`
-      desc = 'MatchPulse is the live-scoring and competition-management platform built for South African school and club rugby.'
-      h1   = `Why ${SITE_NAME}?`; canonical = abs('/why-matchpulse')
       break
     case 'contact':
       core = `Contact ${SITE_NAME} — Get in Touch`

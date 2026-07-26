@@ -1061,10 +1061,10 @@ function CompetitionsSection({ orgId, org, isPlatformAdmin, competitions, setCom
               Host a tournament, league or festival. Purchase a plan and MatchPulse activates your competition access manually within one business day.
             </p>
           </div>
-          <Link to="/plans"
+          <a href="https://matchpulse.co.za" target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm uppercase tracking-wider rounded-xl px-5 py-2.5 transition-colors">
             See plans
-          </Link>
+          </a>
         </div>
       )}
 
