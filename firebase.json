@@ -16,9 +16,12 @@
       { "source": "**", "destination": "/index.html" }
     ]
   },
-  "storage": {
-    "rules": "storage.rules"
-  },
+  "storage": [
+    {
+      "bucket": "match-pulse-4560e-ff0fe",
+      "rules": "storage.rules"
+    }
+  ],
   "functions": [
     {
       "source": "functions",
