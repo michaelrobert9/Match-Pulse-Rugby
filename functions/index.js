@@ -22,6 +22,19 @@ const app = admin.initializeApp()
 const DATABASE_ID = process.env.FIRESTORE_DATABASE_ID || 'rugby'
 const db = getFirestore(app, DATABASE_ID)
 
+// ── Function naming ───────────────────────────────────────────────────────────
+// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
+// sport deploys into the shared match-pulse-4560e project. Unprefixed names
+// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
+// so deploying one would OVERWRITE another sport's live functions — rebinding
+// them to the wrong database. Every export below is therefore prefixed `rugby`,
+// and firebase.json pins a distinct `codebase` so a deploy from this repo never
+// treats another sport's functions as deleted.
+//
+// The one deliberately UNPREFIXED function this app calls is the main site's
+// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
+// ours, and must not be redeclared here.
+
 // Human-readable role labels, mirroring src/lib/capabilities.js ROLE_DISPLAY.
 // Falls back to the raw role string for anything not listed.
 const ROLE_DISPLAY = {
@@ -37,7 +50,7 @@ const ROLE_DISPLAY = {
 // top-level `invites` collection. The Resend API key is supplied at runtime by
 // the RESEND_API_KEY secret (Google Cloud Secret Manager) and read from
 // process.env — never committed or hard-coded.
-exports.sendInviteEmail = onDocumentCreated(
+exports.rugbySendInviteEmail = onDocumentCreated(
   // RESEND_API_KEY is read from process.env (functions/.env, see
   // functions/.env.example). It is intentionally NOT declared as a Secret
   // Manager secret so a fresh, pre-launch deploy succeeds before any email
@@ -166,7 +179,7 @@ async function verifyTurnstile(token, remoteip) {
   return { skipped: false, ok: result.success === true }
 }
 
-exports.submitContactForm = onCall(
+exports.rugbySubmitContactForm = onCall(
   // RESEND_API_KEY / TURNSTILE_SECRET_KEY are read from process.env
   // (functions/.env). Not declared as Secret Manager secrets so a pre-launch
   // deploy succeeds before those providers are set up — the captcha step is
@@ -273,10 +286,23 @@ exports.submitContactForm = onCall(
 // fixture in the database into Live → Awaiting result and flood the queue.
 const AUTOFLIP_WINDOW_HOURS = 6
 
-exports.autoFlipScheduledMatches = onSchedule(
+exports.rugbyAutoFlipScheduledMatches = onSchedule(
   { schedule: 'every 15 minutes', region: 'europe-west1' },
   async () => {
     const db = getFirestore(app, DATABASE_ID)
+
+// ── Function naming ───────────────────────────────────────────────────────────
+// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
+// sport deploys into the shared match-pulse-4560e project. Unprefixed names
+// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
+// so deploying one would OVERWRITE another sport's live functions — rebinding
+// them to the wrong database. Every export below is therefore prefixed `rugby`,
+// and firebase.json pins a distinct `codebase` so a deploy from this repo never
+// treats another sport's functions as deleted.
+//
+// The one deliberately UNPREFIXED function this app calls is the main site's
+// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
+// ours, and must not be redeclared here.
     const serverTs = admin.firestore.FieldValue.serverTimestamp
     const now = Date.now()
     const windowStart = now - AUTOFLIP_WINDOW_HOURS * 60 * 60 * 1000
@@ -316,10 +342,23 @@ exports.autoFlipScheduledMatches = onSchedule(
 // finalised, NEVER given an invented score. tracked matches keep their
 // provisional live score (already on homeScore/awayScore) for the admin to
 // confirm; untracked matches present a blank form (driven by tracked downstream).
-exports.dailyFixtureSweep = onSchedule(
+exports.rugbyDailyFixtureSweep = onSchedule(
   { schedule: '0 * * * *', region: 'europe-west1' },
   async () => {
     const db = getFirestore(app, DATABASE_ID)
+
+// ── Function naming ───────────────────────────────────────────────────────────
+// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
+// sport deploys into the shared match-pulse-4560e project. Unprefixed names
+// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
+// so deploying one would OVERWRITE another sport's live functions — rebinding
+// them to the wrong database. Every export below is therefore prefixed `rugby`,
+// and firebase.json pins a distinct `codebase` so a deploy from this repo never
+// treats another sport's functions as deleted.
+//
+// The one deliberately UNPREFIXED function this app calls is the main site's
+// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
+// ours, and must not be redeclared here.
     const serverTs = admin.firestore.FieldValue.serverTimestamp
     const cfg = await readSweepConfig(db)
     const cutoffHour = Number(String(cfg.cutoffTime).split(':')[0])
@@ -394,7 +433,7 @@ function statsRelevantChanged(before, after) {
 // Scoped competition recompute on finalisation. Fires on the transition INTO
 // final, and on any stat-affecting edit to an already-final fixture. Writes only
 // `players` slices (never the match doc) so it cannot re-trigger itself.
-exports.recomputeCompetitionStatsOnFinal = onDocumentUpdated(
+exports.rugbyRecomputeCompetitionStatsOnFinal = onDocumentUpdated(
   { document: 'matches/{matchId}', region: 'europe-west1', database: DATABASE_ID },
   async (event) => {
     const before = event.data?.before?.data()
@@ -438,7 +477,7 @@ exports.recomputeCompetitionStatsOnFinal = onDocumentUpdated(
 // Wholesale career recompute — daily at 03:00 Africa/Johannesburg. Rebuilds every
 // competition's slices from origin, then re-derives every person's career totals
 // and competitionIds as the sum/union of their fresh slices. Idempotent.
-exports.dailyCareerStatsRecompute = onSchedule(
+exports.rugbyDailyCareerStatsRecompute = onSchedule(
   { schedule: '0 3 * * *', timeZone: 'Africa/Johannesburg', region: 'europe-west1' },
   async () => {
     try {
@@ -476,7 +515,7 @@ async function assertCanAdministerCompetition(db, competitionId, auth) {
 // as a competition admin, then runs the same scoped engine the finalisation
 // trigger uses. Career totals are not touched here — they refresh on the nightly
 // run. Writes an immutable audit entry.
-exports.recalculateCompetitionStats = onCall(
+exports.rugbyRecalculateCompetitionStats = onCall(
   { region: 'europe-west1' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.')
@@ -484,6 +523,19 @@ exports.recalculateCompetitionStats = onCall(
     if (!competitionId) throw new HttpsError('invalid-argument', 'competitionId is required.')
 
     const db = getFirestore(app, DATABASE_ID)
+
+// ── Function naming ───────────────────────────────────────────────────────────
+// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
+// sport deploys into the shared match-pulse-4560e project. Unprefixed names
+// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
+// so deploying one would OVERWRITE another sport's live functions — rebinding
+// them to the wrong database. Every export below is therefore prefixed `rugby`,
+// and firebase.json pins a distinct `codebase` so a deploy from this repo never
+// treats another sport's functions as deleted.
+//
+// The one deliberately UNPREFIXED function this app calls is the main site's
+// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
+// ours, and must not be redeclared here.
     await assertCanAdministerCompetition(db, competitionId, request.auth)
 
     const res = await recomputeCompetitionStats(competitionId, db)
@@ -506,7 +558,7 @@ exports.recalculateCompetitionStats = onCall(
 // career totals + competitionIds immediately rather than waiting for 03:00) and
 // as an operator escape hatch. Wholesale cost is fine for a deliberate one-off;
 // it is the per-finalisation case that the nightly schedule exists to avoid.
-exports.rebuildAllCareerStats = onCall(
+exports.rugbyRebuildAllCareerStats = onCall(
   { region: 'europe-west1', timeoutSeconds: 540, memory: '1GiB' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.')
@@ -524,14 +576,14 @@ exports.rebuildAllCareerStats = onCall(
 // catch-all rewrite in firebase.json. Non-bots get the SPA shell; bots get
 // the same shell with per-route title/description/OG/JSON-LD injected.
 // Does NOT require Puppeteer — just Firestore reads + string injection.
-exports.renderer = onRequest(
+exports.rugbyRenderer = onRequest(
   { region: 'europe-west1', timeoutSeconds: 30, memory: '256MiB', minInstances: 0 },
   rendererHandler
 )
 
 // Dynamic sitemap.xml — generated live from Firestore. Served at /sitemap.xml
 // via a Hosting rewrite (firebase.json). Public, cached at the edge for an hour.
-exports.sitemap = onRequest(
+exports.rugbySitemap = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
     try {

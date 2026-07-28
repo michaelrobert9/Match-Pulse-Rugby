@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom'
 //
 // Fallback: if the image is absent or fails to load, we render the wordmark in
 // the brand display font (Space Grotesk) — "Match" in ink navy, "Pulse" in
-// brand green, plus the pale-green RUGBY pill — so the header always shows a
+// brand emerald (#059669), plus the pale-green RUGBY pill — so the header always shows a
 // correct logo. Remove the fallback once the PNG is committed if you prefer.
 const LOGO_SRC = '/logo.png'
 
@@ -17,9 +17,9 @@ function Wordmark({ className = '' }) {
   return (
     <span className={`inline-flex items-center gap-[0.5em] font-display font-bold leading-none whitespace-nowrap text-[1.375rem] ${className}`}>
       <span className="tracking-[-0.01em] text-slate-800">
-        Match<span className="text-green-600">Pulse</span>
+        Match<span className="text-emerald-600">Pulse</span>
       </span>
-      <span className="text-[0.5em] uppercase tracking-[0.14em] text-green-700 bg-green-100 rounded-full px-[0.7em] py-[0.42em]">
+      <span className="text-[0.5em] uppercase tracking-[0.14em] text-emerald-700 bg-emerald-100 rounded-full px-[0.7em] py-[0.42em]">
         Rugby
       </span>
     </span>

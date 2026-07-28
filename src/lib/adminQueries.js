@@ -2639,7 +2639,7 @@ export async function finalizePool(competitionId, poolId) {
 // refresh on the nightly wholesale run (dailyCareerStatsRecompute).
 // Returns { matchCount, playerCount }.
 export async function recalculateCompetitionStats(competitionId) {
-  const call = httpsCallable(functions, 'recalculateCompetitionStats')
+  const call = httpsCallable(functions, 'rugbyRecalculateCompetitionStats')
   const res = await call({ competitionId })
   return res.data
 }
@@ -2651,7 +2651,7 @@ export async function recalculateCompetitionStats(competitionId) {
 // operator use — authority is enforced backend-side. Returns
 // { matchCount, sliceCount, personCount }.
 export async function rebuildAllCareerStats() {
-  const call = httpsCallable(functions, 'rebuildAllCareerStats')
+  const call = httpsCallable(functions, 'rugbyRebuildAllCareerStats')
   const res = await call({})
   return res.data
 }

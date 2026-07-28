@@ -8,10 +8,34 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Platform admin comes from the Auth token's CUSTOM CLAIM, not a document.
+    // Identity lives in the shared (default) database and Firestore rules cannot
+    // read across databases, so the claim (minted centrally by syncUserClaims)
+    // is the only signal available here. It also costs no document read.
     function isPlatformAdmin() {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('platformAdmin', false) == true;
+        && request.auth.token.get('platformAdmin', false) == true;
+    }
+
+    // ── Entitlement (custom claims) ───────────────────────────────────────────
+    // Plan state is mirrored onto the Auth token centrally. Claims travel with
+    // the user, so they are already present after the /auth/handoff sign-in.
+    function entitlement() {
+      return isSignedIn() ? request.auth.token.get('entitlement', 'none') : 'none';
+    }
+
+    function entitlementExpiresAt() {
+      return request.auth.token.get('entitlementExpiresAt', 0);
+    }
+
+    // True when the caller personally holds an entitlement that authorises
+    // creating a competition. Pro = active subscription (expiry in the future,
+    // carried as epoch ms); event = at least one credit remaining.
+    function hasCompetitionEntitlement() {
+      return (entitlement() == 'pro'
+                && entitlementExpiresAt() > request.time.toMillis())
+          || (entitlement() == 'event'
+                && request.auth.token.get('eventCredits', 0) > 0);
     }
 
     // ── Org-membership helpers ────────────────────────────────────────────────
@@ -410,33 +434,23 @@ service cloud.firestore {
       allow delete: if isPlatformAdmin();
     }
 
-    // ── Entitlement helper ────────────────────────────────────────────────────
-    // Returns true when the org has an active paid entitlement that authorises
-    // creating a competition. Pro = active subscription; event = credit >= 1.
+    // ── Entitlement (legacy shims) ────────────────────────────────────────────
+    // Entitlement is now read from the caller's token claims (see
+    // hasCompetitionEntitlement above), never from a document. Both call sites
+    // below used to read organizations/{orgId} or users/{uid} in THIS database;
+    // those records are central now and unreadable from here, so both resolve to
+    // the caller's own claim.
+    //
+    // NOTE (reported to the platform): this narrows enforcement from "the ORG
+    // holds a plan" to "the ACTING USER holds a plan". Org-level entitlement
+    // cannot be enforced in rules while orgs live in another database, because
+    // claims are per-user. Rules still fail closed.
     function orgHasCompetitionEntitlement(orgId) {
-      let org = get(/databases/$(database)/documents/organizations/$(orgId)).data;
-      let e = org.get('entitlement', 'none');
-      // Pro: active subscription whose expiry timestamp is in the future.
-      // Event: at least one credit remaining. Rules functions allow only a
-      // single return expression — no imperative `if` statements.
-      return (e == 'pro'
-                && org.get('entitlementExpiresAt', null) != null
-                && org.get('entitlementExpiresAt', null) > request.time)
-          || (e == 'event' && org.get('eventCredits', 0) > 0);
+      return hasCompetitionEntitlement();
     }
 
-    // Same check against an individual user's profile. PayFast purchases by an
-    // individual land entitlement on users/{uid}; this authorises that user to
-    // create a PERSONAL competition (no org). Entitlement fields are admin-SDK
-    // / platform-admin writable only (see the users/{uid} write rules), so a
-    // user cannot grant themselves access.
     function userHasCompetitionEntitlement(uid) {
-      let u = get(/databases/$(database)/documents/users/$(uid)).data;
-      let e = u.get('entitlement', 'none');
-      return (e == 'pro'
-                && u.get('entitlementExpiresAt', null) != null
-                && u.get('entitlementExpiresAt', null) > request.time)
-          || (e == 'event' && u.get('eventCredits', 0) > 0);
+      return hasCompetitionEntitlement();
     }
 
     // ── Competitions ──────────────────────────────────────────────────────────
