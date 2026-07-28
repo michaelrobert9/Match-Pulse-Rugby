@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, ChevronLeft, Camera } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChevronRight, ChevronLeft, ExternalLink } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import { updateProfile } from 'firebase/auth'
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { useAuth } from '../contexts/AuthContext'
-import { auth, db, storage } from '../firebase'
 import { fetchOrganization } from '../lib/queries'
 import { monogram } from '../lib/names'
 import { grantOf, grantLabel } from '../lib/capabilities'
+import { fetchRugbyProfile, saveRugbyProfile } from '../lib/rugbyProfile'
+import { goAccount } from '../lib/auth-redirect'
 
 const PROVINCES = [
   'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal',
@@ -79,11 +77,8 @@ function OrgChip({ orgId, grant }) {
 export default function Profile() {
   const { user, isPlatformAdmin, orgRoles, canScore, logout } = useAuth()
   const navigate = useNavigate()
-  const fileRef  = useRef(null)
 
-  const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [bio,         setBio]         = useState('')
-  const [photoURL,    setPhotoURL]    = useState(user?.photoURL ?? '')
   const [dob,         setDob]         = useState('')
   const [gender,      setGender]      = useState('')
   const [province,    setProvince]    = useState('')
@@ -92,7 +87,6 @@ export default function Profile() {
   const [position,    setPosition]    = useState('')
   const [saRugbyNumber,  setSaRugbyNumber]  = useState('')
   const [saving,      setSaving]      = useState(false)
-  const [uploading,   setUploading]   = useState(false)
   const [saved,       setSaved]       = useState(false)
   const [error,       setError]       = useState('')
 
@@ -101,67 +95,29 @@ export default function Profile() {
 
   useEffect(() => {
     if (!user) return
-    getDoc(doc(db, 'users', user.uid)).then(snap => {
-      if (!snap.exists()) return
-      const data = snap.data()
-      setBio(data.bio ?? '')
-      if (data.photoURL)    setPhotoURL(data.photoURL)
-      if (data.displayName) setDisplayName(data.displayName)
-      setDob(data.dateOfBirth ?? '')
-      setGender(data.gender ?? '')
-      setProvince(data.province ?? '')
-      setPhone(data.phone ?? '')
-      setRole(data.role ?? '')
-      setPosition(data.position ?? '')
-      setSaRugbyNumber(data.saRugbyNumber ?? '')
+    // Rugby's OWN profile — never the shared central users/{uid} document.
+    fetchRugbyProfile(user.uid).then(p => {
+      setBio(p.bio)
+      setDob(p.dateOfBirth)
+      setGender(p.gender)
+      setProvince(p.province)
+      setPhone(p.phone)
+      setRole(p.role)
+      setPosition(p.position)
+      setSaRugbyNumber(p.saRugbyNumber)
     }).catch(() => {})
   }, [user])
-
-  async function handlePhotoUpload(e) {
-    const file = e.target.files?.[0]
-    if (!file || !storage) return
-    setUploading(true)
-    setError('')
-    try {
-      const storageRef = ref(storage, `avatars/${user.uid}`)
-      await uploadBytes(storageRef, file)
-      const url = await getDownloadURL(storageRef)
-      await updateProfile(auth.currentUser, { photoURL: url })
-      await updateDoc(doc(db, 'users', user.uid), { photoURL: url, updatedAt: serverTimestamp() })
-      setDoc(doc(db, 'userProfiles', user.uid), { photoURL: url }, { merge: true }).catch(() => {})
-      setPhotoURL(url)
-    } catch (err) {
-      setError('Photo upload failed: ' + (err.message ?? 'unknown error'))
-    } finally {
-      setUploading(false)
-      e.target.value = ''
-    }
-  }
 
   async function handleSave() {
     setSaving(true)
     setError('')
     try {
-      if (displayName !== (user.displayName ?? '')) {
-        await updateProfile(auth.currentUser, { displayName })
-      }
-      await updateDoc(doc(db, 'users', user.uid), {
-        displayName,
-        bio,
-        dateOfBirth: dob,
-        gender,
-        province,
-        phone,
-        role,
-        position: role === 'player' ? position : '',
-        saRugbyNumber,
-        updatedAt: serverTimestamp(),
+      // Sport data only. Name, email and photo are central identity, owned by
+      // the main site — this app never writes them.
+      await saveRugbyProfile(user.uid, {
+        role, position, saRugbyNumber, bio,
+        dateOfBirth: dob, gender, province, phone,
       })
-      setDoc(doc(db, 'userProfiles', user.uid), {
-        displayName,
-        email: (user.email ?? '').toLowerCase(),
-        photoURL: photoURL || null,
-      }, { merge: true }).catch(() => {})
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (err) {
@@ -178,7 +134,7 @@ export default function Profile() {
 
   if (!user) return null
 
-  const initials = (displayName || user.email)?.[0]?.toUpperCase() ?? '?'
+  const initials = (user.displayName || user.email)?.[0]?.toUpperCase() ?? '?'
 
   const roleLabel = isPlatformAdmin
     ? 'Platform Admin'
@@ -218,48 +174,31 @@ export default function Profile() {
         </Link>
       </div>
 
-      {/* Avatar */}
+      {/* Identity — owned by the main site. Read-only here. */}
       <div className="flex flex-col items-center gap-2">
-        <button type="button" onClick={() => storage && fileRef.current?.click()}
-          className={`relative ${storage ? 'group' : ''}`}>
-          {photoURL ? (
-            <img src={photoURL} alt="Avatar"
-              className="w-20 h-20 rounded-full object-cover border-2 border-slate-200 group-hover:border-emerald-500 transition-colors" />
-          ) : (
-            <div className="w-20 h-20 rounded-full bg-emerald-100 border-2 border-emerald-300 flex items-center justify-center group-hover:border-emerald-500 transition-colors">
-              <span className="text-2xl font-black text-emerald-600">{initials}</span>
-            </div>
-          )}
-          {storage && (
-            <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center shadow-lg">
-              <Camera className="w-3.5 h-3.5 text-white" />
-            </div>
-          )}
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-        {uploading && <span className="text-xs text-slate-500">Uploading…</span>}
-        {storage && !uploading && <span className="text-[10px] text-slate-400">Tap to change photo</span>}
+        {user.photoURL ? (
+          <img src={user.photoURL} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-slate-200" />
+        ) : (
+          <div className="w-20 h-20 rounded-full bg-emerald-100 border-2 border-emerald-300 flex items-center justify-center">
+            <span className="text-2xl font-black text-emerald-600">{initials}</span>
+          </div>
+        )}
+        <div className="text-center">
+          <div className="text-slate-900 font-semibold text-sm">{user.displayName || '—'}</div>
+          <div className="text-slate-400 text-xs">{user.email}</div>
+        </div>
       </div>
 
-      {/* Edit form */}
-      <div className="space-y-4">
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1.5">Display name</label>
-          <input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Your name"
-            className="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
-        </div>
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1.5">Email</label>
-          <input value={user.email ?? ''} readOnly
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-400 text-sm cursor-default focus:outline-none" />
-        </div>
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1.5">Bio</label>
-          <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3}
-            placeholder="Tell us about yourself…"
-            className="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors resize-none" />
-        </div>
-      </div>
+      <button onClick={goAccount}
+        className="w-full flex items-center justify-between gap-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-4 py-3 text-left transition-colors shadow-sm">
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-slate-900">Account settings</span>
+          <span className="block text-[11px] text-slate-400 leading-snug">
+            Your name, email, photo, password and plan live on MatchPulse.
+          </span>
+        </span>
+        <ExternalLink className="w-4 h-4 text-slate-400 shrink-0" />
+      </button>
 
       {/* Rugby profile */}
       <div className="space-y-4">
@@ -362,6 +301,13 @@ export default function Profile() {
               placeholder="+27 82 000 0000" autoComplete="tel"
               className="w-full bg-white border border-slate-200 rounded-lg px-3 py-3 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
           </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1.5">Bio</label>
+          <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3}
+            placeholder="Tell us about yourself…"
+            className="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors resize-none" />
         </div>
       </div>
 

@@ -1,26 +1,30 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  createUserWithEmailAndPassword,
-  updateProfile as fbUpdateProfile,
-  signOut as fbSignOut,
-} from 'firebase/auth'
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db, configured, googleProvider } from '../firebase'
+import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, identityDb, configured } from '../firebase'
 import { canAdministerCompetition as canAdminComp } from '../lib/competitionAuth'
 import { resolveScopedCapability, grantOf } from '../lib/capabilities'
 import { userEntitlementStatus } from '../lib/entitlement'
 
+// Identity is CENTRAL. This app never creates accounts, signs users in, or
+// changes passwords/emails — the main site owns all of that and hands the user
+// over via /auth/handoff (see src/pages/AuthHandoff.jsx). Here we only observe
+// the resulting session and read central identity.
+//
+// Plan/entitlement state is read from the Auth token's CUSTOM CLAIMS, not from
+// the users/{uid} document: Firestore rules cannot read across databases, so
+// claims are the only entitlement signal available to this sport's rules, and
+// reading the same source in the client keeps client and rules in agreement.
+
 const AuthContext = createContext(null)
 
-// Pull just the entitlement-bearing fields out of a users/{uid} doc.
-function entitlementFieldsOf(data) {
+// Entitlement-bearing custom claims, normalised to the shape the entitlement
+// helpers expect. Claims are minted centrally by syncUserClaims.
+function entitlementFromClaims(claims) {
   return {
-    entitlement:          data?.entitlement ?? 'none',
-    eventCredits:         data?.eventCredits ?? 0,
-    entitlementExpiresAt: data?.entitlementExpiresAt ?? null,
+    entitlement:          claims?.entitlement ?? 'none',
+    eventCredits:         claims?.eventCredits ?? 0,
+    entitlementExpiresAt: claims?.entitlementExpiresAt ?? null,
   }
 }
 
@@ -33,117 +37,68 @@ export function AuthProvider({ children }) {
   const [userEntitlement,   setUserEntitlement]  = useState(null)
   const [loading,           setLoading]          = useState(true)
 
+  function clearIdentity() {
+    setIsPlatformAdmin(false)
+    setOrgRoles({})
+    setCompetitionRoles({})
+    setOverrides({})
+    setUserEntitlement(null)
+  }
+
+  // Load the parts of identity this app may read: entitlement + platformAdmin
+  // from the token claims, roles from the central user document.
+  async function loadIdentity(u) {
+    // Claims first — they resolve even if the central document read is denied.
+    try {
+      const token = await u.getIdTokenResult()
+      setIsPlatformAdmin(token.claims?.platformAdmin === true)
+      setUserEntitlement(entitlementFromClaims(token.claims))
+    } catch {
+      setIsPlatformAdmin(false)
+      setUserEntitlement(null)
+    }
+    // Roles live on the central users/{uid} document — read-only from here.
+    try {
+      const snap = await getDoc(doc(identityDb, 'users', u.uid))
+      const data = snap.exists() ? snap.data() : null
+      setOrgRoles(data?.orgRoles ?? {})
+      setCompetitionRoles(data?.competitionRoles ?? {})
+      setOverrides(data?.permissionOverrides ?? {})
+    } catch {
+      setOrgRoles({})
+      setCompetitionRoles({})
+      setOverrides({})
+    }
+  }
+
   useEffect(() => {
     if (!configured) { setLoading(false); return }
 
     return onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u)
-        try {
-          const userRef = doc(db, 'users', u.uid)
-          const snap    = await getDoc(userRef)
-
-          if (!snap.exists()) {
-            const profile = {
-              email:          (u.email ?? '').toLowerCase(),
-              displayName:    u.displayName ?? '',
-              platformAdmin:  false,
-              orgRoles:       {},
-              createdAt:      serverTimestamp(),
-              updatedAt:      serverTimestamp(),
-            }
-            await setDoc(userRef, profile)
-            setDoc(doc(db, 'userProfiles', u.uid), {
-              email:       (u.email ?? '').toLowerCase(),
-              displayName: u.displayName ?? '',
-              photoURL:    u.photoURL ?? null,
-            }, { merge: true }).catch(() => {})
-            setIsPlatformAdmin(false)
-            setOrgRoles({})
-            setCompetitionRoles({})
-            setOverrides({})
-            setUserEntitlement(null)
-          } else {
-            const data = snap.data()
-            // Self-heal a profile that predates this fix: if the stored name is
-            // empty but the auth account carries one (from sign-up / Google),
-            // backfill it so the back-end panels show the name, not the email.
-            if (!data.displayName && u.displayName) {
-              updateDoc(userRef, { displayName: u.displayName, updatedAt: serverTimestamp() }).catch(() => {})
-              setDoc(doc(db, 'userProfiles', u.uid), { displayName: u.displayName }, { merge: true }).catch(() => {})
-            }
-            setIsPlatformAdmin(data.platformAdmin === true)
-            setOrgRoles(data.orgRoles ?? {})
-            setCompetitionRoles(data.competitionRoles ?? {})
-            setOverrides(data.permissionOverrides ?? {})
-            setUserEntitlement(entitlementFieldsOf(data))
-          }
-        } catch {
-          setIsPlatformAdmin(false)
-          setOrgRoles({})
-          setCompetitionRoles({})
-          setOverrides({})
-          setUserEntitlement(null)
-        }
+        await loadIdentity(u)
       } else {
         setUser(null)
-        setIsPlatformAdmin(false)
-        setOrgRoles({})
-        setCompetitionRoles({})
-        setOverrides({})
-        setUserEntitlement(null)
+        clearIdentity()
       }
       setLoading(false)
     })
   }, [])
 
-  // Force a re-read of the user's Firestore profile (orgRoles, platformAdmin).
-  // Call this after operations that modify the user's own document — e.g. after
-  // self-creating an org so the new orgRoles mirror is reflected without signing out.
-  async function refreshUserData() {
-    if (!auth?.currentUser) return
-    try {
-      const snap = await getDoc(doc(db, 'users', auth.currentUser.uid))
-      if (snap.exists()) {
-        const data = snap.data()
-        setIsPlatformAdmin(data.platformAdmin === true)
-        setOrgRoles(data.orgRoles ?? {})
-        setCompetitionRoles(data.competitionRoles ?? {})
-        setOverrides(data.permissionOverrides ?? {})
-        setUserEntitlement(entitlementFieldsOf(data))
-      }
-    } catch { /* silently ignore — will pick up on next sign-in */ }
+  // Re-read identity. Pass { force: true } after anything that should have
+  // changed entitlement — custom claims are baked into the token at mint time
+  // and only refresh about hourly, so a purchase made on the main site stays
+  // invisible here until the token is force-refreshed.
+  async function refreshUserData({ force = false } = {}) {
+    const u = auth?.currentUser
+    if (!u) return
+    if (force) { try { await u.getIdToken(true) } catch { /* keep existing claims */ } }
+    await loadIdentity(u)
   }
 
-  function login(email, password) {
-    return signInWithEmailAndPassword(auth, email, password)
-  }
-
-  async function signUp(email, password, displayName) {
-    const cred = await createUserWithEmailAndPassword(auth, email, password)
-    if (displayName) await fbUpdateProfile(cred.user, { displayName })
-    // Persist the name to the Firestore profile at account creation, so it shows
-    // on the back end (User Access / Administrators) even if the user never
-    // completes the optional profile step. Merge so it coexists with whatever the
-    // onAuthStateChanged bootstrap or the profile step writes.
-    await setDoc(doc(db, 'users', cred.user.uid), {
-      email:         (email ?? '').toLowerCase(),
-      displayName:   displayName ?? '',
-      platformAdmin: false,
-      orgRoles:      {},
-      updatedAt:     serverTimestamp(),
-    }, { merge: true }).catch(() => {})
-    setDoc(doc(db, 'userProfiles', cred.user.uid), {
-      email:       (email ?? '').toLowerCase(),
-      displayName: displayName ?? '',
-    }, { merge: true }).catch(() => {})
-    return cred
-  }
-
-  function signInWithGoogle() {
-    return signInWithPopup(auth, googleProvider)
-  }
-
+  // Sign-out is per-origin: this ends the session HERE only, not on the main
+  // site or the other sports.
   const logout = () => fbSignOut(auth)
 
   // True if the user owns or is staff at the given org, or is a platform admin.
@@ -187,7 +142,7 @@ export function AuthProvider({ children }) {
       user, uid: user?.uid ?? null, isPlatformAdmin, orgRoles, competitionRoles, permissionOverrides: overrides,
       userEntitlement,
       isOrgMember, canScore, canAdministerCompetition, canDo, grantFor, loading,
-      login, logout, signUp, signInWithGoogle, refreshUserData,
+      logout, refreshUserData,
     }}>
       {children}
     </AuthContext.Provider>

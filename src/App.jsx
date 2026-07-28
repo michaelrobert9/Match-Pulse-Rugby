@@ -9,7 +9,6 @@ import SiteSettingsProvider from './components/SiteSettingsProvider'
 
 // Public pages
 import Home from './pages/Home'
-import Signup from './pages/Signup'
 import CompetitionsListPage from './pages/CompetitionsList'
 import OrgList from './pages/OrgList'
 import OrgDetail from './pages/OrgDetail'
@@ -25,7 +24,7 @@ import CompetitionPools from './pages/CompetitionPools'
 import CompetitionKnockout from './pages/CompetitionKnockout'
 import CompetitionFestivalStats from './pages/CompetitionFestivalStats'
 import TeamDetail from './pages/TeamDetail'
-import Login from './pages/Login'
+import AuthHandoff from './pages/AuthHandoff'
 import Portal from './pages/Portal'
 import Profile from './pages/Profile'
 import LegalPage from './pages/legal/LegalPage'
@@ -56,7 +55,6 @@ import SeoSettings from './pages/admin/SeoSettings'
 // Support Centre — lazy so the article content ships as its own chunk.
 const SupportIndex   = lazy(() => import('./pages/support/SupportIndex'))
 const SupportArticle = lazy(() => import('./pages/support/SupportArticle'))
-import BillingSettings from './pages/admin/BillingSettings'
 import MyPlayers from './pages/MyPlayers'
 
 // Scorer pages
@@ -186,9 +184,11 @@ export default function App() {
           <Route path="*"                               element={<NotFound />} />
         </Route>
 
+        {/* Auth handoff from the main site — MUST stay outside the auth guard,
+            the user is signed out when they land here. */}
+        <Route path="/auth/handoff" element={<AuthHandoff />} />
+
         {/* Auth */}
-        <Route path="/login"   element={<Login />} />
-        <Route path="/signup"  element={<Signup />} />
         <Route path="/portal"  element={<Portal />} />
 
         {/* Admin — requires platform admin */}
@@ -207,7 +207,6 @@ export default function App() {
           <Route path="permissions"                 element={<Permissions />} />
           <Route path="user-access"                 element={<UserAccess />} />
           <Route path="seo"                         element={<SeoSettings />} />
-          <Route path="billing"                     element={<BillingSettings />} />
           <Route path="competitions"                element={<AdminCompetitionsList />} />
           <Route path="fixtures"                    element={<AdminFixturesList />} />
           <Route path="result-queue"                element={<ResultQueue />} />

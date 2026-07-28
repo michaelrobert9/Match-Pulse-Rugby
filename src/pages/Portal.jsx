@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { RedirectToSignIn } from '../components/ProtectedRoute'
 import { useAuth } from '../contexts/AuthContext'
 
-// Landing target after sign-in and after a PayFast payment returns. Because the
-// PayFast ITN webhook grants entitlement a moment after the buyer is redirected
-// back, we briefly poll the user profile so a just-purchased plan is reflected
-// before we decide where to send them — rather than bouncing them home.
+// Landing target after sign-in, and after returning from a purchase on the main
+// site. Entitlement reaches this app as an Auth custom claim, and claims are
+// baked into the token at mint time (refreshing roughly hourly) — so a plan
+// bought seconds ago is invisible until the token is FORCE-refreshed. We poll
+// with a forced refresh so a just-purchased plan is reflected before we decide
+// where to send the user, rather than bouncing them home.
 const MAX_TRIES   = 5
 const RETRY_MS    = 1500
 
@@ -21,7 +24,7 @@ export default function Portal() {
     const tick = async () => {
       if (cancelled) return
       triesRef.current += 1
-      await refreshUserData()
+      await refreshUserData({ force: true })
       if (cancelled) return
       if (triesRef.current >= MAX_TRIES) { setSettling(false); return }
       setTimeout(tick, RETRY_MS)
@@ -39,7 +42,7 @@ export default function Portal() {
     )
   }
 
-  if (!user)           return <Navigate to="/login"  replace />
+  if (!user)           return <RedirectToSignIn />
   if (isPlatformAdmin) return <Navigate to="/admin"  replace />
   if (canScore)        return <Navigate to="/manage" replace />
   return <Navigate to="/" replace />

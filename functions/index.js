@@ -22,6 +22,19 @@ const app = admin.initializeApp()
 const DATABASE_ID = process.env.FIRESTORE_DATABASE_ID || 'rugby'
 const db = getFirestore(app, DATABASE_ID)
 
+// ── Function naming ───────────────────────────────────────────────────────────
+// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
+// sport deploys into the shared match-pulse-4560e project. Unprefixed names
+// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
+// so deploying one would OVERWRITE another sport's live functions — rebinding
+// them to the wrong database. Every export below is therefore prefixed `rugby`,
+// and firebase.json pins a distinct `codebase` so a deploy from this repo never
+// treats another sport's functions as deleted.
+//
+// The one deliberately UNPREFIXED function this app calls is the main site's
+// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
+// ours, and must not be redeclared here.
+
 // Human-readable role labels, mirroring src/lib/capabilities.js ROLE_DISPLAY.
 // Falls back to the raw role string for anything not listed.
 const ROLE_DISPLAY = {
@@ -37,7 +50,7 @@ const ROLE_DISPLAY = {
 // top-level `invites` collection. The Resend API key is supplied at runtime by
 // the RESEND_API_KEY secret (Google Cloud Secret Manager) and read from
 // process.env — never committed or hard-coded.
-exports.sendInviteEmail = onDocumentCreated(
+exports.rugbySendInviteEmail = onDocumentCreated(
   // RESEND_API_KEY is read from process.env (functions/.env, see
   // functions/.env.example). It is intentionally NOT declared as a Secret
   // Manager secret so a fresh, pre-launch deploy succeeds before any email
@@ -69,10 +82,13 @@ exports.sendInviteEmail = onDocumentCreated(
     }
 
     const roleLabel = ROLE_DISPLAY[invite.role] || invite.role || 'member'
-    // PUBLIC_BASE_URL (functions/.env) — the rugby platform's domain is
-    // environment-configured; links fall back to the project's web.app origin.
-    const origin = (process.env.PUBLIC_BASE_URL || `https://${process.env.GCLOUD_PROJECT}.web.app`).replace(/\/$/, '')
-    const signupLink = `${origin}/signup?invite=${inviteId}`
+    // Account creation happens on the MAIN SITE — this app has no signup of its
+    // own. Send the invitee there with the sport key and a return path that
+    // carries the invite id, so they land back here (signed in) on the invite.
+    const mainSite = (process.env.MAIN_SITE_URL || 'https://matchpulse.co.za').replace(/\/$/, '')
+    const returnPath = `/?invite=${encodeURIComponent(inviteId)}`
+    const signupLink =
+      `${mainSite}/signup?sport=rugby&path=${encodeURIComponent(returnPath)}`
 
     const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -163,7 +179,7 @@ async function verifyTurnstile(token, remoteip) {
   return { skipped: false, ok: result.success === true }
 }
 
-exports.submitContactForm = onCall(
+exports.rugbySubmitContactForm = onCall(
   // RESEND_API_KEY / TURNSTILE_SECRET_KEY are read from process.env
   // (functions/.env). Not declared as Secret Manager secrets so a pre-launch
   // deploy succeeds before those providers are set up — the captcha step is
@@ -260,239 +276,6 @@ exports.submitContactForm = onCall(
   }
 )
 
-// ── PayFast helpers ───────────────────────────────────────────────────────────
-
-// Reads PayFast config from _meta/payfastConfig (admin SDK, bypasses rules).
-// Values are trimmed — pasted credentials often carry a trailing space/newline,
-// which silently breaks the MD5 signature. The passphrase is OPTIONAL: PayFast
-// only expects it in the signature when the merchant account actually has one
-// set (Settings → Integration). Signing with a passphrase the account doesn't
-// have — or omitting one it does — produces a signature error / 500.
-async function getPayFastConfig() {
-  const snap = await db.doc('_meta/payfastConfig').get()
-  if (!snap.exists) throw new HttpsError('not-found', 'PayFast is not configured. Set credentials in Admin → Billing.')
-  const raw = snap.data()
-  const trim = v => (typeof v === 'string' ? v.trim() : v)
-  const cfg = {
-    merchantId:  trim(raw.merchantId),
-    merchantKey: trim(raw.merchantKey),
-    passphrase:  trim(raw.passphrase) || '',
-    sandbox:     raw.sandbox,
-    notifyUrl:   trim(raw.notifyUrl) || '',
-    returnUrl:   trim(raw.returnUrl) || '',
-    cancelUrl:   trim(raw.cancelUrl) || '',
-  }
-  if (!cfg.merchantId || !cfg.merchantKey) {
-    throw new HttpsError('not-found', 'PayFast credentials are incomplete. Complete setup in Admin → Billing.')
-  }
-  return cfg
-}
-
-// Computes the MD5 signature expected by PayFast.
-// Params object must NOT include 'signature'. Empty values are excluded.
-//
-// IMPORTANT: PayFast rebuilds the signature string from the fields in the ORDER
-// they are submitted (for the redirect) or received (for the ITN) — NOT sorted
-// alphabetically. We therefore preserve insertion order here. The caller is
-// responsible for building params in PayFast's documented field order and for
-// POSTing them in that same order.
-function computePayFastSignature(params, passphrase) {
-  const str = Object.keys(params)
-    .filter(k => params[k] !== '' && params[k] != null)
-    .map(k => `${k}=${encodeURIComponent(String(params[k])).replace(/%20/g, '+')}`)
-    .join('&')
-  const withPass = passphrase
-    ? `${str}&passphrase=${encodeURIComponent(passphrase).replace(/%20/g, '+')}`
-    : str
-  return crypto.createHash('md5').update(withPass).digest('hex')
-}
-
-// ── initPayFastPayment (callable) ─────────────────────────────────────────────
-// Called by the Plans page CTAs. Generates a signed PayFast payment payload.
-// Returns { paymentUrl, params } — client builds a hidden form and submits it.
-//
-// plan: 'event' (R2,000 once-off) | 'pro' (R15,000 annual)
-// No orgId needed — payment is by the individual user. Entitlement is granted
-// to users/{uid} on ITN confirmation; which org (if any) to apply it to is
-// handled separately inside the app.
-exports.initPayFastPayment = onCall(
-  { region: 'europe-west1' },
-  async (request) => {
-    const { plan } = request.data ?? {}
-
-    if (!plan) throw new HttpsError('invalid-argument', 'plan is required.')
-    if (plan !== 'event' && plan !== 'pro') throw new HttpsError('invalid-argument', 'plan must be event or pro.')
-
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.')
-
-    const cfg = await getPayFastConfig()
-    const isSandbox = cfg.sandbox !== false
-
-    const PRICES = { event: '2000.00', pro: '15000.00' }
-    const NAMES  = { event: 'MatchPulse Plus - Single Event', pro: 'MatchPulse Pro - Annual Subscription' }
-
-    // m_payment_id encodes uid + plan + timestamp so the ITN can find the user.
-    const mPaymentId = `${request.auth.uid}__${plan}__${Date.now()}`
-
-    const paymentUrl = isSandbox
-      ? 'https://sandbox.payfast.co.za/eng/process'
-      : 'https://www.payfast.co.za/eng/process'
-
-    // Field order MUST follow PayFast's documented attribute sequence — the
-    // signature is rebuilt from the POSTed order, so any deviation fails.
-    const params = {
-      merchant_id:   cfg.merchantId,
-      merchant_key:  cfg.merchantKey,
-      return_url:    cfg.returnUrl  || `${(process.env.PUBLIC_BASE_URL || `https://${process.env.GCLOUD_PROJECT}.web.app`).replace(/\/$/, '')}/portal`,
-      cancel_url:    cfg.cancelUrl  || 'https://matchpulse.co.za',
-      notify_url:    cfg.notifyUrl  || '',
-      email_address: request.auth.token.email || '',
-      m_payment_id:  mPaymentId,
-      amount:        PRICES[plan],
-      item_name:     NAMES[plan],
-    }
-
-    params.signature = computePayFastSignature(params, cfg.passphrase)
-
-    logger.info('PayFast payment initiated', { uid: request.auth.uid, plan, mPaymentId, sandbox: isSandbox })
-    return { paymentUrl, params }
-  }
-)
-
-// ── payfastITN (HTTP webhook) ──────────────────────────────────────────────────
-// PayFast sends a POST here on every payment event (Instant Transaction
-// Notification). Verifies the signature, then grants the entitlement to the
-// org identified in m_payment_id.
-//
-// Required config: notifyUrl in _meta/payfastConfig must point to this function.
-exports.payfastITN = onRequest(
-  { region: 'europe-west1' },
-  async (req, res) => {
-    if (req.method !== 'POST') { res.status(405).send('Method Not Allowed'); return }
-
-    try {
-      const body = req.body ?? {}
-      logger.info('PayFast ITN received', { payment_status: body.payment_status, m_payment_id: body.m_payment_id })
-
-      const cfg = await getPayFastConfig().catch(() => null)
-      if (!cfg) {
-        logger.error('PayFast config missing — cannot verify ITN')
-        res.status(200).send('OK')  // Always 200 to PayFast; log the error.
-        return
-      }
-
-      // Verify signature: rebuild the param string excluding 'signature'.
-      const { signature: receivedSig, ...verifyParams } = body
-      const expectedSig = computePayFastSignature(verifyParams, cfg.passphrase)
-      if (receivedSig !== expectedSig) {
-        logger.warn('PayFast ITN signature mismatch', { received: receivedSig, expected: expectedSig })
-        res.status(200).send('OK')
-        return
-      }
-
-      // Only act on completed payments.
-      if (body.payment_status !== 'COMPLETE') {
-        logger.info('PayFast ITN ignored — payment not complete', { payment_status: body.payment_status })
-        res.status(200).send('OK')
-        return
-      }
-
-      // Parse m_payment_id: "{uid}__{plan}__{timestamp}"
-      const parts = (body.m_payment_id ?? '').split('__')
-      if (parts.length < 2) {
-        logger.warn('PayFast ITN — cannot parse m_payment_id', { m_payment_id: body.m_payment_id })
-        res.status(200).send('OK')
-        return
-      }
-      const [uid, plan] = parts
-
-      const db = getFirestore(app, DATABASE_ID)
-      const userRef = db.doc(`users/${uid}`)
-      const userSnap = await userRef.get()
-      if (!userSnap.exists) {
-        logger.warn('PayFast ITN — user not found', { uid })
-        res.status(200).send('OK')
-        return
-      }
-
-      if (plan === 'pro') {
-        const expiresAt = new Date()
-        expiresAt.setFullYear(expiresAt.getFullYear() + 1)
-        await userRef.update({
-          entitlement: 'pro',
-          entitlementExpiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-          entitlementUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        })
-        logger.info('Pro entitlement granted to user', { uid, expiresAt })
-      } else if (plan === 'event') {
-        await userRef.update({
-          entitlement: 'event',
-          eventCredits: admin.firestore.FieldValue.increment(1),
-          entitlementUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        })
-        logger.info('Event credit granted to user', { uid })
-      } else {
-        logger.warn('PayFast ITN — unknown plan', { plan, uid })
-      }
-
-      res.status(200).send('OK')
-    } catch (err) {
-      // Always return 200 to PayFast — a non-200 triggers retries.
-      logger.error('PayFast ITN error', { message: err.message })
-      res.status(200).send('OK')
-    }
-  }
-)
-
-// ── Fixture lifecycle: scheduled functions ─────────────────────────────────────
-//
-// CORE PRINCIPLE: the system NEVER invents a result and NEVER silently
-// finalises one. These jobs only MOVE fixtures between non-counting states —
-// scheduled → live (auto-flip) and live → awaiting_result (daily sweep). A human
-// always confirms the final result from the admin queue. (The previous
-// `autoFinalizeStaleMatches` job, which wrote status:'final' on a timer, has
-// been deleted — it violated this principle.)
-//
-// Legacy match docs may still store status:'upcoming' instead of 'scheduled'
-// until scripts/migrate-fixture-status.mjs has run; both are queried.
-const SCHEDULED_STATUSES = ['scheduled', 'upcoming']
-const LIVE_STATUSES = ['live', 'paused']
-
-// Sweep cutoff lives in config (NOT hard-coded) so going multi-region later is a
-// config change — move this from a single global doc to per-competition/per-org
-// lookups inside the same function body. v1: one global value (South Africa).
-const SWEEP_CONFIG_DEFAULT = { cutoffTime: '03:00', timezone: 'Africa/Johannesburg' }
-
-async function readSweepConfig(db) {
-  try {
-    const snap = await db.doc('_meta/sweepConfig').get()
-    const cfg = snap.exists ? snap.data() : {}
-    return {
-      cutoffTime: cfg.cutoffTime || SWEEP_CONFIG_DEFAULT.cutoffTime,
-      timezone:   cfg.timezone   || SWEEP_CONFIG_DEFAULT.timezone,
-    }
-  } catch {
-    return { ...SWEEP_CONFIG_DEFAULT }
-  }
-}
-
-// The wall-clock hour in a given IANA timezone. The functions run in UTC; this
-// converts so the cutoff is evaluated against local time.
-function localHour(timezone, date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: timezone, hour: '2-digit', hour12: false,
-  }).formatToParts(date)
-  return Number(parts.find(p => p.type === 'hour')?.value ?? -1)
-}
-
-function toMillis(val) {
-  if (val == null) return null
-  if (val.toMillis) return val.toMillis()
-  if (typeof val === 'number') return val
-  const t = new Date(val).getTime()
-  return Number.isNaN(t) ? null : t
-}
-
 // ── Auto-flip: scheduled → live at start time (spec §4 Paths A & C) ─────────────
 // A fixture goes Live (unconfirmed, tracked:false, disclaimer shown) once its
 // scheduled start passes, so the public sees the match is in its window even if
@@ -503,10 +286,23 @@ function toMillis(val) {
 // fixture in the database into Live → Awaiting result and flood the queue.
 const AUTOFLIP_WINDOW_HOURS = 6
 
-exports.autoFlipScheduledMatches = onSchedule(
+exports.rugbyAutoFlipScheduledMatches = onSchedule(
   { schedule: 'every 15 minutes', region: 'europe-west1' },
   async () => {
     const db = getFirestore(app, DATABASE_ID)
+
+// ── Function naming ───────────────────────────────────────────────────────────
+// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
+// sport deploys into the shared match-pulse-4560e project. Unprefixed names
+// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
+// so deploying one would OVERWRITE another sport's live functions — rebinding
+// them to the wrong database. Every export below is therefore prefixed `rugby`,
+// and firebase.json pins a distinct `codebase` so a deploy from this repo never
+// treats another sport's functions as deleted.
+//
+// The one deliberately UNPREFIXED function this app calls is the main site's
+// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
+// ours, and must not be redeclared here.
     const serverTs = admin.firestore.FieldValue.serverTimestamp
     const now = Date.now()
     const windowStart = now - AUTOFLIP_WINDOW_HOURS * 60 * 60 * 1000
@@ -546,10 +342,23 @@ exports.autoFlipScheduledMatches = onSchedule(
 // finalised, NEVER given an invented score. tracked matches keep their
 // provisional live score (already on homeScore/awayScore) for the admin to
 // confirm; untracked matches present a blank form (driven by tracked downstream).
-exports.dailyFixtureSweep = onSchedule(
+exports.rugbyDailyFixtureSweep = onSchedule(
   { schedule: '0 * * * *', region: 'europe-west1' },
   async () => {
     const db = getFirestore(app, DATABASE_ID)
+
+// ── Function naming ───────────────────────────────────────────────────────────
+// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
+// sport deploys into the shared match-pulse-4560e project. Unprefixed names
+// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
+// so deploying one would OVERWRITE another sport's live functions — rebinding
+// them to the wrong database. Every export below is therefore prefixed `rugby`,
+// and firebase.json pins a distinct `codebase` so a deploy from this repo never
+// treats another sport's functions as deleted.
+//
+// The one deliberately UNPREFIXED function this app calls is the main site's
+// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
+// ours, and must not be redeclared here.
     const serverTs = admin.firestore.FieldValue.serverTimestamp
     const cfg = await readSweepConfig(db)
     const cutoffHour = Number(String(cfg.cutoffTime).split(':')[0])
@@ -624,7 +433,7 @@ function statsRelevantChanged(before, after) {
 // Scoped competition recompute on finalisation. Fires on the transition INTO
 // final, and on any stat-affecting edit to an already-final fixture. Writes only
 // `players` slices (never the match doc) so it cannot re-trigger itself.
-exports.recomputeCompetitionStatsOnFinal = onDocumentUpdated(
+exports.rugbyRecomputeCompetitionStatsOnFinal = onDocumentUpdated(
   { document: 'matches/{matchId}', region: 'europe-west1', database: DATABASE_ID },
   async (event) => {
     const before = event.data?.before?.data()
@@ -668,7 +477,7 @@ exports.recomputeCompetitionStatsOnFinal = onDocumentUpdated(
 // Wholesale career recompute — daily at 03:00 Africa/Johannesburg. Rebuilds every
 // competition's slices from origin, then re-derives every person's career totals
 // and competitionIds as the sum/union of their fresh slices. Idempotent.
-exports.dailyCareerStatsRecompute = onSchedule(
+exports.rugbyDailyCareerStatsRecompute = onSchedule(
   { schedule: '0 3 * * *', timeZone: 'Africa/Johannesburg', region: 'europe-west1' },
   async () => {
     try {
@@ -706,7 +515,7 @@ async function assertCanAdministerCompetition(db, competitionId, auth) {
 // as a competition admin, then runs the same scoped engine the finalisation
 // trigger uses. Career totals are not touched here — they refresh on the nightly
 // run. Writes an immutable audit entry.
-exports.recalculateCompetitionStats = onCall(
+exports.rugbyRecalculateCompetitionStats = onCall(
   { region: 'europe-west1' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.')
@@ -714,6 +523,19 @@ exports.recalculateCompetitionStats = onCall(
     if (!competitionId) throw new HttpsError('invalid-argument', 'competitionId is required.')
 
     const db = getFirestore(app, DATABASE_ID)
+
+// ── Function naming ───────────────────────────────────────────────────────────
+// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
+// sport deploys into the shared match-pulse-4560e project. Unprefixed names
+// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
+// so deploying one would OVERWRITE another sport's live functions — rebinding
+// them to the wrong database. Every export below is therefore prefixed `rugby`,
+// and firebase.json pins a distinct `codebase` so a deploy from this repo never
+// treats another sport's functions as deleted.
+//
+// The one deliberately UNPREFIXED function this app calls is the main site's
+// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
+// ours, and must not be redeclared here.
     await assertCanAdministerCompetition(db, competitionId, request.auth)
 
     const res = await recomputeCompetitionStats(competitionId, db)
@@ -736,7 +558,7 @@ exports.recalculateCompetitionStats = onCall(
 // career totals + competitionIds immediately rather than waiting for 03:00) and
 // as an operator escape hatch. Wholesale cost is fine for a deliberate one-off;
 // it is the per-finalisation case that the nightly schedule exists to avoid.
-exports.rebuildAllCareerStats = onCall(
+exports.rugbyRebuildAllCareerStats = onCall(
   { region: 'europe-west1', timeoutSeconds: 540, memory: '1GiB' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.')
@@ -754,14 +576,14 @@ exports.rebuildAllCareerStats = onCall(
 // catch-all rewrite in firebase.json. Non-bots get the SPA shell; bots get
 // the same shell with per-route title/description/OG/JSON-LD injected.
 // Does NOT require Puppeteer — just Firestore reads + string injection.
-exports.renderer = onRequest(
+exports.rugbyRenderer = onRequest(
   { region: 'europe-west1', timeoutSeconds: 30, memory: '256MiB', minInstances: 0 },
   rendererHandler
 )
 
 // Dynamic sitemap.xml — generated live from Firestore. Served at /sitemap.xml
 // via a Hosting rewrite (firebase.json). Public, cached at the edge for an hour.
-exports.sitemap = onRequest(
+exports.rugbySitemap = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
     try {
