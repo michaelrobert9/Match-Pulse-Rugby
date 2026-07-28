@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
 import { fetchOrganization } from '../../../lib/queries'
 import { createManagedCompetition, updateManagedCompetition } from '../../../lib/adminQueries'
-import { orgEntitlementStatus, userEntitlementStatus, consumeEventCredit, consumeUserEventCredit } from '../../../lib/entitlement'
+import { orgEntitlementStatus, userEntitlementStatus } from '../../../lib/entitlement'
 import { slugify } from '../../../lib/slugify'
 
 // Sentinel owner id for a personal (individual) competition — no org.
@@ -200,11 +200,9 @@ export default function CreateCompetition() {
         if (bonusChosen) rules.bonusPoints = bonusChosen
         await updateManagedCompetition(ref.id, { rules }, { reason: 'Scoring configured at creation' })
       }
-      // Decrement event credit for one-off plans (from the user or the org).
-      if (entitlement?.tier === 'event') {
-        if (isPersonal) await consumeUserEventCredit(uid).catch(() => {})
-        else            await consumeEventCredit(ownerId).catch(() => {})
-      }
+      // Event-credit accounting is CENTRAL — the main site owns plan state and
+      // this app may not write entitlement fields (rules reject it). The credit
+      // balance reaches us through the Auth token's custom claims.
       navigate(`/manage/competitions/${ref.id}`, { replace: true, state: { justCreated: true } })
     } catch (err) {
       setError(err.code === 'competition/edition-exists'

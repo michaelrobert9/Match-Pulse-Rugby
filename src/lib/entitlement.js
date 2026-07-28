@@ -1,16 +1,20 @@
-// Entitlement helpers — competition-hosting access.
+// Entitlement helpers — competition-hosting access. READ-ONLY.
 //
-// Entitlement can live on EITHER an org doc OR an individual user doc. Fields
-// written by the PayFast ITN webhook (admin SDK — bypasses rules):
+// Plan and billing state is CENTRAL and owned by the main site. Purchase runs
+// there (PayFast hosted checkout + ITN webhook) and the result is mirrored onto
+// the user's Auth token as custom claims by syncUserClaims. This app therefore:
+//   • READS entitlement from the token claims (see contexts/AuthContext.jsx)
+//     and, for orgs, from the central organization document;
+//   • NEVER writes entitlement / eventCredits / entitlementExpiresAt. Firestore
+//     rules reject those writes — this is enforcement, not convention.
+//
+// Fields (all written centrally):
 //   entitlement          : 'none' | 'event' | 'pro'   (absent → 'none')
 //   eventCredits         : number                       (remaining once-off credits)
-//   entitlementExpiresAt : Firestore Timestamp          (pro subscription end)
-//
-// PayFast purchases by an individual land on users/{uid}. Org-level grants
-// (manual admin grants, activation codes) land on organizations/{orgId}.
+//   entitlementExpiresAt : Timestamp | epoch ms         (pro subscription end)
 
-import { doc, getDoc, updateDoc, increment } from 'firebase/firestore'
-import { db } from '../firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { identityDb } from '../firebase'
 
 // Shared status resolver — works for any doc carrying the entitlement fields.
 function entitlementStatusOf(data) {
@@ -38,19 +42,8 @@ export function userEntitlementStatus(user) {
   return entitlementStatusOf(user)
 }
 
-// Decrement one event credit after successfully creating a competition.
-// Call immediately after createManagedCompetition() succeeds for event-tier orgs.
-export async function consumeEventCredit(orgId) {
-  await updateDoc(doc(db, 'organizations', orgId), { eventCredits: increment(-1) })
-}
-
-// Decrement one event credit on a USER's profile (personal competitions).
-export async function consumeUserEventCredit(uid) {
-  await updateDoc(doc(db, 'users', uid), { eventCredits: increment(-1) })
-}
-
 // Fetch an org doc and return its entitlement status.
 export async function fetchOrgEntitlement(orgId) {
-  const snap = await getDoc(doc(db, 'organizations', orgId))
+  const snap = await getDoc(doc(identityDb, 'organizations', orgId))
   return orgEntitlementStatus(snap.exists() ? snap.data() : null)
 }
