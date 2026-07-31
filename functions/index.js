@@ -29,11 +29,8 @@ const db = getFirestore(app, DATABASE_ID)
 // so deploying one would OVERWRITE another sport's live functions — rebinding
 // them to the wrong database. Every export below is therefore prefixed `rugby`,
 // and firebase.json pins a distinct `codebase` so a deploy from this repo never
-// treats another sport's functions as deleted.
-//
-// The one deliberately UNPREFIXED function this app calls is the main site's
-// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
-// ours, and must not be redeclared here.
+// treats another sport's functions as deleted. (Sign-in is handled locally by
+// the client against the shared Auth project — there are no auth functions here.)
 
 // Human-readable role labels, mirroring src/lib/capabilities.js ROLE_DISPLAY.
 // Falls back to the raw role string for anything not listed.
@@ -82,13 +79,10 @@ exports.rugbySendInviteEmail = onDocumentCreated(
     }
 
     const roleLabel = ROLE_DISPLAY[invite.role] || invite.role || 'member'
-    // Account creation happens on the MAIN SITE — this app has no signup of its
-    // own. Send the invitee there with the sport key and a return path that
-    // carries the invite id, so they land back here (signed in) on the invite.
-    const mainSite = (process.env.MAIN_SITE_URL || 'https://matchpulse.co.za').replace(/\/$/, '')
-    const returnPath = `/?invite=${encodeURIComponent(inviteId)}`
-    const signupLink =
-      `${mainSite}/signup?sport=rugby&path=${encodeURIComponent(returnPath)}`
+    // Sign-up happens LOCALLY on this origin (direct Firebase Auth). Link the
+    // invitee to this app's own /signup carrying the invite id.
+    const origin = (process.env.PUBLIC_BASE_URL || `https://${process.env.GCLOUD_PROJECT}.web.app`).replace(/\/$/, '')
+    const signupLink = `${origin}/signup?invite=${inviteId}`
 
     const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -290,19 +284,6 @@ exports.rugbyAutoFlipScheduledMatches = onSchedule(
   { schedule: 'every 15 minutes', region: 'europe-west1' },
   async () => {
     const db = getFirestore(app, DATABASE_ID)
-
-// ── Function naming ───────────────────────────────────────────────────────────
-// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
-// sport deploys into the shared match-pulse-4560e project. Unprefixed names
-// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
-// so deploying one would OVERWRITE another sport's live functions — rebinding
-// them to the wrong database. Every export below is therefore prefixed `rugby`,
-// and firebase.json pins a distinct `codebase` so a deploy from this repo never
-// treats another sport's functions as deleted.
-//
-// The one deliberately UNPREFIXED function this app calls is the main site's
-// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
-// ours, and must not be redeclared here.
     const serverTs = admin.firestore.FieldValue.serverTimestamp
     const now = Date.now()
     const windowStart = now - AUTOFLIP_WINDOW_HOURS * 60 * 60 * 1000
@@ -346,19 +327,6 @@ exports.rugbyDailyFixtureSweep = onSchedule(
   { schedule: '0 * * * *', region: 'europe-west1' },
   async () => {
     const db = getFirestore(app, DATABASE_ID)
-
-// ── Function naming ───────────────────────────────────────────────────────────
-// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
-// sport deploys into the shared match-pulse-4560e project. Unprefixed names
-// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
-// so deploying one would OVERWRITE another sport's live functions — rebinding
-// them to the wrong database. Every export below is therefore prefixed `rugby`,
-// and firebase.json pins a distinct `codebase` so a deploy from this repo never
-// treats another sport's functions as deleted.
-//
-// The one deliberately UNPREFIXED function this app calls is the main site's
-// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
-// ours, and must not be redeclared here.
     const serverTs = admin.firestore.FieldValue.serverTimestamp
     const cfg = await readSweepConfig(db)
     const cutoffHour = Number(String(cfg.cutoffTime).split(':')[0])
@@ -523,19 +491,6 @@ exports.rugbyRecalculateCompetitionStats = onCall(
     if (!competitionId) throw new HttpsError('invalid-argument', 'competitionId is required.')
 
     const db = getFirestore(app, DATABASE_ID)
-
-// ── Function naming ───────────────────────────────────────────────────────────
-// Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
-// sport deploys into the shared match-pulse-4560e project. Unprefixed names
-// (sendInviteEmail, renderer, sitemap, …) are identical across the sport repos,
-// so deploying one would OVERWRITE another sport's live functions — rebinding
-// them to the wrong database. Every export below is therefore prefixed `rugby`,
-// and firebase.json pins a distinct `codebase` so a deploy from this repo never
-// treats another sport's functions as deleted.
-//
-// The one deliberately UNPREFIXED function this app calls is the main site's
-// `redeemHandoffTicket` (see src/pages/AuthHandoff.jsx) — it is central, not
-// ours, and must not be redeclared here.
     await assertCanAdministerCompetition(db, competitionId, request.auth)
 
     const res = await recomputeCompetitionStats(competitionId, db)

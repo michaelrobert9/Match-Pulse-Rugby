@@ -4,7 +4,6 @@ import { ChevronDown, Menu, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchLiveMatches } from '../lib/queries'
 import Logo from './Logo'
-import { goSignIn } from '../lib/auth-redirect'
 
 function useScrolled(threshold = 4) {
   const [scrolled, setScrolled] = useState(false)
@@ -187,10 +186,10 @@ export default function Nav() {
               </span>
             </Link>
           ) : (
-            <button onClick={() => goSignIn()}
+            <Link to="/login"
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-lg px-4 py-2 transition-colors">
               Sign in
-            </button>
+            </Link>
           )}
         </div>
 
@@ -268,10 +267,10 @@ export default function Nav() {
               {user.displayName || user.email?.split('@')[0] || 'Profile'}
             </NavLink>
           ) : (
-            <button onClick={() => goSignIn()}
-              className="block w-full text-center bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-lg px-4 py-2.5 transition-colors">
+            <Link to="/login"
+              className="block text-center bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-lg px-4 py-2.5 transition-colors">
               Sign in
-            </button>
+            </Link>
           )}
         </nav>
       )}

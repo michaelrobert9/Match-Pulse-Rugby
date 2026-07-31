@@ -24,7 +24,8 @@ import CompetitionPools from './pages/CompetitionPools'
 import CompetitionKnockout from './pages/CompetitionKnockout'
 import CompetitionFestivalStats from './pages/CompetitionFestivalStats'
 import TeamDetail from './pages/TeamDetail'
-import AuthHandoff from './pages/AuthHandoff'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
 import Portal from './pages/Portal'
 import Profile from './pages/Profile'
 import LegalPage from './pages/legal/LegalPage'
@@ -184,11 +185,9 @@ export default function App() {
           <Route path="*"                               element={<NotFound />} />
         </Route>
 
-        {/* Auth handoff from the main site — MUST stay outside the auth guard,
-            the user is signed out when they land here. */}
-        <Route path="/auth/handoff" element={<AuthHandoff />} />
-
-        {/* Auth */}
+        {/* Auth — sign-in/up happen LOCALLY on this origin */}
+        <Route path="/login"   element={<Login />} />
+        <Route path="/signup"  element={<Signup />} />
         <Route path="/portal"  element={<Portal />} />
 
         {/* Admin — requires platform admin */}

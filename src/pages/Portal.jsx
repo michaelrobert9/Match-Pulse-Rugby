@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { RedirectToSignIn } from '../components/ProtectedRoute'
 import { useAuth } from '../contexts/AuthContext'
 
 // Landing target after sign-in, and after returning from a purchase on the main
@@ -42,7 +41,7 @@ export default function Portal() {
     )
   }
 
-  if (!user)           return <RedirectToSignIn />
+  if (!user)           return <Navigate to="/login" replace />
   if (isPlatformAdmin) return <Navigate to="/admin"  replace />
   if (canScore)        return <Navigate to="/manage" replace />
   return <Navigate to="/" replace />
