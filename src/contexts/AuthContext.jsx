@@ -8,7 +8,7 @@ import {
   signOut as fbSignOut,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, identityDb, configured, googleProvider } from '../firebase'
+import { auth, db, identityDb, configured, googleProvider } from '../firebase'
 import { canAdministerCompetition as canAdminComp } from '../lib/competitionAuth'
 import { resolveScopedCapability, grantOf } from '../lib/capabilities'
 import { userEntitlementStatus } from '../lib/entitlement'
@@ -27,9 +27,16 @@ import { userEntitlementStatus } from '../lib/entitlement'
 // not from a document: Firestore rules cannot read across databases, so claims
 // are the only entitlement signal available to this sport's rules, and reading
 // the same source in the client keeps client and rules in agreement.
-// NOTE: claims are minted by the main site's syncUserClaims, which does not
-// exist yet — until it ships, entitlement/platformAdmin are absent and gating
-// fails closed (see the platform brief §4).
+// Claims are minted centrally by syncUserClaims (live in the shared project;
+// ownership moves to the main site per the platform brief §4a). If it ever
+// stops firing, entitlement/platformAdmin read as absent and gating fails
+// closed — the safe default.
+//
+// Org / competition roles are NOT claims here: rugby authorises org membership
+// entirely within its OWN database (staff subcollections are the authority) and
+// opts out of the central orgRoles claim, because its roles are team-scoped and
+// sport-specific and don't fit a flat per-org claim (platform brief §4b). The
+// role mirror therefore lives on the rugby-local users/{uid} doc, not (default).
 
 const AuthContext = createContext(null)
 
@@ -61,9 +68,9 @@ export function AuthProvider({ children }) {
   }
 
   // Load the parts of identity this app may read: entitlement + platformAdmin
-  // from the token claims, roles from the central user document.
+  // from the token claims, and this sport's roles from the rugby-local user doc.
   async function loadIdentity(u) {
-    // Claims first — they resolve even if the central document read is denied.
+    // Claims first — they resolve even if the document read is denied.
     try {
       const token = await u.getIdTokenResult()
       setIsPlatformAdmin(token.claims?.platformAdmin === true)
@@ -72,9 +79,14 @@ export function AuthProvider({ children }) {
       setIsPlatformAdmin(false)
       setUserEntitlement(null)
     }
-    // Roles live on the central users/{uid} document — read-only from here.
+    // Org / competition roles + permission overrides are RUGBY-LOCAL app data.
+    // They mirror this sport's staff subcollections and are written to — and so
+    // must be read from — the rugby database (`db`), NOT the central (default)
+    // identity doc. Every writer (adminQueries, invites, notifications) and the
+    // backend already use `db`; reading it from (default) here left the client's
+    // role map permanently empty, so org members saw no Manage/Score access.
     try {
-      const snap = await getDoc(doc(identityDb, 'users', u.uid))
+      const snap = await getDoc(doc(db, 'users', u.uid))
       const data = snap.exists() ? snap.data() : null
       setOrgRoles(data?.orgRoles ?? {})
       setCompetitionRoles(data?.competitionRoles ?? {})
@@ -86,14 +98,24 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // First-sign-in bootstrap of the CENTRAL identity record. A user who signs up
-  // on this subdomain (or arrives via Google) needs a users/{uid} + a public
-  // userProfiles/{uid} in the shared (default) database so org roles can attach
-  // and their name/photo render across sports. We only ever create the identity
-  // shell — never plan/billing fields, which the main site owns.
-  // OPEN QUESTION for the platform: if the main site creates users/{uid} via an
-  // Auth onCreate trigger, this write is redundant and should be removed. It is
-  // merge-safe, so it is harmless in the meantime.
+  // First-sign-in bootstrap. Two records get seeded, in two databases:
+  //
+  //  • CENTRAL identity, in the shared (default) database: users/{uid} +
+  //    userProfiles/{uid}. Identity fields ONLY (name/email/photo) — never
+  //    plan/billing (the main site owns those) and never org roles (rugby keeps
+  //    org-auth local; see loadIdentity). This is the cross-sport identity.
+  //  • RUGBY-LOCAL user record, in this sport's database: the home for this
+  //    sport's role mirror (orgRoles/competitionRoles/permissionOverrides). We
+  //    create it here so later grants always have a doc to merge into — the
+  //    appoint writers use update(), which throws on a missing doc, and Firestore
+  //    rules let ONLY the user themselves create their own users doc, so an org
+  //    owner can't create it for an appointee. Seeding it on the appointee's own
+  //    sign-in is what makes later appointment writes land.
+  //
+  // Both writes are merge-safe and idempotent.
+  // OPEN QUESTION for the platform: if the main site creates the central
+  // users/{uid} via an Auth onCreate trigger, that half is redundant and can be
+  // removed. It is merge-safe, so it is harmless in the meantime.
   async function ensureIdentityDoc(u) {
     try {
       const ref  = doc(identityDb, 'users', u.uid)
@@ -102,7 +124,6 @@ export function AuthProvider({ children }) {
         await setDoc(ref, {
           email:       (u.email ?? '').toLowerCase(),
           displayName: u.displayName ?? '',
-          orgRoles:    {},
           createdAt:   serverTimestamp(),
           updatedAt:   serverTimestamp(),
         }, { merge: true })
@@ -116,6 +137,22 @@ export function AuthProvider({ children }) {
         photoURL:    u.photoURL ?? null,
       }, { merge: true }).catch(() => {})
     } catch { /* central rules may reserve this to the main site — non-fatal */ }
+
+    // Rugby-local user record — kept in its own try so a failure of either write
+    // never blocks the other. Created only when absent (self-create is the only
+    // path rules permit). `email` is seeded so the Master Admin user list, which
+    // orders by email, includes this user.
+    try {
+      const localRef  = doc(db, 'users', u.uid)
+      const localSnap = await getDoc(localRef)
+      if (!localSnap.exists()) {
+        await setDoc(localRef, {
+          email:     (u.email ?? '').toLowerCase(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true })
+      }
+    } catch { /* local rules/offline — non-fatal; the invite claim also self-creates */ }
   }
 
   useEffect(() => {
