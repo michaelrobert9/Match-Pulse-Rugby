@@ -19,7 +19,8 @@ service cloud.firestore {
 
     // ── Entitlement (custom claims) ───────────────────────────────────────────
     // Plan state is mirrored onto the Auth token centrally. Claims travel with
-    // the user, so they are already present after the /auth/handoff sign-in.
+    // the user's session, so they are present on this origin's own sign-in —
+    // there is no redirect handoff (that design was abandoned).
     function entitlement() {
       return isSignedIn() ? request.auth.token.get('entitlement', 'none') : 'none';
     }
