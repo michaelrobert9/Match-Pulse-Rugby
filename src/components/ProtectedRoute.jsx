@@ -1,7 +1,5 @@
-import { useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { goSignIn } from '../lib/auth-redirect'
 
 function Spinner() {
   return (
@@ -11,23 +9,12 @@ function Spinner() {
   )
 }
 
-// Signed-out users are sent to the MAIN SITE to sign in — this app has no login
-// of its own. The main site returns them here, authenticated, via /auth/handoff.
-export function RedirectToSignIn() {
-  useEffect(() => { goSignIn() }, [])
-  return (
-    <div className="min-h-[40vh] grid place-items-center px-6">
-      <p className="text-slate-500 text-sm">Taking you to sign in…</p>
-    </div>
-  )
-}
-
 export default function ProtectedRoute({ children, require: requiredRole = 'admin' }) {
   const { user, isPlatformAdmin, canScore, loading } = useAuth()
 
   if (loading) return <Spinner />
 
-  if (!user) return <RedirectToSignIn />
+  if (!user) return <Navigate to="/login" replace />
 
   if (requiredRole === 'any') return children
 

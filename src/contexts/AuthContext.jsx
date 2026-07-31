@@ -1,20 +1,35 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
-import { auth, identityDb, configured } from '../firebase'
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  createUserWithEmailAndPassword,
+  updateProfile as fbUpdateProfile,
+  signOut as fbSignOut,
+} from 'firebase/auth'
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { auth, identityDb, configured, googleProvider } from '../firebase'
 import { canAdministerCompetition as canAdminComp } from '../lib/competitionAuth'
 import { resolveScopedCapability, grantOf } from '../lib/capabilities'
 import { userEntitlementStatus } from '../lib/entitlement'
 
-// Identity is CENTRAL. This app never creates accounts, signs users in, or
-// changes passwords/emails — the main site owns all of that and hands the user
-// over via /auth/handoff (see src/pages/AuthHandoff.jsx). Here we only observe
-// the resulting session and read central identity.
+// Sign-IN happens LOCALLY on this origin, directly against the shared Firebase
+// Auth project (match-pulse-4560e). The redirect-to-main-site handoff was
+// abandoned — an installed iOS home-screen app cannot receive a sign-in
+// redirect from an external origin. Each origin gets its own valid session for
+// the same underlying account the moment it signs in.
 //
-// Plan/entitlement state is read from the Auth token's CUSTOM CLAIMS, not from
-// the users/{uid} document: Firestore rules cannot read across databases, so
-// claims are the only entitlement signal available to this sport's rules, and
-// reading the same source in the client keeps client and rules in agreement.
+// Still CENTRAL and NOT built here: account settings (name/email/password) and
+// plan purchase — those link out to the main site. Account IDENTITY records
+// (users/{uid}, userProfiles/{uid}) live in the shared (default) database.
+//
+// Plan/entitlement + platformAdmin are read from the Auth token's CUSTOM CLAIMS,
+// not from a document: Firestore rules cannot read across databases, so claims
+// are the only entitlement signal available to this sport's rules, and reading
+// the same source in the client keeps client and rules in agreement.
+// NOTE: claims are minted by the main site's syncUserClaims, which does not
+// exist yet — until it ships, entitlement/platformAdmin are absent and gating
+// fails closed (see the platform brief §4).
 
 const AuthContext = createContext(null)
 
@@ -71,12 +86,45 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // First-sign-in bootstrap of the CENTRAL identity record. A user who signs up
+  // on this subdomain (or arrives via Google) needs a users/{uid} + a public
+  // userProfiles/{uid} in the shared (default) database so org roles can attach
+  // and their name/photo render across sports. We only ever create the identity
+  // shell — never plan/billing fields, which the main site owns.
+  // OPEN QUESTION for the platform: if the main site creates users/{uid} via an
+  // Auth onCreate trigger, this write is redundant and should be removed. It is
+  // merge-safe, so it is harmless in the meantime.
+  async function ensureIdentityDoc(u) {
+    try {
+      const ref  = doc(identityDb, 'users', u.uid)
+      const snap = await getDoc(ref)
+      if (!snap.exists()) {
+        await setDoc(ref, {
+          email:       (u.email ?? '').toLowerCase(),
+          displayName: u.displayName ?? '',
+          orgRoles:    {},
+          createdAt:   serverTimestamp(),
+          updatedAt:   serverTimestamp(),
+        }, { merge: true })
+      } else if (!snap.data().displayName && u.displayName) {
+        // Backfill a name captured by Auth (sign-up / Google) but missing here.
+        await setDoc(ref, { displayName: u.displayName, updatedAt: serverTimestamp() }, { merge: true })
+      }
+      setDoc(doc(identityDb, 'userProfiles', u.uid), {
+        email:       (u.email ?? '').toLowerCase(),
+        displayName: u.displayName ?? '',
+        photoURL:    u.photoURL ?? null,
+      }, { merge: true }).catch(() => {})
+    } catch { /* central rules may reserve this to the main site — non-fatal */ }
+  }
+
   useEffect(() => {
     if (!configured) { setLoading(false); return }
 
     return onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u)
+        await ensureIdentityDoc(u)
         await loadIdentity(u)
       } else {
         setUser(null)
@@ -85,6 +133,24 @@ export function AuthProvider({ children }) {
       setLoading(false)
     })
   }, [])
+
+  // ── Sign-in / sign-up (local, direct against the shared Auth project) ────────
+  function login(email, password) {
+    return signInWithEmailAndPassword(auth, email, password)
+  }
+
+  async function signUp(email, password, displayName) {
+    const cred = await createUserWithEmailAndPassword(auth, email, password)
+    if (displayName) await fbUpdateProfile(cred.user, { displayName })
+    // onAuthStateChanged fires and bootstraps the central identity doc; do it
+    // here too so the name is present immediately for the redirect that follows.
+    await ensureIdentityDoc(cred.user)
+    return cred
+  }
+
+  function signInWithGoogle() {
+    return signInWithPopup(auth, googleProvider)
+  }
 
   // Re-read identity. Pass { force: true } after anything that should have
   // changed entitlement — custom claims are baked into the token at mint time
@@ -142,7 +208,7 @@ export function AuthProvider({ children }) {
       user, uid: user?.uid ?? null, isPlatformAdmin, orgRoles, competitionRoles, permissionOverrides: overrides,
       userEntitlement,
       isOrgMember, canScore, canAdministerCompetition, canDo, grantFor, loading,
-      logout, refreshUserData,
+      login, signUp, signInWithGoogle, logout, refreshUserData,
     }}>
       {children}
     </AuthContext.Provider>

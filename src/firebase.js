@@ -5,7 +5,12 @@ import {
   persistentSingleTabManager,
 } from 'firebase/firestore'
 import { getFirestore } from 'firebase/firestore'
-import { getAuth } from 'firebase/auth'
+import {
+  initializeAuth, GoogleAuthProvider,
+  indexedDBLocalPersistence, browserLocalPersistence,
+  browserSessionPersistence, inMemoryPersistence,
+  browserPopupRedirectResolver,
+} from 'firebase/auth'
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
 
@@ -43,11 +48,18 @@ const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || 'rugby'
 // Held in ONE constant so a correction is a one-line change.
 export const FUNCTIONS_REGION = import.meta.env.VITE_FUNCTIONS_REGION || 'europe-west1'
 
-// The main site (front door + account system). Sign-in, account settings and
-// plan purchase all live there — never in this repo.
+// The main site (front door + account system). ACCOUNT SETTINGS (name, email,
+// password) and plan purchase live there — never in this repo. Sign-IN, however,
+// happens locally on this origin (see contexts/AuthContext.jsx): the redirect
+// handoff was abandoned because iOS home-screen apps can't receive a sign-in
+// redirect from an external origin.
 export const MAIN_SITE = import.meta.env.VITE_MAIN_SITE_URL || 'https://matchpulse.co.za'
-// This deployment's sport key, used when handing off to the main site.
+// This deployment's sport key.
 export const SPORT_KEY = 'rugby'
+
+// Google sign-in provider (each origin authenticates directly against the
+// shared Auth project).
+export const googleProvider = new GoogleAuthProvider()
 
 let app, db, identityDb, auth, storage, functions
 
@@ -64,7 +76,20 @@ if (configured) {
   // READ-ONLY from here: plan and billing fields are owned by the main site and
   // client writes to them are rejected by rules.
   identityDb = getFirestore(app)
-  auth      = getAuth(app)
+  // Explicit Auth persistence fallback chain. A browser that refuses IndexedDB
+  // (Safari private mode, some installed-PWA contexts) must NOT take down auth
+  // init or silently drop to in-memory — which looks exactly like "signed in,
+  // then signed out on next navigation." Try IndexedDB → localStorage →
+  // sessionStorage → in-memory, in order. (Reported by netball.)
+  auth = initializeAuth(app, {
+    persistence: [
+      indexedDBLocalPersistence,
+      browserLocalPersistence,
+      browserSessionPersistence,
+      inMemoryPersistence,
+    ],
+    popupRedirectResolver: browserPopupRedirectResolver,
+  })
   storage   = getStorage(app)
   functions = getFunctions(app, FUNCTIONS_REGION)
 }
