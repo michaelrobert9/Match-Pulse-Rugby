@@ -41,5 +41,43 @@ service firebase.storage {
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
+
+    // Player profile pictures. Same model as the banner — public-readable,
+    // size/type constrained; attaching it (people/{id}.photoUrl) is gated by
+    // firestore.rules.
+    match /player-photos/{personId} {
+      allow read:  if true;
+      allow write: if request.auth != null
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Organisation logos. Public-readable; any signed-in user may upload
+    // (size/type constrained). Attaching it (organizations/{id}.logoUrl) requires
+    // an org-admin Firestore write, so an uploaded blob alone has no effect.
+    match /org-logos/{orgId} {
+      allow read:  if true;
+      allow write: if request.auth != null
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Organisation banner / cover images (wide). Same model as org logos.
+    match /org-banners/{orgId} {
+      allow read:  if true;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Team crests. Public-readable; any signed-in user may upload (size/type
+    // constrained). Attaching it (teams/{id}.logoUrl) requires an org-admin
+    // Firestore write.
+    match /team-logos/{teamId} {
+      allow read:  if true;
+      allow write: if request.auth != null
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
   }
 }

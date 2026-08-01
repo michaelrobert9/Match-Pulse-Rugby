@@ -822,6 +822,7 @@ function BasicCard({ competition, onSaved }) {
                   onChange={e => set('logoUrl', e.target.value)}
                   placeholder="…or paste an image URL"
                 />
+                <p className="text-[11px] text-slate-400">Square logo, ideally 512×512px (PNG with a transparent background).</p>
               </div>
             </div>
           </div>
@@ -842,7 +843,7 @@ function BasicCard({ competition, onSaved }) {
                 placeholder="…or paste a banner image URL"
               />
             </div>
-            <p className="text-[11px] text-slate-400 mt-1.5">Wide image shown on the competition page and cards (≈ 1200×400).</p>
+            <p className="text-[11px] text-slate-400 mt-1.5">Wide banner strip shown on the competition page and cards. Recommended 1500×500px (3:1).</p>
           </div>
           {uploadError && <p className="text-red-600 text-xs">{uploadError}</p>}
           <SaveRow saving={saving || uploading} disabled={!form.name.trim()} onSave={save} />

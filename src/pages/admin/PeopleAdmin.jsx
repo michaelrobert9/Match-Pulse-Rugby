@@ -4,6 +4,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { collection, getDocs, doc, getDoc, orderBy, query } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { createPerson, updatePerson, adminLinkProfileToUser, isProfileClaimed } from '../../lib/adminQueries'
+import { uploadImageForEntity } from '../../lib/imageUpload'
+import ImageUpload from '../../components/ImageUpload'
 import { deleteDoc } from 'firebase/firestore'
 
 const POSITIONS = ['GK', 'Def', 'Mid', 'Fwd']
@@ -41,6 +43,7 @@ function PersonForm({ initial = {}, onSave, onDelete, saving }) {
   })
   const [allOrgs, setAllOrgs]   = useState([])
   const [orgQuery, setOrgQuery] = useState('')
+  const [photoFile, setPhotoFile] = useState(null)
 
   useEffect(() => {
     getDocs(query(collection(db, 'organizations'), orderBy('name')))
@@ -70,7 +73,7 @@ function PersonForm({ initial = {}, onSave, onDelete, saving }) {
       ...form,
       representativeOrgs: repOrgs,
       representativeOrgIds: repOrgs.map(o => o.orgId),
-    })
+    }, photoFile)
   }
 
   const filteredOrgs = orgQuery.trim()
@@ -110,16 +113,19 @@ function PersonForm({ initial = {}, onSave, onDelete, saving }) {
           placeholder="South African" />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="SA Rugby number (optional)">
-          <Input value={form.saRugbyNumber ?? ''} onChange={e => set('saRugbyNumber', e.target.value)}
-            placeholder="e.g. SA-12345" />
-        </Field>
-        <Field label="Photo URL (optional)">
-          <Input value={form.photoUrl} onChange={e => set('photoUrl', e.target.value)}
-            placeholder="https://…" type="url" />
-        </Field>
-      </div>
+      <Field label="SA Rugby number (optional)">
+        <Input value={form.saRugbyNumber ?? ''} onChange={e => set('saRugbyNumber', e.target.value)}
+          placeholder="e.g. SA-12345" />
+      </Field>
+
+      <ImageUpload
+        specKey="playerPhoto"
+        deferred
+        label="Profile picture (optional)"
+        value={form.photoUrl}
+        monogram={initials}
+        onPick={f => setPhotoFile(f)}
+      />
 
       {/* Roles */}
       <Field label="Roles">
@@ -280,10 +286,18 @@ export function NewPerson() {
   const navigate = useNavigate()
   const [saving, setSaving] = useState(false)
 
-  async function handleSave(form) {
+  async function handleSave(form, photoFile) {
     setSaving(true)
     try {
-      await createPerson(form)
+      const ref = await createPerson(form)
+      // Photo is deferred until the person id exists. Non-fatal on failure —
+      // the person is created and a photo can be added from their profile.
+      if (photoFile) {
+        try {
+          const url = await uploadImageForEntity('playerPhoto', ref.id, photoFile)
+          await updatePerson(ref.id, { photoUrl: url })
+        } catch { /* ignore — person saved without a photo */ }
+      }
       navigate('/admin/people')
     } finally { setSaving(false) }
   }
@@ -315,10 +329,19 @@ export function EditPerson() {
     })
   }, [id])
 
-  async function handleSave(form) {
+  async function handleSave(form, photoFile) {
     setSaving(true)
-    try { await updatePerson(id, form); navigate('/admin/people') }
-    finally { setSaving(false) }
+    try {
+      let patch = form
+      if (photoFile) {
+        try {
+          const url = await uploadImageForEntity('playerPhoto', id, photoFile)
+          patch = { ...form, photoUrl: url }
+        } catch { /* ignore — save the rest without a new photo */ }
+      }
+      await updatePerson(id, patch)
+      navigate('/admin/people')
+    } finally { setSaving(false) }
   }
 
   async function handleDelete() {
