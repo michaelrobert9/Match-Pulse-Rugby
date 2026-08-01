@@ -9,9 +9,8 @@ import { matchUrl } from '../lib/slugify'
 import { monogram } from '../lib/names'
 import { useAuth } from '../contexts/AuthContext'
 import { managesPlayerProfile } from '../lib/capabilities'
-import { removeSelfFromFixture, updatePersonBanner, claimPlayerProfile, isProfileClaimed } from '../lib/adminQueries'
-import { storage } from '../firebase'
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { removeSelfFromFixture, updatePersonBanner, updatePerson, claimPlayerProfile, isProfileClaimed } from '../lib/adminQueries'
+import { uploadImageForEntity, IMAGE_SPECS } from '../lib/imageUpload'
 import { useSeoMeta } from '../lib/useSeoMeta'
 
 const ROLE_LABELS = {
@@ -348,11 +347,9 @@ export default function PlayerProfile() {
           onSaved={url => setPerson(p => ({ ...p, bannerUrl: url }))} />
         <div className="h-2 bg-gradient-to-r from-emerald-500 to-emerald-400" />
         <div className="p-5 flex items-start gap-4">
-          <div className="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
-            {person.photoUrl
-              ? <img src={person.photoUrl} alt={person.fullName} className="w-full h-full object-cover object-top" />
-              : <span className="text-lg font-bold font-mono text-slate-500">{initials}</span>}
-          </div>
+          <ProfilePhoto person={person} canEdit={canEditBanner} initials={initials}
+            onSaved={url => setPerson(p => ({ ...p, photoUrl: url }))} />
+
           <div className="flex-1 min-w-0 pt-0.5">
             {person.roles?.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-2">
@@ -483,22 +480,62 @@ function ClaimCard({ person, onClaimed }) {
   )
 }
 
-// Profile banner: a wide hero image at the top of the player card. The player
+// Profile photo: the square avatar in the player card hero. The player
 // (owner/guardian/manager) or a platform admin can upload one — stored at
-// player-banners/{personId}, attached to the person doc as bannerUrl.
-function ProfileBanner({ person, canEdit, onSaved }) {
+// player-photos/{personId}, attached to the person doc as photoUrl.
+function ProfilePhoto({ person, canEdit, initials, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr]   = useState('')
 
   async function handleUpload(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
-    if (!file || !storage) return
+    if (!file) return
     setBusy(true); setErr('')
     try {
-      const r = storageRef(storage, `player-banners/${person.id}`)
-      await uploadBytes(r, file)
-      const url = await getDownloadURL(r)
+      const url = await uploadImageForEntity('playerPhoto', person.id, file)
+      await updatePerson(person.id, { photoUrl: url })
+      onSaved(url)
+    } catch (e2) {
+      setErr(e2.message || 'Upload failed.')
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="shrink-0">
+      <div className="relative w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden">
+        {person.photoUrl
+          ? <img src={person.photoUrl} alt={person.fullName} className="w-full h-full object-cover object-top" />
+          : <span className="text-lg font-bold font-mono text-slate-500">{initials}</span>}
+        {canEdit && (
+          <label title={IMAGE_SPECS.playerPhoto.recommend}
+            className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/45 text-transparent hover:text-white text-[9px] font-bold uppercase tracking-widest cursor-pointer transition-colors">
+            {busy ? '…' : (person.photoUrl ? 'Change' : '+ Photo')}
+            <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={handleUpload} />
+          </label>
+        )}
+      </div>
+      {canEdit && <p className="mt-1 w-16 text-[9px] leading-tight text-slate-400 text-center">512×512</p>}
+      {err && <p className="mt-0.5 w-16 text-[9px] leading-tight text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+// Profile banner: a wide hero image at the top of the player card. The player
+// (owner/guardian/manager) or a platform admin can upload one — stored at
+// player-banners/{personId}, attached to the person doc as bannerUrl.
+function ProfileBanner({ person, canEdit, onSaved }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr]   = useState('')
+  const recommend = IMAGE_SPECS.playerBanner.recommend
+
+  async function handleUpload(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true); setErr('')
+    try {
+      const url = await uploadImageForEntity('playerBanner', person.id, file)
       await updatePersonBanner(person.id, url)
       onSaved(url)
     } catch (e2) {
@@ -513,13 +550,16 @@ function ProfileBanner({ person, canEdit, onSaved }) {
       {person.bannerUrl ? (
         <img src={person.bannerUrl} alt="" className="w-full h-32 sm:h-44 object-cover" loading="lazy" />
       ) : (
-        <label className={`flex items-center justify-center h-16 border-b border-dashed border-slate-200 text-[11px] font-bold uppercase tracking-widest cursor-pointer transition-colors ${busy ? 'text-slate-300' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50/50'}`}>
-          {busy ? 'Uploading…' : '+ Add banner image'}
+        <label title={recommend}
+          className={`flex flex-col items-center justify-center gap-0.5 h-16 border-b border-dashed border-slate-200 cursor-pointer transition-colors ${busy ? 'text-slate-300' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50/50'}`}>
+          <span className="text-[11px] font-bold uppercase tracking-widest">{busy ? 'Uploading…' : '+ Add banner image'}</span>
+          <span className="text-[10px] normal-case tracking-normal">Recommended 1500×500 (3:1)</span>
           <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={handleUpload} />
         </label>
       )}
       {person.bannerUrl && canEdit && (
-        <label className="absolute bottom-2 right-2 bg-white/90 hover:bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 cursor-pointer shadow-sm">
+        <label title={recommend}
+          className="absolute bottom-2 right-2 bg-white/90 hover:bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 cursor-pointer shadow-sm">
           {busy ? 'Uploading…' : 'Change banner'}
           <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={handleUpload} />
         </label>

@@ -6,6 +6,7 @@ import { db } from '../../firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { roleLabel, grantLabel, grantOf } from '../../lib/capabilities'
 import InviteUserForm from '../../components/InviteUserForm'
+import ImageUpload from '../../components/ImageUpload'
 import { fetchOrganization } from '../../lib/queries'
 import {
   updateOrganization, deleteOrganization,
@@ -953,11 +954,12 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
                       value={editName}
                       onChange={e => setEditName(e.target.value)}
                     />
-                    <input
-                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
-                      placeholder="Image URL"
+                    <ImageUpload
+                      specKey="teamLogo"
+                      entityId={team.id}
                       value={editImage}
-                      onChange={e => setEditImage(e.target.value)}
+                      monogram={monogram(editName || team.displayName || '')}
+                      onChange={url => setEditImage(url)}
                     />
                     <div>
                       <div className="flex items-center justify-between mb-1">
@@ -1326,31 +1328,20 @@ function SettingsSection({ org, onSaved }) {
             </div>
           </div>
         </div>
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1.5">Profile photo URL</label>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
-              style={{ backgroundColor: form.primaryColor + '25', border: `2px solid ${form.primaryColor}` }}>
-              {form.logoUrl.trim()
-                ? <img src={form.logoUrl.trim()} alt="" className="w-full h-full object-cover"
-                    onError={e => { e.currentTarget.style.display = 'none' }}
-                    onLoad={e => { e.currentTarget.style.display = '' }} />
-                : <span className="text-xs font-bold font-mono" style={{ color: form.primaryColor }}>{monogram(form.name)}</span>
-              }
-            </div>
-            <input value={form.logoUrl} onChange={e => setForm(f => ({ ...f, logoUrl: e.target.value }))}
-              type="url" placeholder="https://…"
-              className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
-          </div>
-          <p className="text-[11px] text-slate-500 mt-1">Logo or crest. Falls back to the {entityLabel.toLowerCase()}'s initials when empty.</p>
-        </div>
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1.5">Card / banner image URL</label>
-          <input value={form.bannerUrl} onChange={e => setForm(f => ({ ...f, bannerUrl: e.target.value }))}
-            type="url" placeholder="https://…"
-            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
-          <p className="text-[11px] text-slate-500 mt-1">Displayed as the banner on the listing card. Recommended size: 1200 × 630 px.</p>
-        </div>
+        <ImageUpload
+          specKey="orgLogo"
+          entityId={org.id}
+          value={form.logoUrl}
+          monogram={monogram(form.name)}
+          accentColor={form.primaryColor}
+          onChange={url => setForm(f => ({ ...f, logoUrl: url }))}
+        />
+        <ImageUpload
+          specKey="orgBanner"
+          entityId={org.id}
+          value={form.bannerUrl}
+          onChange={url => setForm(f => ({ ...f, bannerUrl: url }))}
+        />
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">About</label>

@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, ChevronLeft, ExternalLink } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { updateProfile } from 'firebase/auth'
+import { doc, setDoc } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
+import { auth, identityDb } from '../firebase'
 import { fetchOrganization } from '../lib/queries'
 import { monogram } from '../lib/names'
 import { grantOf, grantLabel } from '../lib/capabilities'
 import { fetchRugbyProfile, saveRugbyProfile } from '../lib/rugbyProfile'
 import { goAccount } from '../lib/auth-redirect'
+import ImageUpload from '../components/ImageUpload'
 
 const PROVINCES = [
   'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal',
@@ -89,9 +93,27 @@ export default function Profile() {
   const [saving,      setSaving]      = useState(false)
   const [saved,       setSaved]       = useState(false)
   const [error,       setError]       = useState('')
+  const [avatarUrl,   setAvatarUrl]   = useState(user?.photoURL ?? '')
 
   const orgEntries = Object.entries(orgRoles ?? {})
   const hasOrgs    = orgEntries.length > 0
+
+  useEffect(() => { setAvatarUrl(user?.photoURL ?? '') }, [user])
+
+  // The profile picture lives on the Firebase Auth user (central identity) and,
+  // once uploaded to avatars/{uid}, is attached with updateProfile — the same
+  // path signup uses. Mirror it to the public userProfiles doc so it renders
+  // across sports. The blob is already stored even if these attach writes fail.
+  async function handleAvatarUploaded(url) {
+    setAvatarUrl(url)
+    try {
+      if (auth?.currentUser) await updateProfile(auth.currentUser, { photoURL: url || null })
+      if (user?.uid) {
+        setDoc(doc(identityDb, 'userProfiles', user.uid),
+          { photoURL: url || null }, { merge: true }).catch(() => {})
+      }
+    } catch { /* non-fatal — blob uploaded; Auth profile can be retried later */ }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -174,15 +196,16 @@ export default function Profile() {
         </Link>
       </div>
 
-      {/* Identity — owned by the main site. Read-only here. */}
-      <div className="flex flex-col items-center gap-2">
-        {user.photoURL ? (
-          <img src={user.photoURL} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-slate-200" />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-emerald-100 border-2 border-emerald-300 flex items-center justify-center">
-            <span className="text-2xl font-black text-emerald-600">{initials}</span>
-          </div>
-        )}
+      {/* Identity — name/email are central (the main site owns them); the
+          profile picture uploads to this project's storage bucket. */}
+      <div className="flex flex-col items-center gap-3">
+        <ImageUpload
+          specKey="userAvatar"
+          entityId={user.uid}
+          value={avatarUrl}
+          monogram={initials}
+          onChange={handleAvatarUploaded}
+        />
         <div className="text-center">
           <div className="text-slate-900 font-semibold text-sm">{user.displayName || '—'}</div>
           <div className="text-slate-400 text-xs">{user.email}</div>

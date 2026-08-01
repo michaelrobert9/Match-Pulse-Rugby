@@ -301,6 +301,9 @@ export default function Signup() {
               <span className="text-[10px] text-slate-400">
                 {uploading ? 'Uploading…' : storage ? 'Tap to add a photo' : 'Photo upload — coming soon'}
               </span>
+              {storage && !uploading && (
+                <span className="text-[10px] text-slate-300">512×512px, square</span>
+              )}
             </div>
 
             {/* Bio */}
