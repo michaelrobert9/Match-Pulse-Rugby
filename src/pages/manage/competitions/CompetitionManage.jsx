@@ -25,6 +25,7 @@ import {
   revertFixtureOutcome,
 } from '../../../lib/adminQueries'
 import { userDisplayName, userInitial } from '../../../lib/names'
+import { POM_DEFAULT_COLOR } from '../../../lib/pom'
 import { useAuth } from '../../../contexts/AuthContext'
 import { matchSlug as buildMatchSlug } from '../../../lib/slugify'
 import { fetchCompetitionPools, fetchCompetitionKnockout, fetchCompetitionFixtureMembers, fetchAwaitingResultMatchesForCompetition, fetchCompetitionAuditLog, toDate } from '../../../lib/queries'
@@ -1231,24 +1232,33 @@ function EligibilityCard({ competition, onSaved }) {
 
 function POTMCard({ competition, onSaved }) {
   const rules   = competition.rules ?? {}
-  const enabled = rules.potm?.enabled ?? false
+  const potm    = rules.potm ?? {}
+  const enabled = potm.enabled ?? false
+  const perTeam = potm.perTeam ?? false
+  const color   = potm.color   ?? ''
   const [saving, setSaving] = useState(false)
 
-  async function toggle(next) {
+  // Single entry point for every write in this card. Merges the incoming patch
+  // over the current potm map and saves the whole map back — the two sub-
+  // controls never write bare fields, so a stale field can never linger.
+  async function patchPotm(next) {
     setSaving(true)
     try {
-      const newRules = { ...rules, potm: { ...(rules.potm ?? {}), enabled: next } }
+      const merged   = { ...potm, ...next }
+      const newRules = { ...rules, potm: merged }
       await updateCompetition(competition.id, { rules: newRules })
       onSaved({ ...competition, rules: newRules })
     } finally { setSaving(false) }
   }
+
+  const dim = enabled ? '' : 'opacity-50 cursor-not-allowed'
 
   return (
     <Card title="Player of the Match"
       subtitle="Recognise outstanding individual performances">
       <label className="flex items-start gap-3 cursor-pointer">
         <input type="checkbox" checked={enabled} disabled={saving}
-          onChange={e => toggle(e.target.checked)}
+          onChange={e => patchPotm({ enabled: e.target.checked })}
           className="accent-emerald-600 w-4 h-4 mt-0.5" />
         <div>
           <span className="text-sm font-medium text-slate-700">Show Player of the Match stats</span>
@@ -1258,6 +1268,51 @@ function POTMCard({ competition, onSaved }) {
           </p>
         </div>
       </label>
+
+      {/* Per-team mode — indented sub-option, only meaningful when POM itself is on. */}
+      <label className={`flex items-start gap-3 mt-3 pl-6 ${enabled ? 'cursor-pointer' : dim}`}>
+        <input type="checkbox" checked={perTeam} disabled={saving || !enabled}
+          onChange={e => patchPotm({ perTeam: e.target.checked })}
+          className="accent-emerald-600 w-4 h-4 mt-0.5" />
+        <div>
+          <span className="text-sm font-medium text-slate-700">One Player of the Match per team</span>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Recognise one player from each side instead of a single overall winner. The end-of-match
+            sheet asks for both home and away.
+          </p>
+        </div>
+      </label>
+
+      {/* Colour — the on-page badge and highlighted row follow this colour.
+          Empty = the platform default (amber). Some competitions award POM socks or
+          shorts in a specific colour; matching it here is the point. */}
+      <div className={`mt-3 pl-6 ${enabled ? '' : dim}`}>
+        <div className="text-sm font-medium text-slate-700">POM highlight colour</div>
+        <p className="text-[11px] text-slate-400 mt-0.5 mb-2">
+          Colour used for the POM tag and highlighted row on match pages. Match a special POM colour
+          your competition uses, or leave as the default.
+        </p>
+        <div className="flex items-center gap-2">
+          <input type="color"
+            value={color || POM_DEFAULT_COLOR}
+            disabled={saving || !enabled}
+            onChange={e => patchPotm({ color: e.target.value })}
+            className="w-10 h-10 rounded-lg cursor-pointer border-0 bg-transparent p-0" />
+          <input type="text"
+            value={color}
+            disabled={saving || !enabled}
+            onChange={e => patchPotm({ color: e.target.value })}
+            placeholder={POM_DEFAULT_COLOR}
+            className="w-28 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-slate-900 text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
+          {color && (
+            <button type="button" disabled={saving || !enabled}
+              onClick={() => patchPotm({ color: '' })}
+              className="text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-700 disabled:opacity-40">
+              Reset to default
+            </button>
+          )}
+        </div>
+      </div>
     </Card>
   )
 }

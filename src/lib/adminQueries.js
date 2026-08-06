@@ -1909,6 +1909,17 @@ export async function setPlayerOfMatch(matchId, player) {
   })
 }
 
+// Per-team Player of the Match. When rules.potm.perTeam is on, awards are
+// captured per side and stored here instead of `playerOfMatch`. Legacy single-
+// POM matches are read from `playerOfMatch`; the two are never migrated so no
+// historical award is lost. See src/lib/pom.js#pomForSide.
+export async function setPlayersOfMatch(matchId, { home = null, away = null } = {}) {
+  return updateDoc(doc(db, 'matches', matchId), {
+    playersOfMatch: { home: home ?? null, away: away ?? null },
+    updatedBy: uid(), updatedAt: serverTimestamp(),
+  })
+}
+
 // ── Tournament structure: stages ─────────────────────────────────────────────
 // Admins EXPLICITLY define structure; the platform never infers it. A stage is
 // one of pool | knockout | single_match. Order is an integer for display.

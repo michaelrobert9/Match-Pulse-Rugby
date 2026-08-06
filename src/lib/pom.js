@@ -1,0 +1,31 @@
+// Player of the Match — single source of truth for reading the two storage
+// shapes, matching a lineup entry to a POM award, and resolving the display
+// colour a competition organiser chose (some competitions award special POM
+// socks/shorts in a specific colour; the badge follows suit).
+
+// amber-600 — historical POM colour, kept as the fallback when no competition
+// override exists (older matches, friendlies, or an organiser who never picked).
+export const POM_DEFAULT_COLOR = '#d97706'
+
+export function pomForSide(match, side) {
+  const perTeam = match?.playersOfMatch?.[side]
+  if (perTeam?.name) return perTeam
+  const single = match?.playerOfMatch
+  if (single?.name && single.side === side) return single
+  return null
+}
+
+export function isLineupEntryPOM(pom, entry) {
+  if (!pom || !entry) return false
+  if (pom.personId && entry.personId) return pom.personId === entry.personId
+  if (pom.name && entry.personName) return pom.name === entry.personName
+  return false
+}
+
+export function pomColor(pom) {
+  return pom?.color || POM_DEFAULT_COLOR
+}
+
+export function pomBgTint(pom) {
+  return pomColor(pom) + '1F'   // ~12% alpha
+}
