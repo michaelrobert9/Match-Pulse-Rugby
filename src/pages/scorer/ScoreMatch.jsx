@@ -8,7 +8,7 @@ import {
   startMatch, pauseMatch, resumeMatch, endPeriod, startPeriod, finalizeMatch,
   addScore, enrichScore, changeScoreType, addCard, reverseScore, reverseCard, recordKickComp,
   addPersonToMatchLineup, removePersonFromMatchLineup, toggleLineupStarter, updateMatchLineupEntry, updateMatch,
-  setPlayerOfMatch, syncFixtureMembership, swapFixtureSides, resetMatch,
+  setPlayerOfMatch, setPlayersOfMatch, syncFixtureMembership, swapFixtureSides, resetMatch,
   setFixtureNotPlayed, setFixtureWalkover, abandonMatch, letAbandonedStand, revertFixtureOutcome,
   submitFixtureResult,
 } from '../../lib/adminQueries'
@@ -208,8 +208,17 @@ export default function ScoreMatch() {
   // and auto-return to the list (rather than redirecting a review visit).
   const [justFinalized, setJustFinalized] = useState(false)
   // POTM step: shown between finalization and the full-time screen when there
-  // are lineup players to choose from.
+  // are lineup players to choose from. Two modes gated by rules.potm.perTeam:
+  //   single  → one tap picks the overall winner (writes playerOfMatch)
+  //   perTeam → home then away, sequential (writes playersOfMatch = {home, away})
+  //             potmSide tracks which side is being picked; potmDraft accumulates.
   const [potmStep, setPotmStep] = useState(false)
+  const [potmSide,  setPotmSide]  = useState('home')
+  const [potmDraft, setPotmDraft] = useState({ home: null, away: null })
+  // Competition rules for POM display + capture. Loaded once when the match's
+  // competition is known; falls back to single-mode + default colour otherwise.
+  const [potmPerTeam, setPotmPerTeam] = useState(false)
+  const [potmColor,   setPotmColor]   = useState('')
   // Place-kick competition: optional knockout decider, only relevant when the
   // match ends level.
   const [kickCompEnabled, setKickCompEnabled] = useState(false)
@@ -394,6 +403,18 @@ export default function ScoreMatch() {
       .then(c => { if (c) setWkDefault(walkoverScore(c)) })
       .catch(() => {})
   }, [outcomeOpen, match?.competitionId])
+
+  // Load POM configuration once per match. Read from rules.potm.{perTeam,color};
+  // both are optional — absent means single-mode + default colour, preserving
+  // legacy behaviour for competitions that predate these controls.
+  useEffect(() => {
+    if (!match?.competitionId) return
+    fetchCompetition(match.competitionId).then(c => {
+      if (!c) return
+      setPotmPerTeam(c.rules?.potm?.perTeam === true)
+      setPotmColor(c.rules?.potm?.color || '')
+    }).catch(() => {})
+  }, [match?.competitionId])
 
   if (loading) return (
     <div className={`min-h-screen ${t.root} flex items-center justify-center`}>
@@ -662,19 +683,59 @@ export default function ScoreMatch() {
       }
       const hasPlayers = (match?.homeLineup?.length ?? 0) + (match?.awayLineup?.length ?? 0) > 0
       if (hasPlayers) {
-        setPotmStep(true)
+        openPotmSheet()
       } else {
         setJustFinalized(true)
       }
     })
   }
 
+  // Prefer home; skip empty-lineup sides so per-team never opens on a side with
+  // no players to pick from.
+  function openPotmSheet() {
+    const homeHas = (match?.homeLineup?.length ?? 0) > 0
+    setPotmDraft({ home: null, away: null })
+    setPotmSide(homeHas ? 'home' : 'away')
+    setPotmStep(true)
+  }
+
+  // Attach the competition's POM colour to every award at write time — see the
+  // brief §2h. Downstream reads use pomColor() with a default, so absent is fine;
+  // this just saves the match page a re-fetch.
+  function decoratePotm(player) {
+    if (!player) return null
+    return potmColor ? { ...player, color: potmColor } : player
+  }
+
+  // Persist the accumulated draft. In per-team mode both sides go in one write —
+  // a skipped side stays as null, never omitted, so the record is unambiguous.
+  async function commitPerTeamPotm(draft) {
+    await setPlayersOfMatch(id, {
+      home: decoratePotm(draft.home),
+      away: decoratePotm(draft.away),
+    }).catch(() => {})
+    setPotmStep(false); setJustFinalized(true)
+  }
+
   async function handleSelectPOTM(player) {
-    if (player) {
-      await setPlayerOfMatch(id, player).catch(() => {})
+    if (!potmPerTeam) {
+      // Single mode (legacy): one write, done.
+      if (player) await setPlayerOfMatch(id, decoratePotm(player)).catch(() => {})
+      setPotmStep(false); setJustFinalized(true)
+      return
     }
-    setPotmStep(false)
-    setJustFinalized(true)
+    // Per-team mode: fold this side's pick into the draft. If the other side
+    // has no players (or we're already on the second side), commit now.
+    const next   = { ...potmDraft, [potmSide]: player }
+    const other  = potmSide === 'home' ? 'away' : 'home'
+    const otherLineup = other === 'home' ? (match?.homeLineup ?? []) : (match?.awayLineup ?? [])
+    const done  = potmSide === 'away' || otherLineup.length === 0
+    if (done) {
+      await commitPerTeamPotm(next)
+    } else {
+      setPotmDraft(next)
+      setPotmSide(other)
+    }
   }
 
   // Season squad for a side — roster entries carry a shirt number from the squad.
@@ -757,9 +818,20 @@ export default function ScoreMatch() {
     } finally { setLineupSaving(false) }
   }
 
-  async function runOutcome(fn) {
+  async function runOutcome(fn, { openPotmAfter = false } = {}) {
     setOutcomeBusy(true); setOutcomeError('')
-    try { await fn(); setOutcomeOpen(false) }
+    try {
+      await fn()
+      setOutcomeOpen(false)
+      // Entered-result path: reuse the same POM sheet the live-scored path uses,
+      // so a fixture whose score is typed in (not live-scored) still gets POM
+      // capture. Only for entered results — walkovers/not-played/abandonments
+      // don't have a match to award anyone in.
+      if (openPotmAfter) {
+        const hasPlayers = (match?.homeLineup?.length ?? 0) + (match?.awayLineup?.length ?? 0) > 0
+        if (hasPlayers) openPotmSheet()
+      }
+    }
     catch (e) { setOutcomeError(e.message || 'Action failed.') }
     finally { setOutcomeBusy(false) }
   }
@@ -1509,70 +1581,85 @@ export default function ScoreMatch() {
         </Sheet>
       )}
 
-      {/* Player of the Match selection — shown after finalization when players exist */}
-      {potmStep && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center"
-          style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className={`w-full max-w-md ${t.sheet} rounded-t-2xl border-t flex flex-col overflow-hidden`}
-            style={{ maxHeight: '85dvh' }}>
-            {/* Header */}
-            <div className={`px-5 py-4 border-b ${bright ? 'border-slate-200' : 'border-slate-700'} shrink-0`}>
-              <div className="flex items-center gap-2 mb-0.5">
-                <Star className="w-4 h-4 text-amber-400" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">Player of the Match</span>
+      {/* Player of the Match selection — shown after finalization when players
+          exist. Two modes gated by rules.potm.perTeam. */}
+      {potmStep && (() => {
+        // Sides rendered in this pass: all sides in single mode, one side in
+        // per-team mode. openPotmSheet has already put us on a side with players.
+        const visibleSides = potmPerTeam ? [potmSide] : ['home', 'away']
+        const headerLabel  = potmPerTeam
+          ? `Player of the Match — ${potmSide === 'home' ? match.homeTeamName : match.awayTeamName}`
+          : 'Player of the Match'
+        const headerHint   = potmPerTeam
+          ? `Pick one player from ${potmSide === 'home' ? 'the home' : 'the away'} side, or skip this side.`
+          : 'Tap a player to award the honour, or skip.'
+        const skipLabel    = potmPerTeam
+          ? `Skip — no ${potmSide === 'home' ? 'home' : 'away'} award`
+          : 'Skip — no award today'
+        return (
+          <div className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ background: 'rgba(0,0,0,0.6)' }}>
+            <div className={`w-full max-w-md ${t.sheet} rounded-t-2xl border-t flex flex-col overflow-hidden`}
+              style={{ maxHeight: '85dvh' }}>
+              {/* Header */}
+              <div className={`px-5 py-4 border-b ${bright ? 'border-slate-200' : 'border-slate-700'} shrink-0`}>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <Star className="w-4 h-4 text-amber-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">{headerLabel}</span>
+                </div>
+                <p className={`text-sm ${t.muted}`}>{headerHint}</p>
               </div>
-              <p className={`text-sm ${t.muted}`}>Tap a player to award the honour, or skip.</p>
-            </div>
-            {/* Player list */}
-            <div className="overflow-y-auto flex-1">
-              {(['home', 'away']).map(side => {
-                const players = side === 'home' ? (match.homeLineup ?? []) : (match.awayLineup ?? [])
-                const teamName  = side === 'home' ? match.homeTeamName  : match.awayTeamName
-                const teamColor = side === 'home' ? match.homeTeamColor : match.awayTeamColor
-                if (players.length === 0) return null
-                return (
-                  <div key={side}>
-                    <div className="flex items-center gap-2 px-4 py-2 sticky top-0"
-                      style={{ backgroundColor: (teamColor ?? '#94a3b8') + '22' }}>
-                      <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: teamColor ?? '#94a3b8' }} />
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${t.muted}`}>{teamName}</span>
+              {/* Player list */}
+              <div className="overflow-y-auto flex-1">
+                {visibleSides.map(side => {
+                  const players = side === 'home' ? (match.homeLineup ?? []) : (match.awayLineup ?? [])
+                  const teamName  = side === 'home' ? match.homeTeamName  : match.awayTeamName
+                  const teamColor = side === 'home' ? match.homeTeamColor : match.awayTeamColor
+                  if (players.length === 0) return null
+                  return (
+                    <div key={side}>
+                      <div className="flex items-center gap-2 px-4 py-2 sticky top-0"
+                        style={{ backgroundColor: (teamColor ?? '#94a3b8') + '22' }}>
+                        <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: teamColor ?? '#94a3b8' }} />
+                        <span className={`text-[10px] font-bold uppercase tracking-widest ${t.muted}`}>{teamName}</span>
+                      </div>
+                      {players.map(p => (
+                        <button key={p.id}
+                          onClick={() => handleSelectPOTM({
+                            personId:    p.personId    ?? null,
+                            name:        p.personName,
+                            side,
+                            photoUrl:    p.photoUrl    ?? null,
+                            shirtNumber: p.shirtNumber ?? null,
+                          })}
+                          className={`w-full flex items-center gap-3 px-4 py-3 border-b ${
+                            bright ? 'border-slate-100 hover:bg-slate-50' : 'border-slate-800 hover:bg-slate-800'
+                          } transition-colors text-left`}>
+                          <span className="font-mono text-[11px] text-slate-400 w-5 text-right shrink-0">
+                            {p.shirtNumber ?? '–'}
+                          </span>
+                          <PersonAvatar name={p.personName} photoUrl={p.photoUrl} size={28} />
+                          <span className={`flex-1 text-sm font-medium truncate ${bright ? 'text-slate-900' : 'text-white'}`}>
+                            {p.personName}
+                          </span>
+                          <Star className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                        </button>
+                      ))}
                     </div>
-                    {players.map(p => (
-                      <button key={p.id}
-                        onClick={() => handleSelectPOTM({
-                          personId:    p.personId    ?? null,
-                          name:        p.personName,
-                          side,
-                          photoUrl:    p.photoUrl    ?? null,
-                          shirtNumber: p.shirtNumber ?? null,
-                        })}
-                        className={`w-full flex items-center gap-3 px-4 py-3 border-b ${
-                          bright ? 'border-slate-100 hover:bg-slate-50' : 'border-slate-800 hover:bg-slate-800'
-                        } transition-colors text-left`}>
-                        <span className="font-mono text-[11px] text-slate-400 w-5 text-right shrink-0">
-                          {p.shirtNumber ?? '–'}
-                        </span>
-                        <PersonAvatar name={p.personName} photoUrl={p.photoUrl} size={28} />
-                        <span className={`flex-1 text-sm font-medium truncate ${bright ? 'text-slate-900' : 'text-white'}`}>
-                          {p.personName}
-                        </span>
-                        <Star className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                      </button>
-                    ))}
-                  </div>
-                )
-              })}
-            </div>
-            {/* Skip */}
-            <div className={`px-4 py-4 border-t shrink-0 ${bright ? 'border-slate-200' : 'border-slate-700'}`}>
-              <button onClick={() => handleSelectPOTM(null)}
-                className={`w-full border font-bold text-sm rounded-xl py-3 ${t.neutralBtn}`}>
-                Skip — no award today
-              </button>
+                  )
+                })}
+              </div>
+              {/* Skip — per-side in per-team mode, single button otherwise */}
+              <div className={`px-4 py-4 border-t shrink-0 ${bright ? 'border-slate-200' : 'border-slate-700'}`}>
+                <button onClick={() => handleSelectPOTM(null)}
+                  className={`w-full border font-bold text-sm rounded-xl py-3 ${t.neutralBtn}`}>
+                  {skipLabel}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Post-match: Full-time confirmation — stays open until dismissed */}
       {justFinalized && (
@@ -1883,7 +1970,7 @@ export default function ScoreMatch() {
             match={match} t={t} busy={outcomeBusy} error={outcomeError} wkDefault={wkDefault}
             homeName={match.homeTeamName} awayName={match.awayTeamName}
             homePlayers={home} awayPlayers={away}
-            onEnterResult={(payload) => runOutcome(() => submitFixtureResult(match.id, { ...payload, method: 'submitted' }))}
+            onEnterResult={(payload) => runOutcome(() => submitFixtureResult(match.id, { ...payload, method: 'submitted' }), { openPotmAfter: true })}
             onNotPlayed={(reason) => runOutcome(() => setFixtureNotPlayed(match.id, { reason }))}
             onWalkover={(payload) => runOutcome(() => setFixtureWalkover(match.id, payload))}
             onAbandon={(reason) => runOutcome(() => abandonMatch(match.id, { minute: Math.floor(getElapsedMs(match) / 60000), reason }))}

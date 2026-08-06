@@ -183,11 +183,13 @@ export async function fetchCompetitionTopPOTM(competitionId, limit = 5) {
       where('status', '==', 'final'))
   )
   const counts = new Map()
-  snap.docs.forEach(d => {
-    const data = d.data()
-    const potm = data.playerOfMatch
+  // Accumulate a single POM record against the counter. The reducer is shape-
+  // agnostic — one match may contribute 0, 1 (legacy single or one-side-only),
+  // or 2 (per-team, both sides awarded) times. Records are never migrated, so
+  // both shapes coexist in the same competition.
+  const addPotm = (potm, data) => {
     if (!potm?.name) return
-    const key = potm.personId ?? potm.name
+    const key   = potm.personId ?? potm.name
     const entry = counts.get(key)
     if (entry) {
       entry.count++
@@ -202,6 +204,12 @@ export async function fetchCompetitionTopPOTM(competitionId, limit = 5) {
         count: 1,
       })
     }
+  }
+  snap.docs.forEach(d => {
+    const data = d.data()
+    addPotm(data.playerOfMatch, data)
+    addPotm(data.playersOfMatch?.home, data)
+    addPotm(data.playersOfMatch?.away, data)
   })
   return [...counts.values()]
     .sort((a, b) => b.count - a.count)

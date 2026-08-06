@@ -3,7 +3,6 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { ChevronDown, Menu, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchLiveMatches } from '../lib/queries'
-import Logo from './Logo'
 
 function useScrolled(threshold = 4) {
   const [scrolled, setScrolled] = useState(false)
@@ -120,10 +119,14 @@ export default function Nav() {
 
   return (
     <header ref={headerRef} className={`border-b border-slate-200 sticky top-0 z-20 transition-all duration-200 ${scrolled ? 'bg-white/95 backdrop-blur-md shadow-md' : 'bg-white shadow-sm'}`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center gap-4">
 
-        {/* Logo — always links home */}
-        <Logo />
+        {/* Logo — always links home. Uses the supplied PNG as-is (public/logo.png);
+            do not recreate it in CSS. Fixed height so it never grows with the header;
+            width scales to preserve the artwork. */}
+        <Link to="/" className="shrink-0" aria-label="MatchPulse Rugby — home">
+          <img src="/logo.png" alt="MatchPulse Rugby" className="h-16 w-auto block" />
+        </Link>
 
         {/* Desktop nav links */}
         <nav className="hidden md:flex items-center gap-1 flex-1 ml-4">
