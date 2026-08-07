@@ -2,12 +2,13 @@ import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { doc, setDoc } from 'firebase/firestore'
 import { claimPendingInvites } from '../lib/invites'
-import { updateProfile } from 'firebase/auth'
+import { updateProfile, sendEmailVerification } from 'firebase/auth'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { Camera, ChevronRight } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { auth, identityDb, storage, configured } from '../firebase'
 import { saveRugbyProfile } from '../lib/rugbyProfile'
+import { searchUnclaimedProfiles, claimPlayerProfile } from '../lib/adminQueries'
 
 const PROVINCES = [
   'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal',
@@ -55,6 +56,15 @@ export default function Signup() {
   const fileRef    = useRef(null)
 
   const [step, setStep] = useState(1)
+  // Step 3 — claim an existing unclaimed profile (ownerless-profiles addendum
+  // A4). Searching BEFORE offering a fresh start is the main defence against
+  // duplicates: a player signing up fresh alongside their own unclaimed
+  // profile is exactly the mess the ownerless model avoids.
+  const [claimMatches, setClaimMatches] = useState([])
+  const [pendingClaim, setPendingClaim] = useState(null)
+  const [claimBusy,    setClaimBusy]    = useState(false)
+  const [claimErr,     setClaimErr]     = useState('')
+  const [verifySent,   setVerifySent]   = useState(false)
 
   // Step 1
   const [firstName, setFirstName] = useState('')
@@ -167,7 +177,7 @@ export default function Signup() {
       await saveProfile()
       // Claim any pending invites for this email (best-effort, never blocks signup)
       await claimPendingInvites(email, createdUid).catch(() => {})
-      navigate('/portal')
+      await maybeOfferClaim()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -177,7 +187,44 @@ export default function Signup() {
 
   async function handleSkip() {
     try { await saveProfile() } catch { /* best-effort */ }
-    navigate('/portal')
+    await maybeOfferClaim()
+  }
+
+  // Search unclaimed profiles by the sign-up name and surface any matches
+  // before finishing (addendum A4 step 3 — not optional; it is the main entry
+  // point to claiming). No matches -> straight through.
+  async function maybeOfferClaim() {
+    const matches = await searchUnclaimedProfiles(`${firstName} ${lastName}`).catch(() => [])
+    if (matches.length === 0) { navigate('/portal'); return }
+    setClaimMatches(matches)
+    setStep(3)
+  }
+
+  // Selecting a profile sends the verification email (claiming needs a
+  // verified address); the claim itself runs when the user confirms they have
+  // clicked the link.
+  async function startClaim(personOrNull) {
+    if (!personOrNull) { navigate('/portal'); return }
+    setPendingClaim(personOrNull)
+    setClaimErr('')
+    if (!verifySent && auth?.currentUser && !auth.currentUser.emailVerified) {
+      try { await sendEmailVerification(auth.currentUser); setVerifySent(true) }
+      catch { /* the retry button below can resend via claim error */ }
+    }
+  }
+
+  async function finishClaim() {
+    if (!pendingClaim) return
+    setClaimBusy(true)
+    setClaimErr('')
+    try {
+      await claimPlayerProfile(pendingClaim.id)
+      navigate('/portal')
+    } catch (e) {
+      setClaimErr(e.code === 'claim/email-unverified'
+        ? "That email address isn't verified yet — click the link in your inbox first."
+        : (e.message || 'Could not claim this profile.'))
+    } finally { setClaimBusy(false) }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -203,6 +250,7 @@ export default function Signup() {
           {[
             { n: 1, label: 'Account' },
             { n: 2, label: 'Profile' },
+            { n: 3, label: 'Claim' },
           ].map(({ n, label }, i) => (
             <div key={n} className="flex items-center flex-1">
               {i > 0 && <div className={`flex-1 h-px mx-2 ${step > i ? 'bg-emerald-300' : 'bg-slate-200'}`} />}
@@ -412,6 +460,52 @@ export default function Signup() {
               </button>
             </div>
           </form>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600 leading-relaxed">
+              We found existing player profiles matching your name. If one of these is you — or your
+              child — claim it instead of starting fresh, so your history stays in one place.
+            </p>
+            <div className="space-y-2">
+              {claimMatches.map(p => (
+                <button key={p.id} type="button" onClick={() => startClaim(p)}
+                  className={`w-full flex items-center gap-3 bg-white border rounded-xl px-4 py-3 text-left transition-colors min-h-[48px] ${
+                    pendingClaim?.id === p.id ? 'border-emerald-400' : 'border-slate-200 hover:border-emerald-300'
+                  }`}>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-slate-900 truncate">{p.fullName}</span>
+                    {(p.representativeOrgs ?? []).length > 0 && (
+                      <span className="block text-[11px] text-slate-400 truncate">
+                        {(p.representativeOrgs ?? []).map(o => o.orgName).filter(Boolean).join(', ')}
+                      </span>
+                    )}
+                  </span>
+                  {pendingClaim?.id === p.id && (
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 shrink-0">Selected</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            {pendingClaim && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 space-y-2">
+                <p className="text-[12px] text-slate-600 leading-relaxed">
+                  We&rsquo;ve emailed a verification link to <span className="font-semibold">{email}</span>.
+                  Click it, then finish the claim below.
+                </p>
+                <button type="button" onClick={finishClaim} disabled={claimBusy}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-sm uppercase tracking-wider rounded-lg px-4 py-3 transition-colors">
+                  {claimBusy ? 'Claiming…' : "I've verified — claim this profile"}
+                </button>
+              </div>
+            )}
+            {claimErr && <ErrorBox>{claimErr}</ErrorBox>}
+            <button type="button" onClick={() => startClaim(null)}
+              className="w-full text-slate-400 hover:text-slate-700 text-sm font-medium py-2 transition-colors">
+              None of these are me — continue
+            </button>
+          </div>
         )}
 
         <div className="mt-6 text-center">

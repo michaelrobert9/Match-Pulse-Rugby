@@ -296,6 +296,30 @@ service cloud.firestore {
               || (request.resource.data.keys().hasAny(['managerUids'])
                 && request.auth.uid in request.resource.data.managerUids)));
 
+      // OWNERLESS team-sheet creation (bulk-paste addendum Part A). Bulk paste
+      // creates live profiles with NO owner: empty managerUids, unclaimed, no
+      // consent record — nobody is claiming rights over anyone. Permitted only
+      // to writers with squad-write authority on the sheet's competition team:
+      // organisers and competition scorers (canAdministerCompetition) or the
+      // team's own org staff (isTeamOrgMember on the audited team reference).
+      // A create that attaches ANY owner/guardian/manager through this path is
+      // rejected. createdByUid is audit-only and is deliberately never read
+      // here — reading it to grant access would quietly turn the ownerless
+      // model back into an ownership model.
+      allow create: if isSignedIn()
+        && request.resource.data.get('createdVia', '') == 'teamSheet'
+        && request.resource.data.get('claimStatus', '') == 'unclaimed'
+        && request.resource.data.get('ownerUid', null) == null
+        && request.resource.data.get('guardianUids', ['x']).size() == 0
+        && request.resource.data.get('managerUids', ['x']).size() == 0
+        && (
+          (request.resource.data.get('createdInCompetitionId', '') != ''
+            && canAdministerCompetition(request.resource.data.createdInCompetitionId))
+          || (request.resource.data.get('createdForTeamId', '') != null
+            && request.resource.data.get('createdForTeamId', '') != ''
+            && isTeamOrgMember(request.resource.data.createdForTeamId))
+        );
+
       // Update: platform admin or owner/guardian (full control, including
       // transfer + manager grants); a delegated manager may edit everything
       // EXCEPT the control fields.
@@ -328,22 +352,28 @@ service cloud.firestore {
                  .hasOnly(['competitionIds'])
             && request.resource.data.get('competitionIds', [])
                  .hasAll(resource.data.get('competitionIds', [])))
-        // Self-service CLAIM: a signed-in user may claim an UNCLAIMED profile
-        // (no owner, no guardians) by making themselves the owner (player) OR the
-        // sole guardian (parent). Only the control fields change, and only to
-        // self. Once owner/guardian exists this fails — reassignment then goes
-        // through the controller or a platform admin.
+        // Self-service CLAIM (ownerless-profiles addendum A4/A5). The whole
+        // gate is a verified email: it confirms the address is real and the
+        // person controls it, nothing more (a deliberate, recorded decision —
+        // volume does not justify more friction yet; master-admin revocation
+        // is the recovery path). The write must set managerUids to EXACTLY the
+        // caller (a claim naming any other uid is rejected), flip claimStatus
+        // to claimed, and may attach the pre-claim snapshot + audit trail. A
+        // claimed profile is not claimable again; a revoked uid is blocked.
+        // For a player under 18 the claim comes from the parent's account —
+        // same flow, same rule, no separate path.
         || (isSignedIn()
+            && request.auth.token.get('email_verified', false) == true
+            && resource.data.get('claimStatus', 'unclaimed') != 'claimed'
             && resource.data.get('ownerUid', null) == null
             && resource.data.get('guardianUids', []).size() == 0
+            && resource.data.get('managerUids', []).size() == 0
+            && !(request.auth.uid in resource.data.get('claimBlockedUids', []))
+            && request.resource.data.get('managerUids', []) == [request.auth.uid]
+            && request.resource.data.get('claimStatus', '') == 'claimed'
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['ownerUid', 'guardianUids', 'updatedAt', 'updatedBy'])
-            && (
-                 (request.resource.data.get('ownerUid', null) == request.auth.uid
-                   && request.resource.data.get('guardianUids', []).size() == 0)
-                 || (request.resource.data.get('ownerUid', null) == null
-                   && request.resource.data.get('guardianUids', []) == [request.auth.uid])
-               ));
+                 .hasOnly(['managerUids', 'claimStatus', 'claimedAt', 'claimedByUid',
+                           'preClaimSnapshot', 'claimAudit', 'updatedAt', 'updatedBy']));
 
       allow delete: if isPlatformAdmin() || controlsPerson(resource.data);
     }

@@ -13,6 +13,7 @@ import { positionForNumber } from '../lib/teamSheet'
 // too and never touches the competition squad.
 export default function FixtureSquadPanel({
   t, bright, match, side, member,
+  teamColor = null,      // side's team colour — the © renders in it (slate fallback)
   onToggleAbsent,        // (side, playerId)
   onOverride,            // (side, playerId, shirtNumber|null)
   onOpenPaste,           // (side)
@@ -76,7 +77,10 @@ export default function FixtureSquadPanel({
       {/* Tap the player to toggle absent. */}
       <button disabled={saving} onClick={() => onToggleAbsent(side, p.playerId)}
         className="flex-1 min-w-0 min-h-[44px] flex items-center gap-2 text-left">
-        {p.isCaptain && <span className="text-[14px] font-bold text-amber-600 leading-none shrink-0">©</span>}
+        {p.isCaptain && (
+          <span className="text-sm font-bold leading-none shrink-0"
+            style={{ color: teamColor ?? '#64748b' }}>©</span>
+        )}
         <span className={`text-sm font-medium truncate ${absent ? '' : bright ? 'text-slate-900' : 'text-white'}`}>
           {p.name}
         </span>

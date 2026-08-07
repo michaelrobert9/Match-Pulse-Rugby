@@ -5,7 +5,6 @@ import {
   duplicateNumbers, duplicateNames, isFifteenInOrder,
 } from '../lib/teamSheet'
 import { matchRowsToPeople } from '../lib/teamSheetQueries'
-import { PLAYER_CONSENT_TEXT } from '../lib/consent'
 
 // Bulk team-sheet editor: paste box → review grid → confirm (brief §5–§8).
 // Nothing writes to the database until the confirm bar's Add/Save — the grid
@@ -103,7 +102,7 @@ export default function TeamSheetEditor({
   initialStaff = null,
   saving = false,
   error = '',
-  onConfirm,          // async ({ rows, staff, consented })
+  onConfirm,          // async ({ rows, staff })
   onCancel,
 }) {
   const hasExisting = (initialSquad?.length ?? 0) > 0
@@ -117,13 +116,11 @@ export default function TeamSheetEditor({
   // confirmed interpretation; hand-added rows are never touched.
   const [lastBatch, setLastBatch] = useState(null)
   const [chooserKey, setChooserKey] = useState(null)
-  const [consented, setConsented] = useState(false)
 
   const dupNums  = useMemo(() => duplicateNumbers(rows), [rows])
   const dupNames = useMemo(() => duplicateNames(rows), [rows])
   const fifteen  = useMemo(() => isFifteenInOrder(rows), [rows])
-  const hasNew   = rows.some(r => !r.match?.personId)
-  const canConfirm = rows.length > 0 && !saving && (!hasNew || consented)
+  const canConfirm = rows.length > 0 && !saving
 
   // Parse the paste with auto-detected interpretation (rugby default: shirt
   // numbers; a plain contiguous list reads as ordinal). The toggle above the
@@ -444,16 +441,6 @@ export default function TeamSheetEditor({
         </div>
       </div>
 
-      {/* Consent — required by the platform's profile-creation contract
-          whenever the confirm will mint new player profiles. */}
-      {hasNew && rows.length > 0 && (
-        <label className="flex items-start gap-2.5 mt-5 bg-slate-50 border border-slate-200 rounded-xl p-3 cursor-pointer">
-          <input type="checkbox" checked={consented} onChange={e => setConsented(e.target.checked)}
-            className="accent-emerald-600 w-4 h-4 mt-0.5 shrink-0" />
-          <span className="text-[11px] text-slate-500 leading-relaxed">{PLAYER_CONSENT_TEXT}</span>
-        </label>
-      )}
-
       {error && (
         <p className="mt-3 text-sm text-red-600">{error}</p>
       )}
@@ -470,7 +457,7 @@ export default function TeamSheetEditor({
           <button type="button" disabled={!canConfirm}
             onClick={() => onConfirm({
               rows: rows.filter(r => `${r.firstName}${r.lastName}`.trim()),
-              staff, consented,
+              staff,
             })}
             className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-bold rounded-xl px-8 py-2.5 min-h-[44px] transition-colors">
             {saving ? 'Saving…' : hasExisting ? 'Save' : 'Add'}

@@ -749,7 +749,7 @@ export default function ScoreMatch() {
   }
   // Late additions from the fixture screen run through the same grid and add
   // to the COMPETITION squad, not just this fixture.
-  async function handleSheetEditorConfirm({ rows, staff, consented }) {
+  async function handleSheetEditorConfirm({ rows, staff }) {
     const side = sheetEditorSide
     const teamId = side === 'home' ? match.homeTeamId : match.awayTeamId
     setSheetSaving(true)
@@ -759,7 +759,6 @@ export default function ScoreMatch() {
         rows, staff,
         orgId: sheetMembers[side]?.organizationId ?? null,
         orgName: sheetMembers[side]?.displaySnapshot?.orgName ?? null,
-        consented,
       })
       const fresh = await fetchCompetitionTeamSheet(match.competitionId, teamId).catch(() => null)
       setSheetMembers(prev => ({ ...prev, [side]: fresh?.member ?? prev[side] }))
@@ -1806,6 +1805,7 @@ export default function ScoreMatch() {
           {sideIsInherited(match, lineupSide) && (sheetMembers[lineupSide]?.squad?.length ?? 0) > 0 ? (
             <FixtureSquadPanel
               t={t} bright={bright} match={match} side={lineupSide}
+              teamColor={teamColor(lineupSide)}
               member={sheetMembers[lineupSide]}
               onToggleAbsent={handleToggleAbsent}
               onOverride={handleOverride}

@@ -7,6 +7,8 @@ import {
 } from '../lib/queries'
 import { matchUrl } from '../lib/slugify'
 import { monogram } from '../lib/names'
+import { sendEmailVerification } from 'firebase/auth'
+import { auth } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { managesPlayerProfile } from '../lib/capabilities'
 import { removeSelfFromFixture, updatePersonBanner, updatePerson, claimPlayerProfile, isProfileClaimed } from '../lib/adminQueries'
@@ -273,6 +275,17 @@ export default function PlayerProfile() {
   const { uid, isPlatformAdmin } = useAuth()
   const [person,         setPerson]        = useState(null)
   useSeoMeta({ type: 'player', entity: person })
+  // Unclaimed profiles are noindex (addendum A3): the page exists and is
+  // reachable from a team sheet, but it does not enter search results. The
+  // restriction drops away on claim.
+  useEffect(() => {
+    if (!person || isProfileClaimed(person)) return
+    let m = document.querySelector('meta[name="robots"]')
+    if (!m) { m = document.createElement('meta'); m.setAttribute('name', 'robots'); document.head.appendChild(m) }
+    const prev = m.getAttribute('content')
+    m.setAttribute('content', 'noindex')
+    return () => { if (prev != null) m.setAttribute('content', prev) }
+  }, [person])
   const [career,         setCareer]        = useState([])
   const [orgMap,         setOrgMap]        = useState({})
   const [playerMatches,  setPlayerMatches] = useState([])
@@ -323,11 +336,11 @@ export default function PlayerProfile() {
   }
 
   const initials      = person.fullName.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  const claimed       = isProfileClaimed(person)
   const canSelfRemove = managesPlayerProfile(person, uid)
-  const canEditBanner = isPlatformAdmin || managesPlayerProfile(person, uid)
-  // Anyone signed in may claim an UNCLAIMED profile (no owner/guardian yet) that
-  // isn't already theirs.
-  const canClaim = !!uid && !isProfileClaimed(person) && !managesPlayerProfile(person, uid)
+  const canEditBanner = claimed && (isPlatformAdmin || managesPlayerProfile(person, uid))
+  // Anyone signed in may claim an UNCLAIMED profile that isn't already theirs.
+  const canClaim = !!uid && !claimed && !managesPlayerProfile(person, uid)
 
   // Career groups from players-collection records, then append any representative
   // orgs that have no career data yet (so the org header still shows).
@@ -343,12 +356,19 @@ export default function PlayerProfile() {
 
       {/* Hero: banner, photo, name, position, nationality, DOB, SA Rugby number */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <ProfileBanner person={person} canEdit={canEditBanner}
-          onSaved={url => setPerson(p => ({ ...p, bannerUrl: url }))} />
+        {/* An UNCLAIMED profile is a limited page (addendum A3): name, teams,
+            stats. No banner, no photo/avatar, no date of birth — those appear
+            when the player (or their parent) claims the profile. */}
+        {claimed && (
+          <ProfileBanner person={person} canEdit={canEditBanner}
+            onSaved={url => setPerson(p => ({ ...p, bannerUrl: url }))} />
+        )}
         <div className="h-2 bg-gradient-to-r from-emerald-500 to-emerald-400" />
         <div className="p-5 flex items-start gap-4">
-          <ProfilePhoto person={person} canEdit={canEditBanner} initials={initials}
-            onSaved={url => setPerson(p => ({ ...p, photoUrl: url }))} />
+          {claimed && (
+            <ProfilePhoto person={person} canEdit={canEditBanner} initials={initials}
+              onSaved={url => setPerson(p => ({ ...p, photoUrl: url }))} />
+          )}
 
           <div className="flex-1 min-w-0 pt-0.5">
             {person.roles?.length > 0 && (
@@ -366,7 +386,7 @@ export default function PlayerProfile() {
                 {[person.position, person.nationality].filter(Boolean).join(' · ')}
               </div>
             )}
-            {person.dateOfBirth && (
+            {claimed && person.dateOfBirth && (
               <div className="text-slate-400 text-xs mt-1">
                 {fmtDate(person.dateOfBirth)}
                 {age(person.dateOfBirth) != null && ` · ${age(person.dateOfBirth)} yrs`}
@@ -388,6 +408,15 @@ export default function PlayerProfile() {
         <ClaimCard person={person}
           onClaimed={patch => setPerson(p => ({ ...p, ...patch }))} />
       )}
+
+      {/* Report: works signed out — a parent or coach who spots a wrong claim
+          must not need an account to say so (addendum A4). */}
+      <p className="text-center">
+        <Link to="/contact"
+          className="text-[11px] text-slate-400 hover:text-slate-600 underline underline-offset-2">
+          This isn't {person.fullName}? Report this profile
+        </Link>
+      </p>
 
       {/* Represents: org → team blocks with caps/tries/points stats */}
       {allOrgGroups.length > 0 && (
@@ -437,19 +466,30 @@ export default function PlayerProfile() {
 function ClaimCard({ person, onClaimed }) {
   const [busy, setBusy] = useState(false)
   const [err,  setErr]  = useState('')
+  const [needsVerify, setNeedsVerify] = useState(false)
+  const [linkSent, setLinkSent] = useState(false)
 
-  async function claim(relationship) {
-    const label = relationship === 'player' ? 'This is you' : `You are ${person.fullName}'s parent/guardian`
-    if (!window.confirm(`${label}? You'll be able to manage this profile.`)) return
+  // One flow for everyone (addendum A4): the player claims their own profile;
+  // for an under-18 the parent claims from their account. The gate is a
+  // verified email and nothing more.
+  async function claim() {
+    if (!window.confirm(`Claim ${person.fullName}? You'll manage this profile.`)) return
     setBusy(true); setErr('')
     try {
-      await claimPlayerProfile(person.id, relationship)
-      onClaimed(relationship === 'parent'
-        ? { guardianUids: [...(person.guardianUids ?? []), 'me'] }
-        : { ownerUid: 'me' })
+      await claimPlayerProfile(person.id)
+      onClaimed({ managerUids: ['me'], claimStatus: 'claimed' })
     } catch (e) {
-      setErr(e.message || 'Could not claim this profile.')
+      if (e.code === 'claim/email-unverified') setNeedsVerify(true)
+      else setErr(e.message || 'Could not claim this profile.')
     } finally { setBusy(false) }
+  }
+
+  async function sendLink() {
+    setErr('')
+    try {
+      await sendEmailVerification(auth.currentUser)
+      setLinkSent(true)
+    } catch (e) { setErr(e.message || 'Could not send the verification email.') }
   }
 
   return (
@@ -461,19 +501,31 @@ function ClaimCard({ person, onClaimed }) {
           <div className="text-slate-900 font-bold text-sm mb-1">Is this you, or your child?</div>
           <p className="text-[12px] text-slate-500 leading-relaxed mb-3">
             Claim <span className="font-semibold">{person.fullName}</span> to manage the profile — edit details,
-            add a photo and banner. If you're a parent you can later transfer it to the player.
+            add a photo and banner. For a player under 18, a parent or guardian claims from their own account.
           </p>
           {err && <p className="text-red-600 text-xs mb-2">{err}</p>}
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => claim('player')} disabled={busy}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
-              {busy ? '…' : "I'm the player"}
+          {needsVerify ? (
+            <div className="space-y-2">
+              <p className="text-[12px] text-slate-600">
+                First verify your email address — claiming needs a verified email.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={sendLink} disabled={busy || linkSent}
+                  className="bg-white border border-emerald-300 hover:border-emerald-400 disabled:opacity-50 text-emerald-700 font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
+                  {linkSent ? 'Link sent — check your inbox' : 'Email me a verification link'}
+                </button>
+                <button onClick={claim} disabled={busy}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
+                  {busy ? '…' : "I've verified — claim"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={claim} disabled={busy}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
+              {busy ? '…' : 'Claim this profile'}
             </button>
-            <button onClick={() => claim('parent')} disabled={busy}
-              className="bg-white border border-emerald-300 hover:border-emerald-400 disabled:opacity-50 text-emerald-700 font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
-              {busy ? '…' : "I'm a parent"}
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </section>

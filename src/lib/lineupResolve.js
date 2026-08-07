@@ -8,12 +8,13 @@
 // immutable after final — and lineupMode flips to 'frozen'. Historical
 // fixtures never mutate afterwards.
 //
-// Exceptions live on the match doc as
-//   exceptions: [{ playerId, side, type: 'absent' | 'added', shirtNumber?, position? }]
-// An 'added' entry whose playerId is already in the squad is a PER-FIXTURE
-// OVERRIDE (rugby: the number changes and the position changes with it). The
-// side field is rugby-specific: one match doc carries both teams, so each
-// exception has to say which sheet it belongs to.
+// Exceptions live on the match doc as (shared model, addendum B1/B2)
+//   exceptions: [{ playerId, side, type: 'absent' | 'added' | 'override',
+//                  shirtNumber?, position? }]
+// 'override' is a PER-FIXTURE shirt-number override (rugby: the number changes
+// and the position changes with it); it never touches the competition squad.
+// The side field is part of the shared model: one match doc carries both
+// teams, so each exception says which sheet it belongs to.
 //
 // Pure functions only — callers own all Firestore I/O.
 
@@ -60,14 +61,14 @@ function entryFromSquad(sq, override) {
 }
 
 // The resolved line-up for one side: competition squad minus 'absent'
-// exceptions, with 'added' overrides applied. Sorted by shirt number.
+// exceptions, with 'override' entries applied. Sorted by shirt number.
 export function resolveSideLineup(match, side, member) {
   const squad = member?.squad ?? []
   if (squad.length === 0) return []
   const ex = exceptionsFor(match, side)
   const absent = new Set(ex.filter(e => e.type === 'absent').map(e => e.playerId))
   const overrides = new Map(
-    ex.filter(e => e.type === 'added').map(e => [e.playerId, e])
+    ex.filter(e => e.type === 'override').map(e => [e.playerId, e])
   )
   return squad
     .filter(sq => !absent.has(sq.playerId))
@@ -95,11 +96,11 @@ export function isAbsent(exceptions, side, playerId) {
 // competition squad. Passing null clears the override.
 export function setNumberOverride(exceptions, side, playerId, shirtNumber) {
   const rest = (exceptions ?? []).filter(
-    e => !(e.side === side && e.playerId === playerId && e.type === 'added')
+    e => !(e.side === side && e.playerId === playerId && e.type === 'override')
   )
   if (shirtNumber == null) return rest
   return [...rest, {
-    playerId, side, type: 'added',
+    playerId, side, type: 'override',
     shirtNumber,
     position: positionForNumber(shirtNumber),
   }]
@@ -107,6 +108,6 @@ export function setNumberOverride(exceptions, side, playerId, shirtNumber) {
 
 export function overrideFor(exceptions, side, playerId) {
   return (exceptions ?? []).find(
-    e => e.side === side && e.playerId === playerId && e.type === 'added'
+    e => e.side === side && e.playerId === playerId && e.type === 'override'
   ) ?? null
 }

@@ -3,7 +3,7 @@ import { ChevronRight, ChevronLeft, X, Plus } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { collection, getDocs, doc, getDoc, orderBy, query } from 'firebase/firestore'
 import { db } from '../../firebase'
-import { createPerson, updatePerson, adminLinkProfileToUser, isProfileClaimed } from '../../lib/adminQueries'
+import { createPerson, updatePerson, adminLinkProfileToUser, isProfileClaimed, revokeProfileClaim } from '../../lib/adminQueries'
 import { uploadImageForEntity } from '../../lib/imageUpload'
 import ImageUpload from '../../components/ImageUpload'
 import { deleteDoc } from 'firebase/firestore'
@@ -361,7 +361,50 @@ export function EditPerson() {
         <h1 className="font-display font-bold text-slate-900 text-lg truncate">{person.fullName}</h1>
       </div>
       <PersonForm initial={person} onSave={handleSave} onDelete={handleDelete} saving={saving} />
+      {person.claimStatus === 'claimed' && (
+        <RevokeClaimSection person={person}
+          onRevoked={patch => setPerson(p => ({ ...p, ...patch }))} />
+      )}
       <LinkUserSection person={person} onLinked={patch => setPerson(p => ({ ...p, ...patch }))} />
+    </div>
+  )
+}
+
+// Master-admin claim revocation (ownerless-profiles addendum A4): any claim,
+// any time, no time limit. Restores the pre-claim snapshot (a wrongly claimed
+// profile must not keep the claimer's photo, bio or edited name), returns the
+// profile to unclaimed, and blocks the revoked uid from re-claiming.
+function RevokeClaimSection({ person, onRevoked }) {
+  const [busy, setBusy] = useState(false)
+  const [err,  setErr]  = useState('')
+
+  async function revoke() {
+    if (!confirm(`Revoke the claim on ${person.fullName}? The profile returns to unclaimed and the pre-claim details are restored.`)) return
+    setBusy(true); setErr('')
+    try {
+      await revokeProfileClaim(person.id)
+      onRevoked({
+        ...(person.preClaimSnapshot ?? {}),
+        managerUids: [], claimStatus: 'unclaimed',
+        claimedByUid: null, preClaimSnapshot: null,
+      })
+    } catch (e) {
+      setErr(e.message || 'Revocation failed.')
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="mx-4 mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-1">Claimed profile</div>
+      <p className="text-[12px] text-slate-600 leading-relaxed mb-2.5">
+        Claimed by <span className="font-mono">{person.claimedByUid ?? (person.managerUids ?? [])[0] ?? 'unknown'}</span>.
+        Revoking restores the pre-claim details and blocks that account from re-claiming.
+      </p>
+      {err && <p className="text-red-600 text-xs mb-2">{err}</p>}
+      <button onClick={revoke} disabled={busy}
+        className="bg-white border border-amber-300 hover:border-amber-400 disabled:opacity-50 text-amber-800 font-bold text-xs uppercase tracking-wider rounded-lg px-4 py-2.5 transition-colors">
+        {busy ? 'Revoking…' : 'Revoke claim'}
+      </button>
     </div>
   )
 }

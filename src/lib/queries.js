@@ -478,6 +478,10 @@ export async function fetchPlayers() {
   ))
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
+    // No directory of UNCLAIMED profiles (ownerless-profiles addendum A3):
+    // reachable from a team sheet or the sign-up claim search, never from a
+    // browsable index. The restriction drops away on claim.
+    .filter(p => p.claimStatus !== 'unclaimed')
     .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
 }
 

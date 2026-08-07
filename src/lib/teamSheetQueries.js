@@ -9,11 +9,11 @@
 // one-at-a-time flow uses. No shadow profiles, no unclaimed state.
 
 import {
-  doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion,
+  collection, doc, addDoc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../firebase'
-import { createChildPlayerProfile } from './adminQueries'
-import { positionForNumber } from './teamSheet'
+import { generatePersonSlug } from './adminQueries'
+import { positionForNumber, splitName } from './teamSheet'
 
 const uid = () => auth?.currentUser?.uid ?? null
 
@@ -91,13 +91,51 @@ export async function fetchCompetitionTeamSheet(competitionId, teamId) {
   return { squad: d.squad ?? [], staff: d.staff ?? [], member: { id: snap.id, ...d } }
 }
 
-// Persist the confirmed grid. Creates profiles for 'new' rows (consent-gated,
-// creator as manager — the platform's existing creation contract), links
-// everything else, and writes the squad + staff arrays onto the competition
-// membership doc in one shot. Squad entries denormalise name/photo so fixture
-// line-ups derive without a read per player.
+// Ownerless profile creation (addendum Part A). Bulk paste creates REAL player
+// profiles with NO owner: nobody claims rights over anyone, so there is
+// nothing to consent to at creation. managerUids stays empty until the player
+// (or, for a minor, their parent) claims the profile themselves.
+// createdByUid is an AUDIT field only — no rule may read it to grant access.
+// createdInCompetitionId / createdForTeamId carry the squad-write authority
+// context the create rule checks.
+export async function createUnclaimedProfile({
+  firstName, lastName, position = null,
+  orgId = null, orgName = null, competitionId, teamId,
+}) {
+  const fullName = `${firstName} ${lastName}`.trim()
+  const slug = await generatePersonSlug(fullName)
+  return addDoc(collection(db, 'people'), {
+    fullName,
+    firstName: firstName || splitName(fullName).firstName,
+    lastName:  lastName  || splitName(fullName).lastName,
+    roles: ['player'],
+    position,
+    ...(orgId ? {
+      representativeOrgs: [{ orgId, orgName: orgName ?? null }],
+      representativeOrgIds: [orgId],
+    } : {}),
+    ownerUid: null,
+    guardianUids: [],
+    managerUids: [],                          // empty at creation, always
+    claimStatus: 'unclaimed',
+    createdVia: 'teamSheet',
+    createdByUid: uid(),                      // audit only
+    createdInCompetitionId: competitionId,    // audit + create-rule context
+    createdForTeamId: teamId ?? null,         // audit + create-rule context
+    careerCaps: 0, careerTries: 0, careerPoints: 0,
+    careerCards: { yellow: 0, red: 0 },
+    slug,
+    createdAt: serverTimestamp(),
+  })
+}
+
+// Persist the confirmed grid. Creates OWNERLESS profiles for 'new' rows
+// (addendum Part A — no consent, no manager), links everything else, and
+// writes the squad + staff arrays onto the competition membership doc in one
+// shot. Squad entries denormalise name/photo so fixture line-ups derive
+// without a read per player.
 export async function saveCompetitionTeamSheet(competitionId, teamId, {
-  rows, staff = [], orgId = null, orgName = null, consented = false,
+  rows, staff = [], orgId = null, orgName = null,
 } = {}) {
   const squad = []
   for (const row of rows) {
@@ -106,14 +144,11 @@ export async function saveCompetitionTeamSheet(competitionId, teamId, {
     let personId = row.match?.personId ?? null
     let photoUrl = row.match?.photoUrl ?? null
     if (!personId) {
-      const ref = await createChildPlayerProfile({
-        fullName,
+      const ref = await createUnclaimedProfile({
+        firstName: row.firstName, lastName: row.lastName,
         position: row.position ?? null,
-        ...(orgId ? {
-          representativeOrgs: [{ orgId, orgName: orgName ?? null }],
-          representativeOrgIds: [orgId],
-        } : {}),
-      }, 'manager', { consented })
+        orgId, orgName, competitionId, teamId,
+      })
       personId = ref.id
       photoUrl = null
     }

@@ -47,7 +47,7 @@ export default function TeamSheetPage() {
 
   const back = () => navigate(`/manage/competitions/${competitionId}`)
 
-  async function handleConfirm({ rows, staff, consented }) {
+  async function handleConfirm({ rows, staff }) {
     setSaving(true)
     setSaveError('')
     try {
@@ -55,7 +55,6 @@ export default function TeamSheetPage() {
         rows, staff,
         orgId: member?.organizationId ?? null,
         orgName: member?.displaySnapshot?.orgName ?? null,
-        consented,
       })
       back()
     } catch (e) {

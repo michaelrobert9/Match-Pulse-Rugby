@@ -161,7 +161,7 @@ export async function deleteOrganization(id) {
 // Collision rule: first registration keeps the clean slug; later ones get the
 // lowest available numeric suffix. excludeId skips the person's own doc so
 // that updates don't collide with the record itself.
-async function generatePersonSlug(fullName, excludeId = null) {
+export async function generatePersonSlug(fullName, excludeId = null) {
   const base = slugify(fullName) || 'player'
   const isFree = async (candidate) => {
     const snap = await getDocs(query(collection(db, 'people'), where('slug', '==', candidate)))
@@ -882,8 +882,12 @@ export async function freezeInheritedLineups(matchId) {
   const finalHome = stamp(homeLineup)
   const finalAway = stamp(awayLineup)
   await updateDoc(matchRef, {
+    // The CANONICAL fields — the stats engine, scorer and public renderer all
+    // read these (addendum B3) — plus a frozenLineup copy for the cross-sport
+    // contract.
     homeLineup: finalHome,
     awayLineup: finalAway,
+    frozenLineup: { home: finalHome, away: finalAway },
     lineupPersonIds: [...new Set([...finalHome, ...finalAway].map(e => e.personId).filter(Boolean))],
     lineupMode: 'frozen',
     lineupFrozenAt: serverTimestamp(),
@@ -1633,31 +1637,107 @@ export async function revokePlayerManager(personId, managerUid) {
 // (parent). Managers alone do not count as claimed — a manager-created profile
 // can still be claimed by the player/parent.
 export function isProfileClaimed(person) {
-  return !!(person && (person.ownerUid || (person.guardianUids ?? []).length > 0))
+  return !!(person && (
+    person.ownerUid
+    || (person.guardianUids ?? []).length > 0
+    || person.claimStatus === 'claimed'
+  ))
 }
 
-// Self-service claim: a signed-in user claims an UNCLAIMED profile as the player
-// (owner) or a parent (guardian). Once claimed it locks — further changes go
-// through the controller (transfer / manager grant) or a master admin. There is
-// intentionally no identity verification; the master-admin reassignment tool
-// (adminLinkProfileToUser) is the safety valve for mistakes.
-export async function claimPlayerProfile(personId, relationship) {
-  const userId = uid()
-  if (!userId) throw new Error('You must be signed in to claim a profile.')
-  if (relationship !== 'player' && relationship !== 'parent') {
-    throw new Error('Choose whether you are the player or a parent/guardian.')
+// Fields captured in the pre-claim snapshot at the moment of claim, and
+// restored verbatim on revocation. A revoked profile must not keep a photo,
+// bio or edited name added by whoever claimed it wrongly.
+const CLAIM_SNAPSHOT_FIELDS = [
+  'fullName', 'firstName', 'lastName', 'photoUrl', 'bannerUrl',
+  'bio', 'dateOfBirth', 'position', 'nationality',
+]
+
+// Self-service claim (ownerless-profiles addendum A4). The whole gate is a
+// verified email address — it proves the claimer controls a real inbox and
+// nothing more (a deliberate, recorded decision; master-admin revocation is
+// the recovery path). On claim, managerUids becomes exactly [claimer] and
+// claimStatus flips; nothing migrates — the profile already holds the
+// history. For an under-18 the claim comes from the parent's account: same
+// flow, same rule, no separate path.
+export async function claimPlayerProfile(personId) {
+  const user = auth?.currentUser
+  if (!user) throw new Error('You must be signed in to claim a profile.')
+  await user.reload().catch(() => {})
+  if (!user.emailVerified) {
+    const e = new Error('Verify your email address first — we sent you a link. Once verified, try again.')
+    e.code = 'claim/email-unverified'; throw e
   }
+  // The rules read email_verified off the TOKEN — force a refresh so a
+  // just-completed verification is actually on it.
+  await user.getIdToken(true).catch(() => {})
+
   const ref = doc(db, 'people', personId)
   const snap = await getDoc(ref)
   if (!snap.exists()) throw new Error('Profile not found.')
-  if (isProfileClaimed(snap.data())) {
+  const p = snap.data()
+  if (isProfileClaimed(p)) {
     const e = new Error('This profile has already been claimed. Ask a MatchPulse admin to reassign it if this is wrong.')
     e.code = 'profile/already-claimed'; throw e
   }
-  const patch = relationship === 'parent'
-    ? { guardianUids: [userId] }
-    : { ownerUid: userId }
-  await updateDoc(ref, { ...patch, updatedBy: userId, updatedAt: serverTimestamp() })
+  if ((p.claimBlockedUids ?? []).includes(user.uid)) {
+    const e = new Error('This profile cannot be claimed from this account.')
+    e.code = 'claim/blocked'; throw e
+  }
+  const snapshot = {}
+  for (const k of CLAIM_SNAPSHOT_FIELDS) snapshot[k] = p[k] ?? null
+  await updateDoc(ref, {
+    managerUids: [user.uid],
+    claimStatus: 'claimed',
+    claimedAt: serverTimestamp(),
+    claimedByUid: user.uid,
+    preClaimSnapshot: snapshot,
+    claimAudit: arrayUnion({ type: 'claim', uid: user.uid, at: Date.now() }),
+    updatedBy: user.uid, updatedAt: serverTimestamp(),
+  })
+}
+
+// Master-admin revocation (addendum A4): any claim, any time, no time limit.
+// Restores the pre-claim snapshot, empties managerUids, returns the profile to
+// unclaimed, blocks the revoked uid from re-claiming, and audits the action.
+export async function revokeProfileClaim(personId) {
+  const ref = doc(db, 'people', personId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('Profile not found.')
+  const p = snap.data()
+  const revokedUid = p.claimedByUid ?? (p.managerUids ?? [])[0] ?? null
+  const restore = {}
+  const snapshot = p.preClaimSnapshot ?? {}
+  for (const k of CLAIM_SNAPSHOT_FIELDS) restore[k] = snapshot[k] ?? null
+  await updateDoc(ref, {
+    ...restore,
+    managerUids: [],
+    claimStatus: 'unclaimed',
+    claimedAt: null,
+    claimedByUid: null,
+    preClaimSnapshot: null,
+    ...(revokedUid ? { claimBlockedUids: arrayUnion(revokedUid) } : {}),
+    claimAudit: arrayUnion({ type: 'revoke', uid: uid(), revokedUid, at: Date.now() }),
+    updatedBy: uid(), updatedAt: serverTimestamp(),
+  })
+}
+
+// Unclaimed-profile search for the sign-up claim step (addendum A4 step 3).
+// Surfacing existing unclaimed profiles BEFORE offering to create a fresh
+// account-side profile is the main defence against duplicates. Name-matched
+// client-side against the public people pool.
+export async function searchUnclaimedProfiles(name) {
+  const q = (name ?? '').trim().toLowerCase()
+  if (!q) return []
+  const snap = await getDocs(query(collection(db, 'people'), where('roles', 'array-contains', 'player')))
+  const words = q.split(/\s+/)
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(p => !isProfileClaimed(p))
+    .filter(p => {
+      const n = (p.fullName ?? '').toLowerCase()
+      return n === q || words.every(w => n.includes(w)) || n.includes(words[words.length - 1])
+    })
+    .slice(0, 8)
 }
 
 // Master-admin recovery / reassignment: link a user (by their account email) to
