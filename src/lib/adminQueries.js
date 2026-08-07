@@ -11,6 +11,7 @@ import { SCORE_POINTS, isTryEvent } from './rugbyScoring'
 import { generatedTeamName } from './teamNaming'
 import { defaultRulesForType, rulesHash } from './competitionRules'
 import { assertCanAdministerCompetition } from './competitionAuth'
+import { isBulkLineupCompetition, resolveSideLineup } from './lineupResolve'
 import { schedulePoolFixtures } from './scheduler'
 import { PLAYER_CONSENT_VERSION } from './consent'
 
@@ -824,7 +825,85 @@ function controlEntry(type, period, matchTimestamp) {
     clockTime: new Date().toISOString(), createdBy: uid(), createdAt: Date.now() }
 }
 
+// ── Inherited line-up freeze (tournaments & festivals, brief §4) ─────────────
+// Fixtures in bulk-sheet competitions DERIVE their line-ups from the
+// competition squad until the freeze: on transition to live, or on an entered
+// result. The resolved line-up is written once into homeLineup/awayLineup (the
+// existing stored shape the scorer, stats engine and history already treat as
+// immutable after final) and lineupMode flips to 'frozen'. Squad edits after
+// the freeze never touch this fixture. A side that already carries a manually
+// stored line-up keeps it verbatim — the freeze only fills empty sides, so
+// leagues and legacy fixtures are untouched (their competitions never match
+// the type gate anyway).
+export async function freezeInheritedLineups(matchId) {
+  const matchRef = doc(db, 'matches', matchId)
+  const snap = await getDoc(matchRef)
+  if (!snap.exists()) return
+  const m = snap.data()
+  if (m.lineupMode === 'frozen' || !m.competitionId) return
+
+  const compSnap = await getDoc(doc(db, 'competitions', m.competitionId))
+  if (!compSnap.exists() || !isBulkLineupCompetition(compSnap.data())) return
+
+  const memberFor = async (teamId) => {
+    if (!teamId) return null
+    const ms = await getDoc(doc(db, 'competitions', m.competitionId, 'teams', teamId))
+    return ms.exists() ? ms.data() : null
+  }
+  const [homeMember, awayMember] = await Promise.all([
+    memberFor(m.homeTeamId), memberFor(m.awayTeamId),
+  ])
+
+  const resolveSide = (side, member) => {
+    const stored = (side === 'home' ? m.homeLineup : m.awayLineup) ?? []
+    if (stored.length > 0) return stored          // manual line-up wins, verbatim
+    return resolveSideLineup(m, side, member)
+  }
+  const homeLineup = resolveSide('home', homeMember)
+  const awayLineup = resolveSide('away', awayMember)
+  if (homeLineup.length === 0 && awayLineup.length === 0) return
+
+  // Stamp controllerUids onto derived entries (the player self-removal rule
+  // reads the snapshot) — one people read per player, once per fixture.
+  const needIds = [...homeLineup, ...awayLineup]
+    .filter(e => e.personId && !e.controllerUids)
+    .map(e => e.personId)
+  const controlByPerson = new Map()
+  await Promise.all([...new Set(needIds)].map(async pid => {
+    try {
+      const ps = await getDoc(doc(db, 'people', pid))
+      const pd = ps.exists() ? ps.data() : {}
+      controlByPerson.set(pid, [pd.ownerUid, ...(pd.guardianUids ?? []), ...(pd.managerUids ?? [])].filter(Boolean))
+    } catch { controlByPerson.set(pid, []) }
+  }))
+  const stamp = (entries) => entries.map(e =>
+    e.controllerUids ? e : { ...e, controllerUids: controlByPerson.get(e.personId) ?? [] })
+
+  const finalHome = stamp(homeLineup)
+  const finalAway = stamp(awayLineup)
+  await updateDoc(matchRef, {
+    homeLineup: finalHome,
+    awayLineup: finalAway,
+    lineupPersonIds: [...new Set([...finalHome, ...finalAway].map(e => e.personId).filter(Boolean))],
+    lineupMode: 'frozen',
+    lineupFrozenAt: serverTimestamp(),
+    updatedBy: uid(), updatedAt: serverTimestamp(),
+  })
+}
+
+// Replace a fixture's exception list (absences + per-fixture overrides).
+// Callers build the new list with the pure helpers in src/lib/lineupResolve.js.
+export async function updateFixtureExceptions(matchId, exceptions) {
+  return updateDoc(doc(db, 'matches', matchId), {
+    exceptions: exceptions ?? [],
+    updatedBy: uid(), updatedAt: serverTimestamp(),
+  })
+}
+
 export async function startMatch(id, { matchTimestamp = 0, periods } = {}) {
+  // Freeze an inherited line-up the moment a human starts live-scoring. Best
+  // effort — a freeze hiccup must never block scoring at a field.
+  await freezeInheritedLineups(id).catch(() => {})
   const firstPeriod = periodLabels(periods)[0]
   // The "Start match" tap is the single moment a fixture becomes `tracked` — a
   // human is now live-scoring it. `tracked` drives the live disclaimer, exempts
@@ -1090,6 +1169,9 @@ export async function submitFixtureResult(matchId, {
   tries: submittedTries = null,
   cards: submittedCards = null,
 } = {}) {
+  // An entered result is this fixture's first (and only) tracked event — freeze
+  // an inherited line-up before the result lands so the sheet becomes history.
+  await freezeInheritedLineups(matchId).catch(() => {})
   const snap = await getDoc(doc(db, 'matches', matchId))
   if (!snap.exists()) throw new Error('Match not found')
   const m = snap.data()

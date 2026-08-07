@@ -519,7 +519,15 @@ service cloud.firestore {
         allow update: if canAdministerCompetition(competitionId)
           || (isTeamOrgMember(teamId)
               && request.resource.data.diff(resource.data).affectedKeys()
-                   .hasOnly(['status', 'acceptedBy', 'acceptedAt']));
+                   .hasOnly(['status', 'acceptedBy', 'acceptedAt']))
+          // Bulk team sheet (platform brief §3): the team's own coaches and
+          // managers may write their squad + staff arrays — nothing else on the
+          // membership record. Organisers and competition scorers come through
+          // canAdministerCompetition above. Named teams with no linked org have
+          // no isTeamOrgMember path, so they remain organiser-managed.
+          || (isTeamOrgMember(teamId)
+              && request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(['squad', 'staff', 'updatedAt', 'updatedBy']));
 
         allow delete: if canAdministerCompetition(competitionId);
       }

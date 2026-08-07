@@ -35,6 +35,7 @@ import NotFound from './pages/NotFound'
 // Manage pages (org owners, staff, self-service)
 import ManageHub  from './pages/manage/Hub'
 import CompetitionManage from './pages/manage/competitions/CompetitionManage'
+import TeamSheetPage from './pages/manage/competitions/TeamSheetPage'
 import CompetitionsManageList from './pages/manage/competitions/CompetitionsList'
 import CreateCompetition from './pages/manage/competitions/CreateCompetition'
 import OrgManage  from './pages/manage/OrgManage'
@@ -161,6 +162,11 @@ export default function App() {
           <Route path="/manage/competitions/:id" element={
             <ProtectedRoute require="any">
               <CompetitionManage />
+            </ProtectedRoute>
+          } />
+          <Route path="/manage/competitions/:id/teams/:teamId/sheet" element={
+            <ProtectedRoute require="any">
+              <TeamSheetPage />
             </ProtectedRoute>
           } />
           <Route path="/fixtures/new" element={

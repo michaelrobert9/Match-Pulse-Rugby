@@ -1811,7 +1811,7 @@ function SettingsTab({ competition, onSaved }) {
 // One participating team. The organiser can edit its name within this
 // competition (e.g. fix a typo) — the org prefix stays, only the team label is
 // editable. For name-only entrants the whole name is editable.
-function CompetitionTeamRow({ team, onRename, onRemove }) {
+function CompetitionTeamRow({ team, onRename, onRemove, sheetHref }) {
   const [editing, setEditing] = useState(false)
   const [name, setName]       = useState(team.displayName ?? '')
   const [saving, setSaving]   = useState(false)
@@ -1859,6 +1859,13 @@ function CompetitionTeamRow({ team, onRename, onRemove }) {
       </div>
       {!editing && (
         <>
+          {/* Bulk team sheet — tournaments & festivals only (sheetHref unset otherwise) */}
+          {sheetHref && (
+            <Link to={sheetHref}
+              className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 hover:text-emerald-600 border border-emerald-200 hover:border-emerald-300 rounded-lg px-2 py-1 shrink-0 transition-colors">
+              Team sheet
+            </Link>
+          )}
           <span className={`text-[9px] font-bold uppercase tracking-widest rounded px-1.5 py-0.5 shrink-0 ${cfg[0]} ${cfg[1]}`}>{cfg[2]}</span>
           <button onClick={() => { setName(team.displayName ?? ''); setEditing(true) }} title="Edit name"
             className="text-slate-400 hover:text-slate-700 transition-colors p-1 shrink-0"><Pencil className="w-3.5 h-3.5" /></button>
@@ -2099,7 +2106,10 @@ function TeamsTab({ competition, teams, setTeams }) {
       ) : (
         <div className="space-y-2">
           {sortedTeams.map(team => (
-            <CompetitionTeamRow key={team.id} team={team} onRename={handleRename} onRemove={handleRemove} />
+            <CompetitionTeamRow key={team.id} team={team} onRename={handleRename} onRemove={handleRemove}
+              sheetHref={(competition.type === 'tournament' || competition.type === 'festival')
+                ? `/manage/competitions/${competition.id}/teams/${team.id}/sheet`
+                : null} />
           ))}
         </div>
       )}
