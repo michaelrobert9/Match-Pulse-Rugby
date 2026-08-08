@@ -14,6 +14,7 @@ import {
 import { db, auth } from '../firebase'
 import { generatePersonSlug } from './adminQueries'
 import { positionForNumber, splitName } from './teamSheet'
+import { resolveSideLineup } from './lineupResolve'
 
 const uid = () => auth?.currentUser?.uid ?? null
 
@@ -182,4 +183,68 @@ export async function saveCompetitionTeamSheet(competitionId, teamId, {
   }, { merge: true })
 
   return squad
+}
+
+// Write a whole side's fixture line-up directly from a confirmed grid — leagues
+// and standalone fixtures (team-sheets-everywhere §3). Builds the squad from the
+// grid rows exactly like saveCompetitionTeamSheet (creating ownerless profiles
+// for new rows), then maps it through the shared resolveSideLineup and REPLACES
+// that side's line-up on the match doc. It never touches the competition squad,
+// the other side or the exceptions array, and it does NOT set lineupMode:'frozen'
+// — freeze stays the "played" signal (§4), applied at start/result.
+export async function saveFixtureLineup(matchId, side, {
+  rows, orgId = null, orgName = null, competitionId = null, teamId = null,
+} = {}) {
+  const squad = []
+  for (const row of rows) {
+    const fullName = `${row.firstName} ${row.lastName}`.trim()
+    if (!fullName) continue
+    let personId = row.match?.personId ?? null
+    let photoUrl = row.match?.photoUrl ?? null
+    if (!personId) {
+      const ref = await createUnclaimedProfile({
+        firstName: row.firstName, lastName: row.lastName,
+        position: row.position ?? null,
+        orgId, orgName, competitionId, teamId,
+      })
+      personId = ref.id
+      photoUrl = null
+    }
+    squad.push({
+      playerId: personId,
+      playerName: fullName,
+      photoUrl: photoUrl ?? null,
+      shirtNumber: row.shirtNumber ?? null,
+      position: row.position ?? positionForNumber(row.shirtNumber) ?? null,
+      isCaptain: row.isCaptain === true,
+    })
+  }
+
+  // A real (league) competition keeps the competitionIds union in step, same as
+  // the competition-squad path; a standalone fixture has no competition to add.
+  if (competitionId) {
+    await Promise.all(squad.map(s =>
+      updateDoc(doc(db, 'people', s.playerId), {
+        competitionIds: arrayUnion(competitionId),
+      }).catch(() => {})
+    ))
+  }
+
+  // Map the squad → line-up entries through the SAME resolver a freeze uses, so a
+  // pasted line-up is identical in shape to an inherited one.
+  const entries = resolveSideLineup({ exceptions: [] }, side, { squad })
+  const ref = doc(db, 'matches', matchId)
+  const snap = await getDoc(ref)
+  const m = snap.exists() ? snap.data() : {}
+  const field = side === 'home' ? 'homeLineup' : 'awayLineup'
+  const otherField = side === 'home' ? 'awayLineup' : 'homeLineup'
+  const other = m[otherField] ?? []
+  const lineupPersonIds = [...new Set([...entries, ...other].map(e => e.personId).filter(Boolean))]
+  await updateDoc(ref, {
+    [field]: entries,
+    lineupPersonIds,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid(),
+  })
+  return entries
 }
