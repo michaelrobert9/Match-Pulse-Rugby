@@ -61,19 +61,42 @@ function entryFromSquad(sq, override) {
 }
 
 // The resolved line-up for one side: competition squad minus 'absent'
-// exceptions, with 'override' entries applied. Sorted by shirt number.
+// exceptions, with 'override' entries applied, plus 'added' late additions
+// (players added for THIS fixture only, not in the competition squad). Sorted
+// by shirt number. 'added' is purely additive — it never touches the squad —
+// and, like every exception, is scoped to a side.
 export function resolveSideLineup(match, side, member) {
   const squad = member?.squad ?? []
-  if (squad.length === 0) return []
   const ex = exceptionsFor(match, side)
   const absent = new Set(ex.filter(e => e.type === 'absent').map(e => e.playerId))
   const overrides = new Map(
     ex.filter(e => e.type === 'override').map(e => [e.playerId, e])
   )
-  return squad
+  const entries = squad
     .filter(sq => !absent.has(sq.playerId))
     .map(sq => entryFromSquad(sq, overrides.get(sq.playerId)))
-    .sort((a, b) => (a.shirtNumber ?? 999) - (b.shirtNumber ?? 999))
+
+  // 'added' players not already in the squad — late fixture-level additions.
+  // The exception carries its own name and optional shirt number; position
+  // derives from the number like any rugby entry. Same entry shape as a squad
+  // entry so every reader (scorer, stats, match page) works unchanged.
+  const inSquad = new Set(squad.map(sq => sq.playerId))
+  for (const e of ex) {
+    if (e.type !== 'added' || inSquad.has(e.playerId) || absent.has(e.playerId)) continue
+    const shirtNumber = e.shirtNumber ?? null
+    entries.push({
+      id: `sq-${e.playerId}`,
+      personId: e.playerId,
+      personName: e.playerName ?? e.name ?? '',
+      photoUrl: e.photoUrl ?? null,
+      shirtNumber,
+      position: e.position ?? positionForNumber(shirtNumber),
+      isCaptain: false,
+      isStarter: shirtNumber != null && shirtNumber <= 15,
+    })
+  }
+
+  return entries.sort((a, b) => (a.shirtNumber ?? 999) - (b.shirtNumber ?? 999))
 }
 
 // ── Exception list manipulation (pure; caller writes the patch) ─────────────
