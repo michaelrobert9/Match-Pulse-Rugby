@@ -62,7 +62,7 @@ const sortRows = (rows) => [...rows].sort((a, b) => {
   return (a.shirtNumber ?? 999) - (b.shirtNumber ?? 999)
 })
 
-const STAFF_ROLES = ['Coach', 'Assistant Coach', 'Manager']
+const STAFF_ROLES = ['Coach', 'Manager']
 
 function Chip({ tone, children }) {
   const tones = {
@@ -282,10 +282,13 @@ export default function TeamSheetEditor({
           {rows.length === 0 && (
             <p className="text-sm text-slate-500">
               Paste the team sheet — one player per line, straight from a message or a spreadsheet.
+              Give each player a shirt number (1–15) or a position: enter the number and the
+              position follows; write the position in brackets (e.g. John Doe (Fullback)) and we
+              work out the number. Captain markers (C) are picked up automatically.
             </p>
           )}
           <textarea value={pasteText} onChange={e => setPasteText(e.target.value)} rows={8}
-            placeholder={'1. John Smith\n2. Peter van der Merwe (C)'}
+            placeholder={'1. John Smith\n10 Peter Botha (C)\nMike Jones (Fullback)'}
             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
           <div className="flex justify-end">
             <button type="button" disabled={!pasteText.trim()} onClick={runPaste}

@@ -47,6 +47,47 @@ export function positionForNumber(n) {
   return POSITION_BY_NUMBER[n] ?? REPLACEMENT
 }
 
+// Reverse of the map: a written position → its shirt number. Rugby's number IS
+// the position, so a sheet may give either; where a number is missing we infer
+// it from the position ("what number you could be"). Ambiguous words resolve to
+// the conventional number — Lock → 4 (first in the map), and the aliases below
+// pin Flanker → 7, Wing → 14, Centre → 13, Prop → 1.
+const POSITION_TO_NUMBER = (() => {
+  const m = {}
+  for (const [num, name] of Object.entries(POSITION_BY_NUMBER)) {
+    const key = name.toLowerCase()
+    if (!(key in m)) m[key] = Number(num)     // first wins → Lock = 4
+  }
+  return m
+})()
+
+const POSITION_ALIASES = {
+  'loosehead': 1, 'loose head': 1, 'lhp': 1, 'prop': 1,
+  'hooker': 2, 'hook': 2, 'rake': 2,
+  'tighthead': 3, 'tight head': 3, 'thp': 3,
+  'lock': 4, 'second row': 4, 'secondrow': 4, 'second-row': 4,
+  'blindside': 6, 'blindside flanker': 6, 'blind side flank': 6, 'blindside flank': 6,
+  'openside': 7, 'openside flanker': 7, 'openside flank': 7, 'flanker': 7, 'flank': 7,
+  'eighthman': 8, 'eighth man': 8, 'eight man': 8, 'number 8': 8, 'number eight': 8,
+  'no 8': 8, 'no8': 8, '8th man': 8, 'no. 8': 8,
+  'scrumhalf': 9, 'scrum half': 9, 'scrum-half': 9, 'halfback': 9, 'half back': 9, 'sh': 9,
+  'flyhalf': 10, 'fly half': 10, 'fly-half': 10, 'first five': 10, 'firstfive': 10,
+  'pivot': 10, 'outhalf': 10, 'out half': 10, 'out-half': 10, 'fh': 10, 'no 10': 10,
+  'left wing': 11, 'left winger': 11, 'leftwing': 11,
+  'inside centre': 12, 'inside center': 12, 'second five': 12, 'inside': 12,
+  'outside centre': 13, 'outside center': 13, 'centre': 13, 'center': 13, 'outside': 13,
+  'right wing': 14, 'right winger': 14, 'rightwing': 14, 'wing': 14, 'winger': 14,
+  'fullback': 15, 'full back': 15, 'full-back': 15, 'fb': 15,
+}
+
+export function numberForPosition(phrase) {
+  if (!phrase) return null
+  const key = phrase.trim().toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ')
+  if (key in POSITION_TO_NUMBER) return POSITION_TO_NUMBER[key]
+  if (key in POSITION_ALIASES) return POSITION_ALIASES[key]
+  return null
+}
+
 // ── Name handling ────────────────────────────────────────────────────────────
 
 // Surname particles common on South African sheets. Lowercase in normalised
@@ -154,6 +195,21 @@ function parseLine(rawLine) {
   if (capMatch2) {
     isCaptain = true
     text = text.slice(0, capMatch2.index).trim()
+  }
+
+  // Position instead of a number (rugby: the two are interchangeable — brief §5).
+  // Only a BRACKETED position is inferred — "John Doe (Fullback)", "Sam Roe
+  // (No. 8)" — so a surname like "Lock" or "Wing" is never mistaken for a
+  // position. A number, if the line gave one, always wins.
+  if (number == null) {
+    const posMatch = text.match(/[(（]\s*([^)）]+?)\s*[)）]\s*$/)
+    if (posMatch) {
+      const n = numberForPosition(posMatch[1])
+      if (n != null) {
+        number = n
+        text = text.slice(0, posMatch.index).trim()
+      }
+    }
   }
 
   // "Smith, John" reverses — but only when what follows the comma is a name,
