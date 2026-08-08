@@ -22,10 +22,10 @@ export function isLineupEntryPOM(pom, entry) {
   return false
 }
 
-export function pomColor(pom) {
-  return pom?.color || POM_DEFAULT_COLOR
+export function pomColor(pom, fallback) {
+  return pom?.color || fallback || POM_DEFAULT_COLOR
 }
 
-export function pomBgTint(pom) {
-  return pomColor(pom) + '1F'   // ~12% alpha
+export function pomBgTint(pom, fallback) {
+  return pomColor(pom, fallback) + '1F'   // ~12% alpha
 }

@@ -8,8 +8,11 @@ import {
   fetchMatchByMatchSlug, subscribeMatchByMatchSlug,
   fetchMatchBySeasonSlug, subscribeMatchBySeasonSlug,
   fetchMatchByCompetitionSlug, subscribeMatchByCompetitionSlug,
+  fetchCompetition,
   toDate,
 } from '../lib/queries'
+import { isBulkLineupCompetition, sideIsInherited, resolveSideLineup } from '../lib/lineupResolve'
+import { fetchCompetitionTeamSheet } from '../lib/teamSheetQueries'
 import { configured } from '../firebase'
 import ShareButton from '../components/ShareButton'
 import StatusBadge from '../components/StatusBadge'
@@ -264,6 +267,7 @@ export default function MatchDetail() {
   useSeoMeta({ type: 'match', entity: match })
   const [homePlayers, setHomePlayers] = useState([])
   const [awayPlayers, setAwayPlayers] = useState([])
+  const [inheritedLineups, setInheritedLineups] = useState(null)
   const [loading,     setLoading]     = useState(true)
   const [, setTick]                   = useState(0)
   const lineupsLoaded = useRef(false)
@@ -316,6 +320,32 @@ export default function MatchDetail() {
       .then(([h, a]) => { setHomePlayers(h); setAwayPlayers(a) })
   }, [match?.homeTeamId, match?.awayTeamId])
 
+  // Derived line-ups (tournaments/festivals, brief §4/§9): before the freeze a
+  // fixture's sheet EQUALS the competition squad minus exceptions, so the
+  // public page resolves it from the membership docs rather than the (empty)
+  // stored arrays. Re-resolves whenever the subscribed match doc changes —
+  // an absence marked at the field shows here on the next snapshot.
+  useEffect(() => {
+    if (!match?.competitionId) { setInheritedLineups(null); return }
+    const needHome = sideIsInherited(match, 'home')
+    const needAway = sideIsInherited(match, 'away')
+    if (!needHome && !needAway) { setInheritedLineups(null); return }
+    let cancelled = false
+    fetchCompetition(match.competitionId).then(async c => {
+      if (!c || !isBulkLineupCompetition(c)) return
+      const get = (tid) => tid
+        ? fetchCompetitionTeamSheet(match.competitionId, tid).catch(() => null)
+        : Promise.resolve(null)
+      const [h, a] = await Promise.all([get(match.homeTeamId), get(match.awayTeamId)])
+      if (cancelled) return
+      setInheritedLineups({
+        home: needHome ? resolveSideLineup(match, 'home', h?.member) : [],
+        away: needAway ? resolveSideLineup(match, 'away', a?.member) : [],
+      })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [match])
+
   // Advertise the canonical (clean) URL so search engines and link unfurlers
   // prefer it over any legacy id-based URL the visitor may have arrived through.
   useEffect(() => {
@@ -358,15 +388,23 @@ export default function MatchDetail() {
           personName:  e.personName ?? r?.personName ?? 'Unknown',
           photoUrl:    e.photoUrl ?? r?.photoUrl ?? null,
           shirtNumber: e.shirtNumber ?? r?.shirtNumber ?? null,
+          // Captaincy and position read from the LINE-UP ENTRY, where the team
+          // sheet writes them; the roster join is a legacy fallback only. A
+          // pasted captain would not appear if this joined against the roster.
+          position:    e.position ?? null,
           personSlug:  r?.personSlug ?? null,
-          isCaptain:   r?.isCaptain ?? false,
+          isCaptain:   (e.isCaptain ?? r?.isCaptain) === true,
           isStarter:   !!e.isStarter,
         }
       })
-      .sort((a, b) => (Number(b.isStarter) - Number(a.isStarter)) || ((a.shirtNumber || 99) - (b.shirtNumber || 99)))
+      // Rendered line-ups sort by shirt number — the same order as the review
+      // grid (bench is 16+, so starters lead naturally).
+      .sort((a, b) => ((a.shirtNumber ?? 999) - (b.shirtNumber ?? 999)) || (Number(b.isStarter) - Number(a.isStarter)))
   }
-  const homeSelection = buildSelection(match.homeLineup, homePlayers)
-  const awaySelection = buildSelection(match.awayLineup, awayPlayers)
+  const homeEntries = match.homeLineup?.length ? match.homeLineup : (inheritedLineups?.home ?? [])
+  const awayEntries = match.awayLineup?.length ? match.awayLineup : (inheritedLineups?.away ?? [])
+  const homeSelection = buildSelection(homeEntries, homePlayers)
+  const awaySelection = buildSelection(awayEntries, awayPlayers)
 
   // Running scoreboard clock — counts UP within the current half, exactly as
   // the scorer sees it (it keeps climbing into added time). Hidden during the
@@ -578,7 +616,11 @@ export default function MatchDetail() {
         const awayPom = pomForSide(match, 'away')
         if (!homePom && !awayPom) return null
         const anchor = homePom ?? awayPom
-        const c      = pomColor(anchor)
+        // Colour resolution (line-up display brief §4): competition-configured
+        // POM colour wins; else the awarded player's TEAM colour; else the
+        // platform default. The header follows the anchor side.
+        const anchorTeamCol = (homePom ? match.homeTeamColor : match.awayTeamColor) ?? '#64748b'
+        const c      = pomColor(anchor, anchorTeamCol)
         const label  = (homePom && awayPom) ? 'Players of the Match' : 'Player of the Match'
         const items  = [
           homePom ? { pom: homePom, teamName: match.homeTeamName } : null,
@@ -622,21 +664,28 @@ export default function MatchDetail() {
                 {homeSelection.map(p => {
                   const homePom = pomForSide(match, 'home')
                   const isPom = isLineupEntryPOM(homePom, p)
-                  const c = isPom ? pomColor(homePom) : null
+                  const teamCol = match.homeTeamColor ?? '#64748b'
+                  const c = isPom ? pomColor(homePom, teamCol) : null
                   return (
+                    // Line-up row order: number slot → captain slot → name (no
+                    // avatar). The © slot is reserved on EVERY row so names
+                    // stay aligned; the © renders in the TEAM's colour (slate
+                    // fallback), 14px bold — the armband reads at a glance.
                     <div key={p.id}
                       className={`flex items-center gap-2 ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
-                      style={isPom ? { backgroundColor: pomBgTint(homePom) } : undefined}>
-                      <span className="font-mono text-[11px] text-slate-400 w-5 text-right shrink-0">{p.shirtNumber ?? '–'}</span>
-                      <PersonAvatar name={p.personName} photoUrl={p.photoUrl} size={20} />
+                      style={isPom ? { backgroundColor: pomBgTint(homePom, teamCol) } : undefined}>
+                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-right shrink-0">{p.shirtNumber ?? '–'}</span>
+                      <span className="w-5 shrink-0 text-sm font-bold leading-none text-center"
+                        style={{ color: teamCol }}>{p.isCaptain ? '©' : ''}</span>
                       {p.personId
                         ? <Link to={playerUrl({ id: p.personId, slug: p.personSlug })}
-                            className={`text-xs truncate flex-1 transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
+                            className={`text-xs truncate transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</Link>
-                        : <span className={`text-xs truncate flex-1 ${isPom ? 'font-semibold' : 'text-slate-700'}`}
+                        : <span className={`text-xs truncate ${isPom ? 'font-semibold' : 'text-slate-700'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</span>}
+                      {p.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{p.position}</span>}
+                      <span className="flex-1" />
                       {isPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: c }}>POTM</span>}
-                      {p.isCaptain && <span className="text-[9px] text-amber-600 font-bold shrink-0">©</span>}
                     </div>
                   )
                 })}
@@ -653,21 +702,26 @@ export default function MatchDetail() {
                 {awaySelection.map(p => {
                   const awayPom = pomForSide(match, 'away')
                   const isPom = isLineupEntryPOM(awayPom, p)
-                  const c = isPom ? pomColor(awayPom) : null
+                  const teamCol = match.awayTeamColor ?? '#64748b'
+                  const c = isPom ? pomColor(awayPom, teamCol) : null
                   return (
+                    // Mirror of the home row: name ← captain slot ← number, so
+                    // the two columns read outward from the centre line.
                     <div key={p.id}
                       className={`flex items-center gap-2 justify-end ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
-                      style={isPom ? { backgroundColor: pomBgTint(awayPom) } : undefined}>
-                      {p.isCaptain && <span className="text-[9px] text-amber-600 font-bold shrink-0">©</span>}
+                      style={isPom ? { backgroundColor: pomBgTint(awayPom, teamCol) } : undefined}>
                       {isPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: c }}>POTM</span>}
+                      <span className="flex-1" />
+                      {p.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{p.position}</span>}
                       {p.personId
                         ? <Link to={playerUrl({ id: p.personId, slug: p.personSlug })}
-                            className={`text-xs truncate flex-1 text-right transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
+                            className={`text-xs truncate text-right transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</Link>
-                        : <span className={`text-xs truncate flex-1 text-right ${isPom ? 'font-semibold' : 'text-slate-700'}`}
+                        : <span className={`text-xs truncate text-right ${isPom ? 'font-semibold' : 'text-slate-700'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</span>}
-                      <PersonAvatar name={p.personName} photoUrl={p.photoUrl} size={20} />
-                      <span className="font-mono text-[11px] text-slate-400 w-5 shrink-0">{p.shirtNumber ?? '–'}</span>
+                      <span className="w-5 shrink-0 text-sm font-bold leading-none text-center"
+                        style={{ color: teamCol }}>{p.isCaptain ? '©' : ''}</span>
+                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 shrink-0">{p.shirtNumber ?? '–'}</span>
                     </div>
                   )
                 })}

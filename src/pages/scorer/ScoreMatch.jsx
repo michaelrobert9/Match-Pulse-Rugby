@@ -10,8 +10,12 @@ import {
   addPersonToMatchLineup, removePersonFromMatchLineup, toggleLineupStarter, updateMatchLineupEntry, updateMatch,
   setPlayerOfMatch, setPlayersOfMatch, syncFixtureMembership, swapFixtureSides, resetMatch,
   setFixtureNotPlayed, setFixtureWalkover, abandonMatch, letAbandonedStand, revertFixtureOutcome,
-  submitFixtureResult,
+  submitFixtureResult, updateFixtureExceptions,
 } from '../../lib/adminQueries'
+import { isBulkLineupCompetition, sideIsInherited, toggleAbsent, setNumberOverride } from '../../lib/lineupResolve'
+import { fetchCompetitionTeamSheet, saveCompetitionTeamSheet } from '../../lib/teamSheetQueries'
+import FixtureSquadPanel from '../../components/FixtureSquadPanel'
+import TeamSheetEditor from '../../components/TeamSheetEditor'
 import { fetchCompetition } from '../../lib/queries'
 import { walkoverScore, outcomeBanner } from '../../lib/fixtureResult'
 import FixtureBanner from '../../components/FixtureBanner'
@@ -219,6 +223,13 @@ export default function ScoreMatch() {
   // competition is known; falls back to single-mode + default colour otherwise.
   const [potmPerTeam, setPotmPerTeam] = useState(false)
   const [potmColor,   setPotmColor]   = useState('')
+  // Bulk team sheets (tournaments/festivals): membership docs carrying each
+  // side's competition squad, and the late-addition paste overlay (brief §9).
+  const [bulkComp,        setBulkComp]        = useState(false)
+  const [sheetMembers,    setSheetMembers]    = useState({ home: null, away: null })
+  const [sheetEditorSide, setSheetEditorSide] = useState(null)
+  const [sheetSaving,     setSheetSaving]     = useState(false)
+  const [sheetError,      setSheetError]      = useState('')
   // Place-kick competition: optional knockout decider, only relevant when the
   // match ends level.
   const [kickCompEnabled, setKickCompEnabled] = useState(false)
@@ -413,8 +424,21 @@ export default function ScoreMatch() {
       if (!c) return
       setPotmPerTeam(c.rules?.potm?.perTeam === true)
       setPotmColor(c.rules?.potm?.color || '')
+      setBulkComp(isBulkLineupCompetition(c))
     }).catch(() => {})
   }, [match?.competitionId])
+
+  // Competition squads for the two sides — the derived fixture line-up's
+  // source. Loaded only for tournament/festival fixtures.
+  useEffect(() => {
+    if (!bulkComp || !match?.competitionId) return
+    const load = (teamId) => teamId
+      ? fetchCompetitionTeamSheet(match.competitionId, teamId).catch(() => null)
+      : Promise.resolve(null)
+    Promise.all([load(match.homeTeamId), load(match.awayTeamId)]).then(([h, a]) => {
+      setSheetMembers({ home: h?.member ?? null, away: a?.member ?? null })
+    })
+  }, [bulkComp, match?.competitionId, match?.homeTeamId, match?.awayTeamId])
 
   if (loading) return (
     <div className={`min-h-screen ${t.root} flex items-center justify-center`}>
@@ -697,6 +721,53 @@ export default function ScoreMatch() {
     setPotmDraft({ home: null, away: null })
     setPotmSide(homeHas ? 'home' : 'away')
     setPotmStep(true)
+  }
+
+  // ── Inherited fixture line-up (brief §9) ──────────────────────────────────
+  // Absences and per-fixture number overrides are exceptions on the match doc;
+  // the squad itself is never touched from here.
+  async function handleToggleAbsent(side, playerId) {
+    await updateFixtureExceptions(id, toggleAbsent(match?.exceptions, side, playerId)).catch(() => {})
+  }
+  async function handleOverride(side, playerId, shirtNumber) {
+    await updateFixtureExceptions(id, setNumberOverride(match?.exceptions, side, playerId, shirtNumber)).catch(() => {})
+  }
+  async function handleClearAll(side) {
+    // Blank-slate case: mark every squad player on this side absent.
+    let ex = match?.exceptions ?? []
+    for (const sq of sheetMembers[side]?.squad ?? []) {
+      if (!ex.some(e => e.side === side && e.playerId === sq.playerId && e.type === 'absent')) {
+        ex = [...ex, { playerId: sq.playerId, side, type: 'absent' }]
+      }
+    }
+    await updateFixtureExceptions(id, ex).catch(() => {})
+  }
+  function openSheetEditor(side) {
+    if (allPeople.length === 0) fetchAllPeople().then(setAllPeople).catch(() => {})
+    setSheetError('')
+    setSheetEditorSide(side)
+  }
+  // Late additions from the fixture screen run through the same grid and add
+  // to the COMPETITION squad, not just this fixture.
+  async function handleSheetEditorConfirm({ rows, staff }) {
+    const side = sheetEditorSide
+    const teamId = side === 'home' ? match.homeTeamId : match.awayTeamId
+    setSheetSaving(true)
+    setSheetError('')
+    try {
+      await saveCompetitionTeamSheet(match.competitionId, teamId, {
+        rows, staff,
+        orgId: sheetMembers[side]?.organizationId ?? null,
+        orgName: sheetMembers[side]?.displaySnapshot?.orgName ?? null,
+      })
+      const fresh = await fetchCompetitionTeamSheet(match.competitionId, teamId).catch(() => null)
+      setSheetMembers(prev => ({ ...prev, [side]: fresh?.member ?? prev[side] }))
+      setSheetEditorSide(null)
+    } catch (e) {
+      setSheetError(e.message || 'Saving the team sheet failed.')
+    } finally {
+      setSheetSaving(false)
+    }
   }
 
   // Attach the competition's POM colour to every award at write time — see the
@@ -1728,6 +1799,21 @@ export default function ScoreMatch() {
             </div>
           )}
 
+          {/* Inherited fixture (tournament/festival with a pasted squad): the
+              §9 screen — everyone in by default, exceptions only. Otherwise
+              the existing one-at-a-time lineup tools, untouched. */}
+          {sideIsInherited(match, lineupSide) && (sheetMembers[lineupSide]?.squad?.length ?? 0) > 0 ? (
+            <FixtureSquadPanel
+              t={t} bright={bright} match={match} side={lineupSide}
+              teamColor={teamColor(lineupSide)}
+              member={sheetMembers[lineupSide]}
+              onToggleAbsent={handleToggleAbsent}
+              onOverride={handleOverride}
+              onOpenPaste={openSheetEditor}
+              onClearAll={handleClearAll}
+            />
+          ) : (
+          <>
           {/* Entries split by starter / sub */}
           {(() => {
             const entries = (lineupSide === 'home' ? match.homeLineup : match.awayLineup) ?? []
@@ -1835,7 +1921,34 @@ export default function ScoreMatch() {
             className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm uppercase tracking-wider rounded-xl py-3">
             + Add player
           </button>
+          </>
+          )}
         </Sheet>
+      )}
+
+      {/* Late-addition paste from the fixture screen — same grid, writes to the
+          COMPETITION squad (brief §9), never just this fixture. */}
+      {sheetEditorSide && (
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-canvas">
+          <div className="max-w-3xl mx-auto px-4 py-6">
+            <h2 className="font-display font-black text-slate-900 text-xl mb-1">
+              {teamName(sheetEditorSide)} — team sheet
+            </h2>
+            <p className="text-slate-500 text-sm mb-5">
+              Additions here join the competition squad and flow to every remaining fixture.
+            </p>
+            <TeamSheetEditor
+              people={allPeople}
+              orgId={sheetMembers[sheetEditorSide]?.organizationId ?? null}
+              initialSquad={sheetMembers[sheetEditorSide]?.squad ?? null}
+              initialStaff={sheetMembers[sheetEditorSide]?.staff ?? null}
+              saving={sheetSaving}
+              error={sheetError}
+              onConfirm={handleSheetEditorConfirm}
+              onCancel={() => setSheetEditorSide(null)}
+            />
+          </div>
+        </div>
       )}
 
       {/* Add player to lineup */}
