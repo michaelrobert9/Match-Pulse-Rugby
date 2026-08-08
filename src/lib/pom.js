@@ -22,6 +22,10 @@ export function isLineupEntryPOM(pom, entry) {
   return false
 }
 
+// Colour resolution order: a competition-configured POM colour wins; otherwise
+// the caller may pass the awarded player's TEAM colour as the fallback (general
+// fixtures take the team's identity rather than one platform-wide gold); the
+// historical amber remains the last resort for legacy data with neither.
 export function pomColor(pom, fallback) {
   return pom?.color || fallback || POM_DEFAULT_COLOR
 }
