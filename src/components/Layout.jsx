@@ -1,12 +1,14 @@
 import { Outlet, Link } from 'react-router-dom'
 import Nav from './Nav'
 import InstallBanner from './InstallBanner'
+import ClaimPrompt from './ClaimPrompt'
 
 export default function Layout() {
   const year = new Date().getFullYear()
   return (
     <div className="min-h-screen bg-canvas flex flex-col">
       <Nav />
+      <ClaimPrompt />
       <InstallBanner />
       <main className="flex-1"><Outlet /></main>
       <footer className="border-t border-slate-200 bg-white">

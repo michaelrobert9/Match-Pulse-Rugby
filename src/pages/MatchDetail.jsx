@@ -20,6 +20,7 @@ import FixtureBanner from '../components/FixtureBanner'
 import { MatchTeamIdentity, MatchTeamCrest } from '../components/TeamIdentity'
 import PersonAvatar from '../components/PersonAvatar'
 import { pomForSide, isLineupEntryPOM, pomColor, pomBgTint } from '../lib/pom'
+import { teamAccent } from '../lib/teamAccent'
 import { playerUrl, matchUrl } from '../lib/slugify'
 import { gameMinuteLabel, periodElapsedMs, formatClock } from '../lib/matchClock'
 import { SCORE_LABEL, SCORE_POINTS, scorerLabel, matchTries, cardLabel, cardDurationText, cardCategory } from '../lib/rugbyScoring'
@@ -619,7 +620,7 @@ export default function MatchDetail() {
         // Colour resolution (line-up display brief §4): competition-configured
         // POM colour wins; else the awarded player's TEAM colour; else the
         // platform default. The header follows the anchor side.
-        const anchorTeamCol = (homePom ? match.homeTeamColor : match.awayTeamColor) ?? '#64748b'
+        const anchorTeamCol = teamAccent(homePom ? match.homeTeamColor : match.awayTeamColor)
         const c      = pomColor(anchor, anchorTeamCol)
         const label  = (homePom && awayPom) ? 'Players of the Match' : 'Player of the Match'
         const items  = [
@@ -664,7 +665,7 @@ export default function MatchDetail() {
                 {homeSelection.map(p => {
                   const homePom = pomForSide(match, 'home')
                   const isPom = isLineupEntryPOM(homePom, p)
-                  const teamCol = match.homeTeamColor ?? '#64748b'
+                  const teamCol = teamAccent(match.homeTeamColor)
                   const c = isPom ? pomColor(homePom, teamCol) : null
                   return (
                     // Line-up row order: number slot → captain slot → name (no
@@ -702,7 +703,7 @@ export default function MatchDetail() {
                 {awaySelection.map(p => {
                   const awayPom = pomForSide(match, 'away')
                   const isPom = isLineupEntryPOM(awayPom, p)
-                  const teamCol = match.awayTeamColor ?? '#64748b'
+                  const teamCol = teamAccent(match.awayTeamColor)
                   const c = isPom ? pomColor(awayPom, teamCol) : null
                   return (
                     // Mirror of the home row: name ← captain slot ← number, so

@@ -385,7 +385,7 @@ function RevokeClaimSection({ person, onRevoked }) {
       await revokeProfileClaim(person.id)
       onRevoked({
         ...(person.preClaimSnapshot ?? {}),
-        managerUids: [], claimStatus: 'unclaimed',
+        ownerUid: null, guardianUids: [], claimStatus: 'unclaimed',
         claimedByUid: null, preClaimSnapshot: null,
       })
     } catch (e) {
@@ -397,7 +397,7 @@ function RevokeClaimSection({ person, onRevoked }) {
     <div className="mx-4 mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
       <div className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-1">Claimed profile</div>
       <p className="text-[12px] text-slate-600 leading-relaxed mb-2.5">
-        Claimed by <span className="font-mono">{person.claimedByUid ?? (person.managerUids ?? [])[0] ?? 'unknown'}</span>.
+        Claimed by <span className="font-mono">{person.claimedByUid ?? person.ownerUid ?? (person.guardianUids ?? [])[0] ?? 'unknown'}</span>.
         Revoking restores the pre-claim details and blocks that account from re-claiming.
       </p>
       {err && <p className="text-red-600 text-xs mb-2">{err}</p>}

@@ -1652,14 +1652,18 @@ const CLAIM_SNAPSHOT_FIELDS = [
   'bio', 'dateOfBirth', 'position', 'nationality',
 ]
 
-// Self-service claim (ownerless-profiles addendum A4). The whole gate is a
-// verified email address — it proves the claimer controls a real inbox and
-// nothing more (a deliberate, recorded decision; master-admin revocation is
-// the recovery path). On claim, managerUids becomes exactly [claimer] and
-// claimStatus flips; nothing migrates — the profile already holds the
-// history. For an under-18 the claim comes from the parent's account: same
-// flow, same rule, no separate path.
-export async function claimPlayerProfile(personId) {
+// Self-service claim (ownerless-profiles addendum A4; ownership settled by the
+// resolution round Part 1.1). The gate is a verified email — it proves the
+// claimer controls a real inbox and nothing more (a deliberate, recorded
+// decision; master-admin revocation is the recovery path). Ownership is three
+// fields: a player claiming their own profile sets ownerUid; a parent claiming
+// for the player adds themselves to guardianUids. This feature NEVER writes
+// managerUids — there is no manager-claimer. Nothing migrates; the profile
+// already holds the history.
+export async function claimPlayerProfile(personId, relationship = 'player') {
+  if (relationship !== 'player' && relationship !== 'parent') {
+    throw new Error('Choose whether you are the player or a parent/guardian.')
+  }
   const user = auth?.currentUser
   if (!user) throw new Error('You must be signed in to claim a profile.')
   await user.reload().catch(() => {})
@@ -1685,8 +1689,11 @@ export async function claimPlayerProfile(personId) {
   }
   const snapshot = {}
   for (const k of CLAIM_SNAPSHOT_FIELDS) snapshot[k] = p[k] ?? null
+  const ownership = relationship === 'parent'
+    ? { guardianUids: [user.uid] }
+    : { ownerUid: user.uid }
   await updateDoc(ref, {
-    managerUids: [user.uid],
+    ...ownership,
     claimStatus: 'claimed',
     claimedAt: serverTimestamp(),
     claimedByUid: user.uid,
@@ -1697,20 +1704,23 @@ export async function claimPlayerProfile(personId) {
 }
 
 // Master-admin revocation (addendum A4): any claim, any time, no time limit.
-// Restores the pre-claim snapshot, empties managerUids, returns the profile to
-// unclaimed, blocks the revoked uid from re-claiming, and audits the action.
+// Restores the pre-claim snapshot, clears the ownership fields the claim set
+// (ownerUid / guardianUids — never managerUids, which this feature does not
+// touch), returns the profile to unclaimed, blocks the revoked uid from
+// re-claiming, and audits the action. Runs as a platform-admin write.
 export async function revokeProfileClaim(personId) {
   const ref = doc(db, 'people', personId)
   const snap = await getDoc(ref)
   if (!snap.exists()) throw new Error('Profile not found.')
   const p = snap.data()
-  const revokedUid = p.claimedByUid ?? (p.managerUids ?? [])[0] ?? null
+  const revokedUid = p.claimedByUid ?? p.ownerUid ?? (p.guardianUids ?? [])[0] ?? null
   const restore = {}
   const snapshot = p.preClaimSnapshot ?? {}
   for (const k of CLAIM_SNAPSHOT_FIELDS) restore[k] = snapshot[k] ?? null
   await updateDoc(ref, {
     ...restore,
-    managerUids: [],
+    ownerUid: null,
+    guardianUids: [],
     claimStatus: 'unclaimed',
     claimedAt: null,
     claimedByUid: null,
