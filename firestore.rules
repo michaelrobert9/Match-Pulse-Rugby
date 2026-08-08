@@ -352,16 +352,16 @@ service cloud.firestore {
                  .hasOnly(['competitionIds'])
             && request.resource.data.get('competitionIds', [])
                  .hasAll(resource.data.get('competitionIds', [])))
-        // Self-service CLAIM (ownerless-profiles addendum A4/A5). The whole
-        // gate is a verified email: it confirms the address is real and the
-        // person controls it, nothing more (a deliberate, recorded decision —
-        // volume does not justify more friction yet; master-admin revocation
-        // is the recovery path). The write must set managerUids to EXACTLY the
-        // caller (a claim naming any other uid is rejected), flip claimStatus
-        // to claimed, and may attach the pre-claim snapshot + audit trail. A
-        // claimed profile is not claimable again; a revoked uid is blocked.
-        // For a player under 18 the claim comes from the parent's account —
-        // same flow, same rule, no separate path.
+        // Self-service CLAIM (ownerless-profiles addendum A4; ownership settled
+        // by the resolution round Part 1.1). The gate is a verified email —
+        // nothing more (a deliberate, recorded decision; master-admin
+        // revocation is the recovery path). Ownership is THREE fields: a
+        // self-claim (the player) sets ownerUid to the caller; a parent claim
+        // adds the caller to guardianUids. This feature NEVER writes
+        // managerUids — there is no manager-claimer. A claim naming any other
+        // uid is rejected; a claimed profile is not claimable again; a revoked
+        // uid is blocked. For a player under 18 the parent claims from their
+        // own account — same flow, same rule, no separate path.
         || (isSignedIn()
             && request.auth.token.get('email_verified', false) == true
             && resource.data.get('claimStatus', 'unclaimed') != 'claimed'
@@ -369,10 +369,18 @@ service cloud.firestore {
             && resource.data.get('guardianUids', []).size() == 0
             && resource.data.get('managerUids', []).size() == 0
             && !(request.auth.uid in resource.data.get('claimBlockedUids', []))
-            && request.resource.data.get('managerUids', []) == [request.auth.uid]
             && request.resource.data.get('claimStatus', '') == 'claimed'
+            && request.resource.data.get('managerUids', []).size() == 0
+            && (
+                 // Player claims their own profile.
+                 (request.resource.data.get('ownerUid', null) == request.auth.uid
+                   && request.resource.data.get('guardianUids', []).size() == 0)
+                 // Parent/guardian claims for the player.
+                 || (request.resource.data.get('ownerUid', null) == null
+                   && request.resource.data.get('guardianUids', []) == [request.auth.uid])
+               )
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['managerUids', 'claimStatus', 'claimedAt', 'claimedByUid',
+                 .hasOnly(['ownerUid', 'guardianUids', 'claimStatus', 'claimedAt', 'claimedByUid',
                            'preClaimSnapshot', 'claimAudit', 'updatedAt', 'updatedBy']));
 
       allow delete: if isPlatformAdmin() || controlsPerson(resource.data);

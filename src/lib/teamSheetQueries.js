@@ -154,7 +154,7 @@ export async function saveCompetitionTeamSheet(competitionId, teamId, {
     }
     squad.push({
       playerId: personId,
-      name: fullName,
+      playerName: fullName,
       photoUrl: photoUrl ?? null,
       shirtNumber: row.shirtNumber ?? null,
       position: row.position ?? positionForNumber(row.shirtNumber) ?? null,

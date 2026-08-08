@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { isAbsent, overrideFor } from '../lib/lineupResolve'
 import { positionForNumber } from '../lib/teamSheet'
+import { teamAccent } from '../lib/teamAccent'
 
 // Fixture line-up screen for an inherited (tournament/festival) side — brief §9.
 //
@@ -79,10 +80,10 @@ export default function FixtureSquadPanel({
         className="flex-1 min-w-0 min-h-[44px] flex items-center gap-2 text-left">
         {p.isCaptain && (
           <span className="text-sm font-bold leading-none shrink-0"
-            style={{ color: teamColor ?? '#64748b' }}>©</span>
+            style={{ color: teamAccent(teamColor) }}>©</span>
         )}
         <span className={`text-sm font-medium truncate ${absent ? '' : bright ? 'text-slate-900' : 'text-white'}`}>
-          {p.name}
+          {p.playerName ?? p.name}
         </span>
         {p.position && (
           <span className={`text-[11px] shrink-0 ${t.muted}`}>{p.position}</span>

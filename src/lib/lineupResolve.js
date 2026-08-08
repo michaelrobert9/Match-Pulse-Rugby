@@ -51,7 +51,7 @@ function entryFromSquad(sq, override) {
   return {
     id: `sq-${sq.playerId}`,
     personId: sq.playerId,
-    personName: sq.name ?? '',
+    personName: sq.playerName ?? sq.name ?? '',
     photoUrl: sq.photoUrl ?? null,
     shirtNumber,
     position: position ?? null,

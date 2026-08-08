@@ -466,20 +466,23 @@ export default function PlayerProfile() {
 function ClaimCard({ person, onClaimed }) {
   const [busy, setBusy] = useState(false)
   const [err,  setErr]  = useState('')
-  const [needsVerify, setNeedsVerify] = useState(false)
+  const [needsVerify, setNeedsVerify] = useState(null)   // holds the chosen relationship
   const [linkSent, setLinkSent] = useState(false)
 
-  // One flow for everyone (addendum A4): the player claims their own profile;
-  // for an under-18 the parent claims from their account. The gate is a
-  // verified email and nothing more.
-  async function claim() {
-    if (!window.confirm(`Claim ${person.fullName}? You'll manage this profile.`)) return
+  // Ownership is three fields (resolution round Part 1.1): a player claiming
+  // sets ownerUid; a parent claiming for an under-18 adds to guardianUids.
+  // Never managerUids. The gate is a verified email and nothing more.
+  async function claim(relationship) {
+    const label = relationship === 'player' ? 'This is you' : `You are ${person.fullName}'s parent/guardian`
+    if (!window.confirm(`${label}? You'll manage this profile.`)) return
     setBusy(true); setErr('')
     try {
-      await claimPlayerProfile(person.id)
-      onClaimed({ managerUids: ['me'], claimStatus: 'claimed' })
+      await claimPlayerProfile(person.id, relationship)
+      onClaimed(relationship === 'parent'
+        ? { guardianUids: ['me'], claimStatus: 'claimed' }
+        : { ownerUid: 'me',       claimStatus: 'claimed' })
     } catch (e) {
-      if (e.code === 'claim/email-unverified') setNeedsVerify(true)
+      if (e.code === 'claim/email-unverified') setNeedsVerify(relationship)
       else setErr(e.message || 'Could not claim this profile.')
     } finally { setBusy(false) }
   }
@@ -514,17 +517,23 @@ function ClaimCard({ person, onClaimed }) {
                   className="bg-white border border-emerald-300 hover:border-emerald-400 disabled:opacity-50 text-emerald-700 font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
                   {linkSent ? 'Link sent — check your inbox' : 'Email me a verification link'}
                 </button>
-                <button onClick={claim} disabled={busy}
+                <button onClick={() => claim(needsVerify)} disabled={busy}
                   className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
                   {busy ? '…' : "I've verified — claim"}
                 </button>
               </div>
             </div>
           ) : (
-            <button onClick={claim} disabled={busy}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
-              {busy ? '…' : 'Claim this profile'}
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => claim('player')} disabled={busy}
+                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
+                {busy ? '…' : "I'm the player"}
+              </button>
+              <button onClick={() => claim('parent')} disabled={busy}
+                className="bg-white border border-emerald-300 hover:border-emerald-400 disabled:opacity-50 text-emerald-700 font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
+                {busy ? '…' : "I'm a parent"}
+              </button>
+            </div>
           )}
         </div>
       </div>
