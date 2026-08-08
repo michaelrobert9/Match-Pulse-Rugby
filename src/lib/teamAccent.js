@@ -1,19 +1,18 @@
 // teamAccent(color) — resolves a raw team colour to a SAFE accent for the
 // captain marker and POM tints (line-up display brief §3).
 //
-// ⚠️ PLACEHOLDER. The canonical teamAccent is authored by netball and, once it
-// lands, is copied here BYTE-IDENTICAL (resolution round Part 1.4) — like
-// pom.js. Do not treat this as the permanent implementation; it exists only so
-// the captain/POM colour call sites are already routed through one function,
-// making the swap a single-file replace. Netball owns the real thresholds.
+// ⚠️ INTERIM. The canonical teamAccent is authored by netball and, once it is
+// actually published, is copied here BYTE-IDENTICAL (closing round Part 1.4) —
+// like pom.js. As of this commit it is NOT present in the netball repo (grep-
+// clean on main), so there is nothing to copy yet; this implementation follows
+// the PUBLISHED SPEC exactly so behaviour is correct in the meantime:
 //
-// Two hazards it guards against, both raised in §3:
-//   1. A team colour near the live token #E5484D reads as the live-match
-//      indicator. Red means live and nothing else — so colours too close to
-//      that hue fall back to slate.
-//   2. A pale colour at 14px bold on white fails contrast; low-luminance
-//      guard also falls back to slate.
-// The slate fallback #64748b is the escape hatch in both cases.
+//   • WCAG contrast ratio ≥ 3:1 against white, else neutral fallback
+//   • ≥ 70 RGB distance from the live token #E5484D, else neutral fallback
+//   • neutral fallback is slate #64748b
+//
+// Replace this whole file with netball's published version verbatim when it
+// lands; do not treat these thresholds as rugby's own permanent implementation.
 
 const SLATE = '#64748b'
 const LIVE  = { r: 0xE5, g: 0x48, b: 0x4d }
@@ -30,7 +29,7 @@ function parseHex(hex) {
   }
 }
 
-// Relative luminance (WCAG). Used for the contrast-against-white guard.
+// Relative luminance (WCAG 2.x).
 function luminance({ r, g, b }) {
   const f = c => {
     const s = c / 255
@@ -39,14 +38,19 @@ function luminance({ r, g, b }) {
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
 }
 
+// Contrast ratio against white (L = 1.0).
+function contrastOnWhite(c) {
+  return 1.05 / (luminance(c) + 0.05)
+}
+
+function distanceFromLive(c) {
+  return Math.sqrt((c.r - LIVE.r) ** 2 + (c.g - LIVE.g) ** 2 + (c.b - LIVE.b) ** 2)
+}
+
 export function teamAccent(color) {
   const c = parseHex(color)
   if (!c) return SLATE
-  // Too pale on white → slate.
-  if (luminance(c) > 0.6) return SLATE
-  // Too close to the live token → slate. Simple RGB distance; the canonical
-  // netball version may use a proper hue check.
-  const dist = Math.sqrt((c.r - LIVE.r) ** 2 + (c.g - LIVE.g) ** 2 + (c.b - LIVE.b) ** 2)
-  if (dist < 60) return SLATE
+  if (contrastOnWhite(c) < 3) return SLATE       // too pale on white
+  if (distanceFromLive(c) < 70) return SLATE     // reads as the live token
   return color
 }

@@ -39,17 +39,18 @@ function toEditorRows(parsedRows, people, orgId) {
 function fromSquad(squad) {
   return (squad ?? []).map(s => {
     const derived = positionForNumber(s.shirtNumber)
+    const displayName = s.playerName ?? s.name ?? ''   // ?? name: pre-rename squad docs
     return {
       key: nextKey(),
-      firstName: s.name.split(' ').slice(0, -1).join(' '),
-      lastName: s.name.split(' ').slice(-1).join(' '),
+      firstName: displayName.split(' ').slice(0, -1).join(' '),
+      lastName: displayName.split(' ').slice(-1).join(' '),
       shirtNumber: s.shirtNumber,
       position: s.position ?? derived,
       positionUnlocked: (s.position ?? derived) !== derived,
       isCaptain: s.isCaptain === true,
       unreadable: false,
       raw: '',
-      match: { status: 'linked', personId: s.playerId, personName: s.name, photoUrl: s.photoUrl ?? null },
+      match: { status: 'linked', personId: s.playerId, personName: displayName, photoUrl: s.photoUrl ?? null },
     }
   })
 }

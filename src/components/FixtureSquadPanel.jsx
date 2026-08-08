@@ -83,7 +83,7 @@ export default function FixtureSquadPanel({
             style={{ color: teamAccent(teamColor) }}>©</span>
         )}
         <span className={`text-sm font-medium truncate ${absent ? '' : bright ? 'text-slate-900' : 'text-white'}`}>
-          {p.name}
+          {p.playerName ?? p.name}
         </span>
         {p.position && (
           <span className={`text-[11px] shrink-0 ${t.muted}`}>{p.position}</span>
