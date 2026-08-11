@@ -147,7 +147,7 @@ export default function OpponentSelector({ orgTeams = [], excludeTeamId, orgId, 
             onClick={() => setAllowInternal(v => !v)}
             className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1 mb-1.5">
             <ChevronDown className={`w-3 h-3 transition-transform ${allowInternal ? '' : '-rotate-90'}`} />
-            Allow internal fixture
+            Allow internal match
           </button>
           {allowInternal && (
             <div className="flex flex-wrap gap-2">
