@@ -103,7 +103,7 @@ export default function TeamSheetPage() {
         {state === 'ready' && !isBulkLineupCompetition(competition) && (
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <p className="text-sm text-slate-600">
-              Bulk team sheets are for tournaments and festivals. League squads are managed per fixture, as before.
+              Bulk team sheets are for tournaments and festivals. League squads are managed per match, as before.
             </p>
           </div>
         )}

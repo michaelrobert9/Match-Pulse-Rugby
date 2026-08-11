@@ -90,7 +90,7 @@ function CompRecord({ record }) {
   // A record is either a competition slice or a season roster entry — the
   // roster entry carries the team's standalone-fixture (friendly) stats.
   const isRoster = !record.competitionId
-  const name   = record.competitionName || (isRoster ? 'Friendlies & other fixtures' : 'Fixtures')
+  const name   = record.competitionName || (isRoster ? 'Friendlies & other matches' : 'Matches')
   const season = record.competitionSeason || record.season || null
   return (
     <div className="flex items-center gap-2 py-1">
@@ -186,7 +186,7 @@ function OrgSection({ orgId, org, teams }) {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 px-4 py-5 text-center shadow-sm">
-          <p className="text-slate-400 text-xs">No fixtures recorded yet.</p>
+          <p className="text-slate-400 text-xs">No matches recorded yet.</p>
         </div>
       )}
     </div>
@@ -206,7 +206,7 @@ function FixtureCard({ match, personId, canSelfRemove, onRemoved }) {
 
   async function handleSelfRemove(e) {
     e.preventDefault()
-    if (!confirm('Remove this player from the fixture lineup?')) return
+    if (!confirm('Remove this player from the match lineup?')) return
     setRemoving(true)
     try {
       await removeSelfFromFixture(match.id, personId)
@@ -432,10 +432,10 @@ export default function PlayerProfile() {
 
       {/* Fixtures */}
       <section>
-        <SectionHeader title={`Fixtures${playerMatches.length > 0 ? ` (${playerMatches.length})` : ''}`} />
+        <SectionHeader title={`Matches${playerMatches.length > 0 ? ` (${playerMatches.length})` : ''}`} />
         {playerMatches.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 px-4 py-8 text-center shadow-sm">
-            <p className="text-slate-500 text-sm">No fixtures listed yet.</p>
+            <p className="text-slate-500 text-sm">No matches listed yet.</p>
           </div>
         ) : (
           <>
@@ -449,7 +449,7 @@ export default function PlayerProfile() {
             </div>
             {playerMatches.length > 20 && (
               <p className="text-center text-sm text-slate-400 pt-2">
-                Showing 20 of {playerMatches.length} fixtures
+                Showing 20 of {playerMatches.length} matches
               </p>
             )}
           </>
