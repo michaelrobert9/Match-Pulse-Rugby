@@ -49,6 +49,7 @@ import { PeopleList, NewPerson, EditPerson } from './pages/admin/PeopleAdmin'
 import { CompetitionsList as AdminCompetitionsList } from './pages/admin/Competitions'
 import { FixturesList as AdminFixturesList } from './pages/admin/Fixtures'
 import ResultQueue from './pages/admin/ResultQueue'
+import TeamGovernance from './pages/admin/TeamGovernance'
 import InstallHelp from './pages/InstallHelp'
 import Permissions from './pages/admin/Permissions'
 import UserAccess from './pages/admin/UserAccess'
@@ -215,6 +216,7 @@ export default function App() {
           <Route path="competitions"                element={<AdminCompetitionsList />} />
           <Route path="fixtures"                    element={<AdminFixturesList />} />
           <Route path="result-queue"                element={<ResultQueue />} />
+          <Route path="team-governance"             element={<TeamGovernance />} />
           {/* Old admin detail/edit/create pages redirect to the manage flow. */}
           <Route path="competitions/new"            element={<Navigate to="/manage/competitions/new" replace />} />
           <Route path="competitions/:id"            element={<RedirectToCompetitionManager />} />
