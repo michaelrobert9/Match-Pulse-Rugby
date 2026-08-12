@@ -80,6 +80,16 @@ export function competitionLifecycle(competition, now = Date.now()) {
   return 'upcoming' // no start date yet
 }
 
+// The single effective status shown for a competition. Visibility (the
+// `published` flag) takes precedence: an unpublished competition reads as
+// "unpublished" regardless of its dates. Once published it reflects the derived
+// lifecycle. This is the one source of truth for both CompetitionStatusBadge and
+// the competitions-list status filter, so badge and filter can never disagree.
+export function competitionStatus(competition, now = Date.now()) {
+  if (competition?.published === false) return 'unpublished'
+  return competitionLifecycle(competition, now)
+}
+
 // ── Points ────────────────────────────────────────────────────────────────────
 // Rugby log points: 4 for a win, 2 for a draw, 0 for a loss is the standard
 // across World Rugby, URC, Currie Cup and SA school leagues.
