@@ -33,7 +33,7 @@ import { MatchTeamIdentity, MatchVersus } from '../../components/TeamIdentity'
 import { prefetchMatchTeams } from '../../lib/teamIdentity'
 import { monogram } from '../../lib/names'
 import { plansUrl } from '../../lib/mainSite'
-import { orgEntitlementStatus } from '../../lib/entitlement'
+import { orgEntitlementStatus, userEntitlementStatus, bestEntitlement } from '../../lib/entitlement'
 import SquadManager from '../../components/SquadManager'
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
@@ -926,9 +926,16 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
 
 // ── Competitions section ───────────────────────────────────────────────────────
 
-function CompetitionsSection({ orgId, org, isPlatformAdmin, competitions, setCompetitions, defaultOpen, canManage }) {
-  // The platform master admin always has full rights — never plan-gated.
-  const entitlement = isPlatformAdmin ? { tier: 'admin', canCreate: true } : orgEntitlementStatus(org)
+function CompetitionsSection({ orgId, org, isPlatformAdmin, userEntitlement, competitions, setCompetitions, defaultOpen, canManage }) {
+  // The platform master admin always has full rights — never plan-gated. Everyone
+  // else: an org inherits its owner's entitlement, so gate on the ACTING USER's
+  // plan (best-of their claim and this org, a fallback that is in practice
+  // unpopulated) rather than the org doc — matching the create rules and
+  // unlocking an entitled owner's own org. The existing-competition list below is
+  // never gated on this; only the create/Manage affordances are.
+  const entitlement = isPlatformAdmin
+    ? { tier: 'admin', canCreate: true }
+    : bestEntitlement([userEntitlementStatus(userEntitlement), orgEntitlementStatus(org)])
 
   return (
     <Section
@@ -1367,7 +1374,7 @@ export default function OrgManage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { state: locationState } = useLocation()
-  const { uid, isPlatformAdmin, isOrgMember, orgRoles, canDo } = useAuth()
+  const { uid, isPlatformAdmin, isOrgMember, orgRoles, canDo, userEntitlement } = useAuth()
 
   const [org,             setOrg]             = useState(null)
   const [competitions,    setCompetitions]    = useState([])
@@ -1539,6 +1546,7 @@ export default function OrgManage() {
           <div ref={competitionRef}>
             <CompetitionsSection
               orgId={id} org={org} isPlatformAdmin={isPlatformAdmin}
+              userEntitlement={userEntitlement}
               competitions={competitions} setCompetitions={setCompetitions}
               defaultOpen={openCompetition} canManage={canDo(id, 'competition.manage')}
             />
