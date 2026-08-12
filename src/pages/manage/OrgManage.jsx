@@ -12,7 +12,7 @@ import {
   updateOrganization, deleteOrganization,
   createCompetition, fetchCompetitionsForOrg, addFixtureToCompetition,
   createTeam, updateTeam, deleteTeam,
-  createMatch, deleteMatch,
+  createMatch,
   fetchOrgStaff, removeOrgStaff,
   propagateTeamNameToMatches, propagateOrgNameToMatches,
 } from '../../lib/adminQueries'
@@ -193,12 +193,6 @@ function UpcomingFixturesSection({ orgId, org, competitions, teams, matches, set
     } finally { setSaving(false) }
   }
 
-  async function handleDelete(match) {
-    if (!confirm('Delete this match?')) return
-    await deleteMatch(match.id)
-    setMatches(prev => prev.filter(m => m.id !== match.id))
-  }
-
   if (loading) return <Section id="fixtures" title="Upcoming Matches"><Spinner /></Section>
 
   const canAddNew = !isSchool || teams.length > 0
@@ -365,10 +359,6 @@ function UpcomingFixturesSection({ orgId, org, competitions, teams, matches, set
                   </div>
                   <MatchVersus match={m} className="text-sm text-slate-900 font-semibold" vsClass="text-slate-600 font-normal" />
                 </Link>
-                <button onClick={() => handleDelete(m)} title="Delete match"
-                  className="text-slate-600 hover:text-red-400 transition-colors p-1 shrink-0">
-                  <X className="w-4 h-4" />
-                </button>
               </div>
             )
           })}
@@ -385,12 +375,6 @@ function RecentResultsSection({ matches, setMatches, loading }) {
     .filter(m => m.status === 'final')
     .sort((a, b) => toDate(b.scheduledAt) - toDate(a.scheduledAt))
     .slice(0, 10)
-
-  async function handleDelete(match) {
-    if (!confirm('Delete this result?')) return
-    await deleteMatch(match.id)
-    setMatches(prev => prev.filter(m => m.id !== match.id))
-  }
 
   if (loading) return <Section id="results" title="Recent Results"><Spinner /></Section>
 
@@ -431,10 +415,6 @@ function RecentResultsSection({ matches, setMatches, loading }) {
                     </div>
                   </div>
                 </Link>
-                <button onClick={() => handleDelete(m)} title="Delete result"
-                  className="text-slate-600 hover:text-red-400 transition-colors p-1 shrink-0">
-                  <X className="w-4 h-4" />
-                </button>
               </div>
             )
           })}
