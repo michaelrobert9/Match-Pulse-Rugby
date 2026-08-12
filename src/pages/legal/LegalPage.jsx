@@ -1,6 +1,7 @@
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { getLegalDoc, LEGAL_LINKS } from '../../legal'
 import { useSupportHead } from '../../support/head'
+import { plansUrl } from '../../lib/mainSite'
 import '../support/Support.css'
 
 // One page for each legal document (/legal/:doc). Reuses the Support Centre's
@@ -49,7 +50,7 @@ export default function LegalPage() {
           {LEGAL_LINKS.filter(l => l.slug !== doc).map(l => (
             <Link key={l.slug} to={l.path}>{l.title}</Link>
           ))}
-          <a href="https://matchpulse.co.za" target="_blank" rel="noopener noreferrer">Pricing</a>
+          <a href={plansUrl({ ref: 'legal' })} target="_blank" rel="noopener noreferrer">Pricing</a>
         </nav>
       </div>
     </div>

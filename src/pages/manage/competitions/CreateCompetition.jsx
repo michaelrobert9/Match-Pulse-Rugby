@@ -4,8 +4,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
 import { fetchOrganization } from '../../../lib/queries'
 import { createManagedCompetition, updateManagedCompetition } from '../../../lib/adminQueries'
-import { orgEntitlementStatus, userEntitlementStatus } from '../../../lib/entitlement'
+import { orgEntitlementStatus, userEntitlementStatus, bestEntitlement } from '../../../lib/entitlement'
 import { slugify } from '../../../lib/slugify'
+import { plansUrl } from '../../../lib/mainSite'
 
 // Sentinel owner id for a personal (individual) competition — no org.
 const PERSONAL = '__personal__'
@@ -132,11 +133,17 @@ export default function CreateCompetition() {
   const selectedOrg = isPersonal ? null : (orgs.find(o => o.id === ownerId) ?? null)
   // The platform master admin always has full rights — no plan required and no
   // credit is consumed. Everyone else is gated on their own / their org's plan.
+  // An org inherits its owner's entitlement (plans attach to the person), so gate
+  // on the ACTING USER's plan whether the competition runs personally or under an
+  // org — best-of the user's claim and the selected org (a fallback that is in
+  // practice unpopulated). Matches the create rules, which authorise off the
+  // caller's claim and ignore the org doc.
   const entitlement = isPlatformAdmin
     ? { tier: 'admin', canCreate: true, credits: Infinity }
-    : (isPersonal
-        ? userEntitlementStatus(userEntitlement)
-        : (selectedOrg ? orgEntitlementStatus(selectedOrg) : null))
+    : bestEntitlement([
+        userEntitlementStatus(userEntitlement),
+        selectedOrg ? orgEntitlementStatus(selectedOrg) : null,
+      ])
 
   const points = pointsKey === 'custom'
     ? customPoints
@@ -281,7 +288,7 @@ export default function CreateCompetition() {
                 <Lock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                 <p className="text-sm text-amber-800">
                   Hosting a competition requires a Plus or Pro plan.{' '}
-                  <a href="https://matchpulse.co.za" target="_blank" rel="noopener noreferrer" className="font-semibold underline hover:text-amber-900">See Plans</a>
+                  <a href={plansUrl({ uid, orgId: isPersonal ? undefined : ownerId, ref: 'create-competition' })} target="_blank" rel="noopener noreferrer" className="font-semibold underline hover:text-amber-900">See Plans</a>
                 </p>
               </div>
             )}
