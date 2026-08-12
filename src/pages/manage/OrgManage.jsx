@@ -32,7 +32,7 @@ import FormatSelector from '../../components/FormatSelector'
 import { MatchTeamIdentity, MatchVersus } from '../../components/TeamIdentity'
 import { prefetchMatchTeams } from '../../lib/teamIdentity'
 import { monogram } from '../../lib/names'
-import { PLANS_URL } from '../../lib/auth-redirect'
+import { plansUrl } from '../../lib/mainSite'
 import { orgEntitlementStatus } from '../../lib/entitlement'
 import SquadManager from '../../components/SquadManager'
 
@@ -955,7 +955,7 @@ function CompetitionsSection({ orgId, org, isPlatformAdmin, competitions, setCom
               Host a tournament, league or festival. Purchase a plan and MatchPulse activates your competition access manually within one business day.
             </p>
           </div>
-          <a href="https://matchpulse.co.za" target="_blank" rel="noopener noreferrer"
+          <a href={plansUrl({ orgId, ref: 'org-competitions' })} target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm uppercase tracking-wider rounded-xl px-5 py-2.5 transition-colors">
             See plans
           </a>
@@ -1321,7 +1321,7 @@ function PlanStatusPanel({ org }) {
       </div>
       <p className="text-[11px] text-slate-500">
         Plans are managed on MatchPulse.{' '}
-        <a href={PLANS_URL} target="_blank" rel="noopener noreferrer"
+        <a href={plansUrl({ orgId: org?.id, ref: 'org-plan-status' })} target="_blank" rel="noopener noreferrer"
           className="text-emerald-600 hover:text-emerald-500 font-semibold">
           View plans &amp; pricing →
         </a>
