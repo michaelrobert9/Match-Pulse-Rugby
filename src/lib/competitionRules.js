@@ -110,12 +110,16 @@ export const POINTS_PRESETS = [
 //                    variant, which is not modelled in V1).
 //   • Losing bonus — 1 log point for losing by `losingBonusMargin` or fewer
 //                    match points. Default 7.
+//   • Winning margin bonus — 1 log point for WINNING by `winMarginThreshold`+
+//                    match points. Off by default (non-standard for rugby, but
+//                    offered for competitions that reward decisive wins).
 // A try bonus can only be earned when the fixture's try count is KNOWN (live
 // scored, or entered with a submitted result) — an unknown count never counts
 // as zero and never earns a bonus.
 export const DEFAULT_BONUS_POINTS = {
   tryBonus: true,  tryBonusThreshold: 4,
   losingBonus: true, losingBonusMargin: 7,
+  winMargin: false, winMarginThreshold: 15,
 }
 
 // ── Tie-breakers ──────────────────────────────────────────────────────────────
@@ -165,7 +169,7 @@ export function defaultRulesForType(type) {
   if (type === 'festival') {
     rules.statsTable  = { enabled: false, columns: [...FESTIVAL_STATS_COLUMNS] }
     // A festival has no log, so bonus points are meaningless there.
-    rules.bonusPoints = { tryBonus: false, tryBonusThreshold: 4, losingBonus: false, losingBonusMargin: 7 }
+    rules.bonusPoints = { tryBonus: false, tryBonusThreshold: 4, losingBonus: false, losingBonusMargin: 7, winMargin: false, winMarginThreshold: 15 }
   }
   return rules
 }

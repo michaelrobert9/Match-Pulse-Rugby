@@ -880,6 +880,8 @@ function ScoringCard({ competition, onSaved }) {
       tryBonusThreshold: String(bonus.tryBonusThreshold ?? 4),
       losingBonus:       bonus.losingBonus !== false,
       losingBonusMargin: String(bonus.losingBonusMargin ?? 7),
+      winMargin:          bonus.winMargin === true,
+      winMarginThreshold: String(bonus.winMarginThreshold ?? 15),
     })
     setEditing(true)
   }
@@ -899,6 +901,8 @@ function ScoringCard({ competition, onSaved }) {
             tryBonusThreshold: Math.max(1, Number(form.tryBonusThreshold) || 4),
             losingBonus:       form.losingBonus,
             losingBonusMargin: Math.max(1, Number(form.losingBonusMargin) || 7),
+            winMargin:          form.winMargin,
+            winMarginThreshold: Math.max(1, Number(form.winMarginThreshold) || 15),
           },
         } : {}),
       }
@@ -945,6 +949,17 @@ function ScoringCard({ competition, onSaved }) {
                   </p>
                 </div>
                 <BonusPill on={bonus.losingBonus !== false} />
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-slate-700">Winning margin bonus</div>
+                  <p className="text-[11px] text-slate-400">
+                    {bonus.winMargin === true
+                      ? `1 log point for winning by ${bonus.winMarginThreshold ?? 15} points or more.`
+                      : 'Not awarded.'}
+                  </p>
+                </div>
+                <BonusPill on={bonus.winMargin === true} />
               </div>
             </div>
           )}
@@ -1005,6 +1020,22 @@ function ScoringCard({ competition, onSaved }) {
                   <div className="w-20">
                     <Input type="number" min={1} max={50} value={form.losingBonusMargin}
                       onChange={e => set('losingBonusMargin', e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.winMargin}
+                  onChange={e => set('winMargin', e.target.checked)}
+                  className="accent-emerald-600 w-4 h-4 shrink-0" />
+                <span className="text-sm text-slate-700 flex-1">Winning margin bonus — 1 point for a decisive win</span>
+              </label>
+              {form.winMargin && (
+                <div className="flex items-center gap-2 pl-6">
+                  <span className="text-xs text-slate-500">Winning margin (points)</span>
+                  <div className="w-20">
+                    <Input type="number" min={1} max={100} value={form.winMarginThreshold}
+                      onChange={e => set('winMarginThreshold', e.target.value)} />
                   </div>
                 </div>
               )}
