@@ -51,9 +51,11 @@ function matchPointsAward(homePoints, awayPoints, homeTries, awayTries, pts, bon
   if (homePoints > awayPoints) {
     award.home.pts = pts.win ?? 4;  award.away.pts = pts.loss ?? 0
     if (b.losingBonus && (homePoints - awayPoints) <= (b.losingBonusMargin ?? 7)) award.away.bp++
+    if (b.winMargin && (homePoints - awayPoints) >= (b.winMarginThreshold ?? Infinity)) award.home.bp++
   } else if (awayPoints > homePoints) {
     award.away.pts = pts.win ?? 4;  award.home.pts = pts.loss ?? 0
     if (b.losingBonus && (awayPoints - homePoints) <= (b.losingBonusMargin ?? 7)) award.home.bp++
+    if (b.winMargin && (awayPoints - homePoints) >= (b.winMarginThreshold ?? Infinity)) award.away.bp++
   } else {
     award.home.pts = pts.draw ?? 2; award.away.pts = pts.draw ?? 2
   }
@@ -86,7 +88,7 @@ function applyResult(stats, homeId, awayId, c, pts, bonus) {
   // fixtureContribution reports their tries as null, and a losing bonus for a
   // team that never took the field would be absurd.
   const award = c.awarded
-    ? matchPointsAward(homePoints, awayPoints, null, null, pts, { losingBonus: false, tryBonus: false })
+    ? matchPointsAward(homePoints, awayPoints, null, null, pts, { losingBonus: false, tryBonus: false, winMargin: false })
     : matchPointsAward(homePoints, awayPoints, c.homeTries, c.awayTries, pts, bonus)
   h.Pts += award.home.pts; h.BP += award.home.bp
   a.Pts += award.away.pts; a.BP += award.away.bp
