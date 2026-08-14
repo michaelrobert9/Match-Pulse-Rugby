@@ -103,7 +103,7 @@ function CompRecord({ record }) {
       <div className="flex items-center gap-2 shrink-0 font-mono text-[10px] text-slate-500">
         <span>{record.caps ?? 0} caps</span>
         <span className="text-slate-300">·</span>
-        <span className="text-emerald-600">{record.tries ?? 0} tries</span>
+        <span className="text-[color:var(--pa)]">{record.tries ?? 0} tries</span>
         <span className="text-slate-300">·</span>
         <span>{record.points ?? 0} pts</span>
       </div>
@@ -133,7 +133,7 @@ function TeamBlock({ team }) {
         <div className="grid grid-cols-4 gap-0 border-t border-slate-200 pt-3">
           {[
             { val: team.caps,   label: 'Caps',     cls: 'text-slate-900' },
-            { val: team.tries,  label: 'Tries',    cls: 'text-emerald-600' },
+            { val: team.tries,  label: 'Tries',    cls: 'text-[color:var(--pa)]' },
             { val: team.points, label: 'Points',   cls: 'text-slate-900' },
             { val: avg,         label: 'Pts/Game', cls: 'text-slate-900' },
           ].map(({ val, label, cls }, i) => (
@@ -150,7 +150,7 @@ function TeamBlock({ team }) {
             ))}
             {team.records.length > 3 && (
               <button onClick={() => setExpanded(e => !e)}
-                className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 hover:text-emerald-500 transition-colors pt-2">
+                className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--pa)] hover:opacity-80 transition-colors pt-2">
                 {expanded ? 'Show less' : `+${team.records.length - 3} more`}
               </button>
             )}
@@ -224,7 +224,7 @@ function FixtureCard({ match, personId, canSelfRemove, onRemoved }) {
           {dateStr && <span className="font-mono text-[10px] text-slate-500">{dateStr}</span>}
           <div className="flex items-center gap-1.5 ml-auto">
             {entry?.isStarter && (
-              <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-[color:var(--pa)] bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
                 Starter
               </span>
             )}
@@ -328,7 +328,7 @@ export default function PlayerProfile() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
         <p className="text-slate-500 text-sm mb-4">Player not found.</p>
-        <Link to="/players" className="text-emerald-600 text-sm hover:underline">← Back to players</Link>
+        <Link to="/players" className="text-[color:var(--pa)] text-sm hover:underline">← Back to players</Link>
       </div>
     )
   }
@@ -349,8 +349,10 @@ export default function PlayerProfile() {
     .map(id => ({ orgId: id, org: orgMap[id] || null, teams: [] }))
   const allOrgGroups = [...careerGroups, ...extraGroups]
 
+  const accent = person.primaryColor || '#059669'
+
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-12 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-12 space-y-6" style={{ '--pa': accent }}>
 
       {/* Hero: banner, photo, name, position, nationality, DOB, SA Rugby number */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -359,9 +361,10 @@ export default function PlayerProfile() {
             when the player (or their parent) claims the profile. */}
         {claimed && (
           <ProfileBanner person={person} canEdit={canEditBanner}
-            onSaved={url => setPerson(p => ({ ...p, bannerUrl: url }))} />
+            onSaved={url => setPerson(p => ({ ...p, bannerUrl: url }))}
+            onColorSaved={c => setPerson(p => ({ ...p, primaryColor: c }))} />
         )}
-        <div className="h-2 bg-gradient-to-r from-emerald-500 to-emerald-400" />
+        <div className="h-2" style={{ backgroundColor: accent }} />
         <div className="p-5 flex items-start gap-4">
           {claimed && (
             <ProfilePhoto person={person} canEdit={canEditBanner} initials={initials}
@@ -498,7 +501,7 @@ function ClaimCard({ person, onClaimed }) {
       <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
         <div className="h-1 bg-gradient-to-r from-emerald-500 to-emerald-400" />
         <div className="p-5">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-1">Unclaimed profile</div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--pa)] mb-1">Unclaimed profile</div>
           <div className="text-slate-900 font-bold text-sm mb-1">Is this you, or your child?</div>
           <p className="text-[12px] text-slate-500 leading-relaxed mb-3">
             Claim <span className="font-semibold">{person.fullName}</span> to manage the profile — edit details,
@@ -583,10 +586,18 @@ function ProfilePhoto({ person, canEdit, initials, onSaved }) {
 // Profile banner: a wide hero image at the top of the player card. The player
 // (owner/guardian/manager) or a platform admin can upload one — stored at
 // player-banners/{personId}, attached to the person doc as bannerUrl.
-function ProfileBanner({ person, canEdit, onSaved }) {
+function ProfileBanner({ person, canEdit, onSaved, onColorSaved }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr]   = useState('')
   const recommend = IMAGE_SPECS.playerBanner.recommend
+
+  async function handleColor(e) {
+    const value = e.target.value
+    try {
+      await updatePerson(person.id, { primaryColor: value })
+      onColorSaved?.(value)
+    } catch { /* leave the previous colour on failure */ }
+  }
 
   async function handleUpload(e) {
     const file = e.target.files?.[0]
@@ -610,7 +621,7 @@ function ProfileBanner({ person, canEdit, onSaved }) {
         <img src={person.bannerUrl} alt="" className="w-full h-40 sm:h-56 object-cover" loading="lazy" />
       ) : (
         <label title={recommend}
-          className={`flex flex-col items-center justify-center gap-0.5 h-16 border-b border-dashed border-slate-200 cursor-pointer transition-colors ${busy ? 'text-slate-300' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50/50'}`}>
+          className={`flex flex-col items-center justify-center gap-0.5 h-16 border-b border-dashed border-slate-200 cursor-pointer transition-colors ${busy ? 'text-slate-300' : 'text-slate-400 hover:text-[color:var(--pa)] hover:bg-emerald-50/50'}`}>
           <span className="text-[11px] font-bold uppercase tracking-widest">{busy ? 'Uploading…' : '+ Add banner image'}</span>
           <span className="text-[10px] normal-case tracking-normal">Recommended 1500×500 (3:1)</span>
           <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={handleUpload} />
@@ -621,6 +632,14 @@ function ProfileBanner({ person, canEdit, onSaved }) {
           className="absolute bottom-2 right-2 bg-white/90 hover:bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 cursor-pointer shadow-sm">
           {busy ? 'Uploading…' : 'Change banner'}
           <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={handleUpload} />
+        </label>
+      )}
+      {canEdit && (
+        <label className="absolute top-2 right-2 flex items-center gap-1.5 bg-white/90 hover:bg-white border border-slate-200 rounded-lg px-2 py-1 cursor-pointer shadow-sm"
+          title="Profile colour — themes the accent bar and highlights">
+          <span className="w-3.5 h-3.5 rounded-sm border border-slate-300 shrink-0" style={{ backgroundColor: person.primaryColor || '#059669' }} />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600">Colour</span>
+          <input type="color" value={person.primaryColor || '#059669'} onChange={handleColor} className="sr-only" />
         </label>
       )}
       {err && <p className="absolute bottom-2 left-2 text-[11px] text-red-600 bg-white/90 rounded px-2 py-0.5">{err}</p>}
