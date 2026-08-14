@@ -6,11 +6,11 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, auth, functions } from '../firebase'
 import { slugify, matchSlug as buildMatchSlug } from './slugify'
-import { matchPath, competitionMatchPath, dedupeSlug, matchSideName } from './matchPaths'
+import { matchPath, competitionMatchPath, dedupeSlug } from './matchPaths'
 import { redirectKey } from './queries'
 import { periodLabels, DEFAULT_PERIODS, DEFAULT_PERIOD_MINUTES, DEFAULT_BREAK_MINUTES } from './matchClock'
 import { SCORE_POINTS, isTryEvent } from './rugbyScoring'
-import { generatedTeamName, teamStructuralKey, levelLabel } from './teamNaming'
+import { generatedTeamName, teamStructuralKey, levelLabel, composeTeamDisplay } from './teamNaming'
 import { defaultRulesForType, rulesHash } from './competitionRules'
 import { assertCanAdministerCompetition } from './competitionAuth'
 import { isBulkLineupCompetition, resolveSideLineup } from './lineupResolve'
@@ -704,9 +704,9 @@ export async function swapFixtureSides(matchId) {
   const newHomeName = m.awayTeamName ?? ''
   const newAwayName = m.homeTeamName ?? ''
   const seasonStr = m.competitionSeason ? String(m.competitionSeason) : (m.season ? String(m.season) : null)
-  const baseSlug  = buildMatchSlug(
-    matchSideName({ orgName: m.awayOrgName, displayName: newHomeName }),
-    matchSideName({ orgName: m.homeOrgName, displayName: newAwayName }))
+  const newHomeDisplay = m.awayDisplay ?? composeTeamDisplay(m.awayOrgName, m.awayTeamName)
+  const newAwayDisplay = m.homeDisplay ?? composeTeamDisplay(m.homeOrgName, m.homeTeamName)
+  const baseSlug  = buildMatchSlug(newHomeDisplay, newAwayDisplay)
   const matchSlug = seasonStr
     ? await generateUniqueMatchSlug(seasonStr, baseSlug)
     : await generateUniqueMatchSlugGlobal(baseSlug)
@@ -718,6 +718,7 @@ export async function swapFixtureSides(matchId) {
     awayTeamId: m.homeTeamId ?? null, awayTeamName: m.homeTeamName ?? null, awayTeamColor: m.homeTeamColor ?? null,
     awayTeamSlug: m.homeTeamSlug ?? null,
     awayOrgId: m.homeOrgId ?? null, awayOrgName: m.homeOrgName ?? null, awayRegistered: !!m.homeRegistered,
+    homeDisplay: newHomeDisplay, awayDisplay: newAwayDisplay,
     homeScore: m.awayScore ?? 0, awayScore: m.homeScore ?? 0,
     homeTries: m.awayTries ?? 0, awayTries: m.homeTries ?? 0,
     scores: flipSide(m.scores ?? []), cards: flipSide(m.cards ?? []),
@@ -847,7 +848,9 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
   sevens = false,
 }) {
   const seasonStr = season ? String(season) : null
-  const baseSlug  = buildMatchSlug(matchSideName(homeTeam), matchSideName(awayTeam))
+  const homeDisplay = composeTeamDisplay(homeTeam.teamName || homeTeam.orgName, homeTeam.displayName)
+  const awayDisplay = composeTeamDisplay(awayTeam.teamName || awayTeam.orgName, awayTeam.displayName)
+  const baseSlug  = buildMatchSlug(homeDisplay, awayDisplay)
 
   // The canonical URL depends on whether this match belongs to a competition.
   // Competition matches are competition-scoped and dateless
@@ -879,6 +882,7 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
     competitionId,
     homeTeamId:        homeRegistered ? homeTeam.id : null,
     homeTeamName:      homeTeam.displayName,
+    homeDisplay,
     homeOrgName:       homeTeam.orgName       || null,
     homeTeamSlug:      homeTeam.slug          || null,
     homeTeamColor:     homeTeam.primaryColor  || null,
@@ -887,6 +891,7 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
     ...(homeTeam.manualOpponentId ? { manualHomeOpponentId: homeTeam.manualOpponentId } : {}),
     awayTeamId:        awayRegistered ? awayTeam.id : null,
     awayTeamName:      awayTeam.displayName,
+    awayDisplay,
     awayOrgName:       awayTeam.orgName       || null,
     awayTeamSlug:      awayTeam.slug          || null,
     awayTeamColor:     awayTeam.primaryColor  || null,
@@ -1146,8 +1151,8 @@ export async function deleteMatchGroup(groupId, mode = 'cascade') {
       const c = cSnap.data()
       const taken = takenByDate.get(c.matchDate) ?? new Set()
       const slug = dedupeSlug(buildMatchSlug(
-        matchSideName({ orgName: c.homeOrgName, displayName: c.homeTeamName ?? 'home' }),
-        matchSideName({ orgName: c.awayOrgName, displayName: c.awayTeamName ?? 'away' })), taken)
+        c.homeDisplay ?? composeTeamDisplay(c.homeOrgName, c.homeTeamName ?? 'home'),
+        c.awayDisplay ?? composeTeamDisplay(c.awayOrgName, c.awayTeamName ?? 'away')), taken)
       taken.add(slug)
       const newPath = matchPath(c.matchDate, slug)
       batch.update(cSnap.ref, {
@@ -2385,7 +2390,9 @@ export async function generateRoundRobinFixtures(competitionId, teams, options =
   const createdIds = []
 
   for (const [home, away] of pairs) {
-    const baseSlug  = buildMatchSlug(matchSideName(home), matchSideName(away))
+    const baseSlug  = buildMatchSlug(
+      composeTeamDisplay(home.teamName || home.orgName, home.displayName),
+      composeTeamDisplay(away.teamName || away.orgName, away.displayName))
     const matchSlug = seasonStr
       ? await generateUniqueMatchSlug(seasonStr, baseSlug)
       : await generateUniqueMatchSlugGlobal(baseSlug)
@@ -3059,8 +3066,8 @@ export async function generatePoolFixtures(competitionId, poolId, options = {}) 
     const pitch       = assignment?.fieldName ?? ''
 
     const matchSlug = dedupeSlug(buildMatchSlug(
-      matchSideName({ orgName: homeSnap.orgName, displayName: homeTeamName }),
-      matchSideName({ orgName: awaySnap.orgName, displayName: awayTeamName })), takenSlugs)
+      composeTeamDisplay(homeSnap.orgName, homeTeamName),
+      composeTeamDisplay(awaySnap.orgName, awayTeamName)), takenSlugs)
     takenSlugs.add(matchSlug)
 
     const matchRef = doc(collection(db, 'matches'))
