@@ -104,21 +104,10 @@ async function generateUniqueOrgSlug(name) {
   return `${base}-${n}`
 }
 
-// Derive a short code (team/org abbreviation, e.g. "PBHS", "HRC") from a name
-// when the caller didn't supply one. Initials of each word, falling back to the
-// first letters of the name. Never returns undefined — Firestore rejects it.
-export function deriveOrgShortCode(name) {
-  const words = String(name || '').trim().split(/\s+/).filter(Boolean)
-  const initials = words.map(w => w[0]).join('').replace(/[^A-Za-z0-9]/g, '').toUpperCase()
-  if (initials.length >= 2) return initials.slice(0, 4)
-  const letters = String(name || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase()
-  return letters.slice(0, 3) || null
-}
 
 export async function createOrganization(data) {
   const slug = await generateUniqueOrgSlug(data.name)
-  const shortCode = data.shortCode || deriveOrgShortCode(data.name)
-  return addDoc(collection(db, 'organizations'), { ...data, shortCode, slug, createdBy: uid(), createdAt: serverTimestamp() })
+  return addDoc(collection(db, 'organizations'), { ...data, slug, createdBy: uid(), createdAt: serverTimestamp() })
 }
 
 // Self-service org creation: any authenticated user creates an org and
@@ -129,11 +118,10 @@ export async function selfCreateOrganization(data) {
   const userId = uid()
   if (!userId) throw new Error('Must be signed in to create an organisation')
   const slug = await generateUniqueOrgSlug(data.name)
-  const shortCode = data.shortCode || deriveOrgShortCode(data.name)
 
   // Step 1 — create the organisation document.
   const orgRef = await addDoc(collection(db, 'organizations'), {
-    ...data, shortCode, slug, createdBy: userId, createdAt: serverTimestamp(),
+    ...data, slug, createdBy: userId, createdAt: serverTimestamp(),
   })
 
   // Step 2 — add creator as owner in staff subcollection + mirror to user doc.
@@ -287,7 +275,6 @@ async function ensurePlayerSlice(match, side, person) {
     competitionSeason: c.season ?? null,
     competitionStatus: c.status ?? null,
     teamDisplayName: t.displayName ?? null,
-    teamShortCode: t.shortCode ?? null,
     teamPrimaryColor: t.primaryColor ?? null,
     createdBy: uid(), createdAt: serverTimestamp(),
   })
@@ -518,6 +505,7 @@ export async function createTeam(orgData, displayName, options = {}) {
   const {
     competitionId = null, season = null,
     ageGroup = null, gender = null, division = null, teamLevel = null,
+    teamName = null,
   } = options
   const orgSlug = orgData.slug || slugify(orgData.name)
   // Always generate a slug. Season-based teams use "{org}-{season}";
@@ -539,7 +527,6 @@ export async function createTeam(orgData, displayName, options = {}) {
     searchName:     name.toLowerCase(),
     // Coalesce to null — Firestore rejects `undefined`. An org created without a
     // short code (or colour) must not break team creation.
-    shortCode:      orgData.shortCode ?? null,
     logoUrl:        orgData.logoUrl || null,
     primaryColor:   orgData.primaryColor ?? null,
     secondaryColor: orgData.secondaryColor || '#FFFFFF',
@@ -547,6 +534,9 @@ export async function createTeam(orgData, displayName, options = {}) {
     ...(gender        ? { gender }        : {}),
     ...(division      ? { division }      : {}),
     ...(teamLevel     ? { teamLevel }     : {}),
+    // Optional per-team name (associations/leagues): replaces the org's match
+    // name in the display — "Durban Panthers – U13 Boys".
+    ...(teamName?.trim() ? { teamName: teamName.trim() } : {}),
     ...(teamLabel     ? { teamLabel }     : {}),
     ...(structuralKey ? { structuralKey } : {}),
     ...(slug          ? { slug }          : {}),
@@ -565,7 +555,6 @@ export async function createManualOpponent(data) {
   return addDoc(collection(db, 'manualOpponents'), {
     name,
     searchName:           name.toLowerCase(),
-    shortCode:            data.shortCode?.trim().toUpperCase().slice(0, 6) || null,
     type:                 data.type || 'unknown',
     primaryColor:         data.primaryColor || null,
     orgName:              data.orgName || null,
@@ -716,12 +705,10 @@ export async function swapFixtureSides(matchId) {
     : await generateUniqueMatchSlugGlobal(baseSlug)
 
   const patch = {
-    homeTeamId: m.awayTeamId ?? null, homeTeamName: m.awayTeamName ?? null,
-    homeTeamShortCode: m.awayTeamShortCode ?? null, homeTeamColor: m.awayTeamColor ?? null,
+    homeTeamId: m.awayTeamId ?? null, homeTeamName: m.awayTeamName ?? null, homeTeamColor: m.awayTeamColor ?? null,
     homeTeamSlug: m.awayTeamSlug ?? null,
     homeOrgId: m.awayOrgId ?? null, homeOrgName: m.awayOrgName ?? null, homeRegistered: !!m.awayRegistered,
-    awayTeamId: m.homeTeamId ?? null, awayTeamName: m.homeTeamName ?? null,
-    awayTeamShortCode: m.homeTeamShortCode ?? null, awayTeamColor: m.homeTeamColor ?? null,
+    awayTeamId: m.homeTeamId ?? null, awayTeamName: m.homeTeamName ?? null, awayTeamColor: m.homeTeamColor ?? null,
     awayTeamSlug: m.homeTeamSlug ?? null,
     awayOrgId: m.homeOrgId ?? null, awayOrgName: m.homeOrgName ?? null, awayRegistered: !!m.homeRegistered,
     homeScore: m.awayScore ?? 0, awayScore: m.homeScore ?? 0,
@@ -784,7 +771,6 @@ export async function assignPlayer(teamData, personData, { shirtNumber, position
     competitionSeason:  null,
     competitionStatus:  null,
     teamDisplayName:    teamData.displayName ?? null,
-    teamShortCode:      teamData.shortCode ?? null,
     teamPrimaryColor:   teamData.primaryColor ?? null,
     createdBy: uid(), createdAt: serverTimestamp(),
   })
@@ -887,7 +873,6 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
     homeTeamId:        homeRegistered ? homeTeam.id : null,
     homeTeamName:      homeTeam.displayName,
     homeOrgName:       homeTeam.orgName       || null,
-    homeTeamShortCode: homeTeam.shortCode     || null,
     homeTeamSlug:      homeTeam.slug          || null,
     homeTeamColor:     homeTeam.primaryColor  || null,
     homeOrgId:         homeTeam.organizationId ?? null,
@@ -896,7 +881,6 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
     awayTeamId:        awayRegistered ? awayTeam.id : null,
     awayTeamName:      awayTeam.displayName,
     awayOrgName:       awayTeam.orgName       || null,
-    awayTeamShortCode: awayTeam.shortCode     || null,
     awayTeamSlug:      awayTeam.slug          || null,
     awayTeamColor:     awayTeam.primaryColor  || null,
     awayOrgId:         awayTeam.organizationId ?? null,
@@ -989,7 +973,6 @@ export async function createMatchGroup({
       homeTeamId:        hReg ? h.id : null,
       homeTeamName:      h.displayName ?? h.name ?? null,
       homeOrgName:       h.orgName ?? null,
-      homeTeamShortCode: h.shortCode ?? null,
       homeTeamSlug:      h.slug ?? null,
       homeTeamColor:     h.primaryColor ?? null,
       homeOrgId:         h.organizationId ?? null,
@@ -998,7 +981,6 @@ export async function createMatchGroup({
       awayTeamId:        aReg ? a.id : null,
       awayTeamName:      a.displayName ?? a.name ?? null,
       awayOrgName:       a.orgName ?? null,
-      awayTeamShortCode: a.shortCode ?? null,
       awayTeamSlug:      a.slug ?? null,
       awayTeamColor:     a.primaryColor ?? null,
       awayOrgId:         a.organizationId ?? null,
@@ -2404,14 +2386,12 @@ export async function generateRoundRobinFixtures(competitionId, teams, options =
       ownerOrgId:        ownerOrgId ?? null,
       homeTeamId:        home.id,
       homeTeamName:      home.displayName,
-      homeTeamShortCode: home.shortCode     || null,
       homeTeamColor:     home.primaryColor  || null,
       homeOrgId:         home.organizationId ?? null,
       homeOrgName:       home.orgName       || null,
       homeRegistered:    !!home.organizationId,
       awayTeamId:        away.id,
       awayTeamName:      away.displayName,
-      awayTeamShortCode: away.shortCode     || null,
       awayTeamColor:     away.primaryColor  || null,
       awayOrgId:         away.organizationId ?? null,
       awayOrgName:       away.orgName       || null,
@@ -2893,9 +2873,9 @@ export async function createPlayoffHoldingFixtures(competition, games, format) {
     const ref = await addDoc(collection(db, 'matches'), {
       competitionId: competition.id,
       ownerOrgId: competition.ownerOrgId || null,
-      homeTeamId: null, homeTeamName: g.homeName, homeTeamShortCode: null, homeTeamColor: null,
+      homeTeamId: null, homeTeamName: g.homeName, homeTeamColor: null,
       homeOrgId: null, homeOrgName: null, homeRegistered: false,
-      awayTeamId: null, awayTeamName: g.awayName, awayTeamShortCode: null, awayTeamColor: null,
+      awayTeamId: null, awayTeamName: g.awayName, awayTeamColor: null,
       awayOrgId: null, awayOrgName: null, awayRegistered: false,
       homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
       periods: Number(format.periods), periodMinutes: Number(format.periodMinutes),
@@ -2923,18 +2903,18 @@ export async function createPlayoffHoldingFixtures(competition, games, format) {
 
 // Stamp the resolved real teams onto a holding fixture once the source pools are
 // verified. The match slug is intentionally NOT changed — the URL stays stable.
-// home/away: { teamId, teamName, orgName, color, shortCode, orgId } | null
+// home/away: { teamId, teamName, orgName, color, orgId } | null
 export async function stampPlayoffFixtureTeams(competitionId, fixtureId, home, away) {
   await assertCompetitionAdmin(competitionId)
   const patch = { updatedAt: serverTimestamp() }
   if (home) Object.assign(patch, {
     homeTeamId: home.teamId, homeTeamName: home.teamName ?? home.teamId,
-    homeTeamColor: home.color ?? null, homeTeamShortCode: home.shortCode ?? null,
+    homeTeamColor: home.color ?? null,
     homeOrgId: home.orgId ?? null, homeOrgName: home.orgName ?? null, homeRegistered: !!home.orgId,
   })
   if (away) Object.assign(patch, {
     awayTeamId: away.teamId, awayTeamName: away.teamName ?? away.teamId,
-    awayTeamColor: away.color ?? null, awayTeamShortCode: away.shortCode ?? null,
+    awayTeamColor: away.color ?? null,
     awayOrgId: away.orgId ?? null, awayOrgName: away.orgName ?? null, awayRegistered: !!away.orgId,
   })
   await updateDoc(doc(db, 'matches', fixtureId), patch)
@@ -2950,9 +2930,9 @@ export async function stampPlayoffFixtureTeams(competitionId, fixtureId, home, a
 export async function resetPlayoffHoldingFixtureToPlaceholders(competitionId, fixtureId, homeName, awayName) {
   await assertCompetitionAdmin(competitionId)
   await updateDoc(doc(db, 'matches', matchId), {
-    homeTeamId: null, homeTeamName: homeName ?? 'TBC', homeTeamColor: null, homeTeamShortCode: null,
+    homeTeamId: null, homeTeamName: homeName ?? 'TBC', homeTeamColor: null,
     homeOrgId: null, homeOrgName: null, homeRegistered: false,
-    awayTeamId: null, awayTeamName: awayName ?? 'TBC', awayTeamColor: null, awayTeamShortCode: null,
+    awayTeamId: null, awayTeamName: awayName ?? 'TBC', awayTeamColor: null,
     awayOrgId: null, awayOrgName: null, awayRegistered: false,
     updatedAt: serverTimestamp(),
   })
@@ -3067,14 +3047,12 @@ export async function generatePoolFixtures(competitionId, poolId, options = {}) 
       homeTeamId:        homeSlot.teamId ?? null,
       homeTeamName,
       homeTeamColor,
-      homeTeamShortCode: homeSnap.shortCode ?? null,
       homeOrgId:         null,
       homeRegistered:    !!homeSlot.teamId,
       homeSlotId:        homeSlot.slotId,
       awayTeamId:        awaySlot.teamId ?? null,
       awayTeamName,
       awayTeamColor,
-      awayTeamShortCode: awaySnap.shortCode ?? null,
       awayOrgId:         null,
       awayRegistered:    !!awaySlot.teamId,
       awaySlotId:        awaySlot.slotId,
