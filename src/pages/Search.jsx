@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Search as SearchIcon, X, ChevronRight, Clock } from 'lucide-react'
 import { fetchAllCompetitions, fetchTopPeople } from '../lib/queries'
+import { isPubliclyVisible } from '../lib/competitionRules'
 
 const EXAMPLE_TAGS = ['Senior IPT 2026', 'St Stithians', 'Western Province', 'U18 Girls', 'PHL 2026']
 
@@ -61,7 +62,7 @@ export default function Search() {
     }
   }, [loaded, q])
 
-  const matchedComps  = loaded && q.length >= 2 ? comps.filter(c => c.name?.toLowerCase().includes(q)) : []
+  const matchedComps  = loaded && q.length >= 2 ? comps.filter(c => isPubliclyVisible(c) && c.name?.toLowerCase().includes(q)) : []
   const matchedPeople = loaded && q.length >= 2 ? people.filter(p => p.fullName?.toLowerCase().includes(q)) : []
   const showEmpty     = loaded && q.length >= 2 && !loading && matchedComps.length === 0 && matchedPeople.length === 0
   const showIdle      = q.length < 2
