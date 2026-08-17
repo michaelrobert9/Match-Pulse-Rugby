@@ -22,10 +22,7 @@
       },
       {
         "source": "**",
-        "function": {
-          "functionId": "rugbyRenderer",
-          "region": "europe-west1"
-        }
+        "destination": "/index.html"
       }
     ]
   },
@@ -45,6 +42,9 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" ci || npm --prefix \"$RESOURCE_DIR\" install"
       ]
     }
   ]
