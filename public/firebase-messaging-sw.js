@@ -15,11 +15,11 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js')
 
 firebase.initializeApp({
-  apiKey:            'TODO_PUBLIC_API_KEY',
-  authDomain:        'TODO.firebaseapp.com',
-  projectId:         'TODO',
-  messagingSenderId: 'TODO_SENDER_ID',
-  appId:             'TODO_APP_ID',
+  apiKey:            'AIzaSyBUlpGJmlCM4PK0dmyOL0MPMSVay_7HhBE',
+  authDomain:        'match-pulse-4560e.firebaseapp.com',
+  projectId:         'match-pulse-4560e',
+  messagingSenderId: '161675532534',
+  appId:             '1:161675532534:web:4ba5fdb624f779049eb4d7',
 })
 
 const messaging = firebase.messaging()
