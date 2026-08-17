@@ -13,6 +13,12 @@ import { MAIN_SITE, SPORT_KEY } from '../firebase'
 // The plans/products page on the main site. Every plan/purchase CTA points here.
 export const PLANS_URL = `${MAIN_SITE}/products`
 
+// Account settings (name, email, password) live on the main site. Sign-in itself
+// is LOCAL to this subdomain (platform brief v2 §1/§2) — we only link out for
+// things that genuinely live centrally.
+export const MAIN_ACCOUNT_URL = `${MAIN_SITE}/account`
+export function goAccount() { window.location.assign(MAIN_ACCOUNT_URL) }
+
 // Build the outbound plans URL, tagging on who is asking and from where. These
 // params are informational only — /products ignores them today — but they let a
 // manual sale be attributed to a sport, an org and a user before the buyer emails

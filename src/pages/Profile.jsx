@@ -9,7 +9,7 @@ import { fetchOrganization } from '../lib/queries'
 import { monogram } from '../lib/names'
 import { grantOf, grantLabel } from '../lib/capabilities'
 import { fetchRugbyProfile, saveRugbyProfile } from '../lib/rugbyProfile'
-import { goAccount } from '../lib/auth-redirect'
+import { goAccount } from '../lib/mainSite'
 import ImageUpload from '../components/ImageUpload'
 
 const PROVINCES = [

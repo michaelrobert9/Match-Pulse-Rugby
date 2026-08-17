@@ -1,22 +1,35 @@
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { configured } from '../firebase'
 
+// Where to send the user after a successful sign-in: the ?next= path a guard
+// recorded, if it is a safe in-app path, otherwise the portal.
+function safeNext(raw) {
+  if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw
+  return '/portal'
+}
+
 export default function Login() {
-  const { login, signUp, signInWithGoogle } = useAuth()
+  const { user, login, signUp, signInWithGoogle, resetPassword } = useAuth()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const next = safeNext(params.get('next'))
+
+  // Already signed in (e.g. navigated here manually) — leave immediately.
+  useEffect(() => { if (user) navigate(next, { replace: true }) }, [user, next, navigate])
 
   const [tab,         setTab]         = useState('signin')
   const [displayName, setDisplayName] = useState('')
   const [email,       setEmail]       = useState('')
   const [password,    setPassword]    = useState('')
   const [error,       setError]       = useState(null)
+  const [notice,      setNotice]      = useState(null)
   const [loading,     setLoading]     = useState(false)
 
   function configCheck() {
     if (!configured) {
-      setError('Firebase is not configured yet. Add VITE_FIREBASE_* secrets to GitHub Actions.')
+      setError('Sign-in is not available right now. Please try again later.')
       return false
     }
     return true
@@ -26,14 +39,14 @@ export default function Login() {
     e.preventDefault()
     if (!configCheck()) return
     setLoading(true)
-    setError(null)
+    setError(null); setNotice(null)
     try {
       if (tab === 'signin') {
         await login(email, password)
       } else {
         await signUp(email, password, displayName)
       }
-      navigate('/portal')
+      navigate(next, { replace: true })
     } catch (err) {
       // "Account already exists" is NOT an error — one person has ONE MatchPulse
       // account across every sport, however it was first created. Switch them to
@@ -42,13 +55,18 @@ export default function Login() {
       if (err.code === 'auth/email-already-in-use') {
         setTab('signin')
         setPassword('')
-        setError('You already have a MatchPulse account — sign in instead.')
+        setNotice('You already have a MatchPulse account with this email — sign in instead.')
+        setLoading(false)
         return
       }
       const messages = {
-        'auth/invalid-credential':   'Invalid email or password.',
-        'auth/weak-password':        'Password must be at least 6 characters.',
-        'auth/invalid-email':        'Please enter a valid email address.',
+        'auth/invalid-credential':    'Invalid email or password.',
+        'auth/user-not-found':        'No account found with this email. Create one instead.',
+        'auth/wrong-password':        'Invalid email or password.',
+        'auth/weak-password':         'Password must be at least 6 characters.',
+        'auth/invalid-email':         'Please enter a valid email address.',
+        'auth/too-many-requests':     'Too many attempts. Please wait a moment and try again.',
+        'auth/operation-not-allowed': 'Email sign-in is not enabled for this project yet.',
       }
       setError(messages[err.code] ?? 'Something went wrong. Please try again.')
     } finally {
@@ -59,25 +77,44 @@ export default function Login() {
   async function handleGoogle() {
     if (!configCheck()) return
     setLoading(true)
-    setError(null)
+    setError(null); setNotice(null)
     try {
       // Google sign-in resolves to the same one account whether it is the first
       // time or a return visit — signInWithPopup signs in an existing account
       // rather than creating a second one, so there is no separate "sign up with
       // Google" path. This is the same one-account guarantee as the email case.
       await signInWithGoogle()
-      navigate('/portal')
+      navigate(next, { replace: true })
     } catch (err) {
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         // User dismissed the popup — not an error.
       } else if (err.code === 'auth/account-exists-with-different-credential') {
         // The email already has a MatchPulse account via a different method
         // (e.g. email+password). Point them at that method rather than forking.
+        const existing = err.customData?.email
+        if (existing) setEmail(existing)
         setTab('signin')
-        setError('This email is already registered. Sign in with your email and password instead.')
+        setPassword('')
+        setNotice('You already have a MatchPulse account with this email — sign in with your password instead.')
       } else {
         setError('Google sign-in failed. Please try again.')
       }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleReset() {
+    if (!configCheck()) return
+    if (!email) { setError('Enter your email above first, then tap “Forgot password”.'); return }
+    setLoading(true); setError(null); setNotice(null)
+    try {
+      await resetPassword(email)
+      setNotice('If an account exists for that email, a password-reset link is on its way.')
+    } catch (err) {
+      // Never reveal whether an email is registered.
+      if (err.code === 'auth/invalid-email') setError('Please enter a valid email address.')
+      else setNotice('If an account exists for that email, a password-reset link is on its way.')
     } finally {
       setLoading(false)
     }
@@ -97,7 +134,7 @@ export default function Login() {
 
         <div className="flex gap-1 bg-slate-100 rounded-lg p-1 mb-6">
           {[['signin', 'Sign in'], ['signup', 'Create account']].map(([t, label]) => (
-            <button key={t} onClick={() => { setTab(t); setError(null) }}
+            <button key={t} type="button" onClick={() => { setTab(t); setError(null); setNotice(null) }}
               className={`flex-1 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-colors ${
                 tab === t ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-slate-900'
               }`}>
@@ -127,6 +164,9 @@ export default function Login() {
               placeholder="••••••••" autoComplete={tab === 'signup' ? 'new-password' : 'current-password'}
               className="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
           </div>
+          {notice && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 text-sm text-emerald-700">{notice}</div>
+          )}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">{error}</div>
           )}
@@ -134,6 +174,13 @@ export default function Login() {
             className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm uppercase tracking-wider rounded-lg px-4 py-3 transition-colors">
             {loading ? 'Please wait…' : tab === 'signin' ? 'Sign in' : 'Create account'}
           </button>
+
+          {tab === 'signin' && (
+            <button type="button" onClick={handleReset} disabled={loading}
+              className="w-full text-[11px] text-slate-400 hover:text-slate-700 transition-colors">
+              Forgot password?
+            </button>
+          )}
         </form>
 
         <div className="relative my-5">
@@ -143,7 +190,7 @@ export default function Login() {
           </div>
         </div>
 
-        <button onClick={handleGoogle} disabled={loading}
+        <button type="button" onClick={handleGoogle} disabled={loading}
           className="w-full flex items-center justify-center gap-3 border border-slate-200 hover:border-slate-300 bg-white rounded-lg px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50 transition-colors shadow-sm">
           <GoogleIcon />
           Continue with Google

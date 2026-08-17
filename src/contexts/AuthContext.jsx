@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   updateProfile as fbUpdateProfile,
   signOut as fbSignOut,
 } from 'firebase/auth'
@@ -189,6 +190,10 @@ export function AuthProvider({ children }) {
     return signInWithPopup(auth, googleProvider)
   }
 
+  function resetPassword(email) {
+    return sendPasswordResetEmail(auth, email)
+  }
+
   // Re-read identity. Pass { force: true } after anything that should have
   // changed entitlement — custom claims are baked into the token at mint time
   // and only refresh about hourly, so a purchase made on the main site stays
@@ -245,7 +250,7 @@ export function AuthProvider({ children }) {
       user, uid: user?.uid ?? null, isPlatformAdmin, orgRoles, competitionRoles, permissionOverrides: overrides,
       userEntitlement,
       isOrgMember, canScore, canAdministerCompetition, canDo, grantFor, loading,
-      login, signUp, signInWithGoogle, logout, refreshUserData,
+      login, signUp, signInWithGoogle, resetPassword, logout, refreshUserData,
     }}>
       {children}
     </AuthContext.Provider>

@@ -288,7 +288,8 @@ export default function SquadManager({ team, readOnly = false }) {
                   </Link>
                 : <span className="text-sm text-slate-700 flex-1">{p.personName}</span>
               }
-              {p.isCaptain && <span className="text-[9px] text-amber-600 font-bold shrink-0">©</span>}
+              {/* 14px © everywhere the glyph renders (line-up display brief §2) */}
+              {p.isCaptain && <span className="text-sm leading-none text-amber-600 font-bold shrink-0">©</span>}
               {p.position  && <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 shrink-0">{p.position}</span>}
               <span className="font-mono text-[10px] text-slate-400 shrink-0">
                 {p.caps ?? 0} caps · <span className="text-emerald-600">{p.tries ?? 0} tries</span> · {p.points ?? 0} pts

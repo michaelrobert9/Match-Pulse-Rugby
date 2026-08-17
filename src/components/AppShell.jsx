@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import LazyBoundary from './LazyBoundary'
 import { Home, Trophy, Shield, User, KeyRound, Search, ArrowLeft, Menu, X, Link2, CalendarDays, Inbox, Radio } from 'lucide-react'
 
 // The single management shell. One chrome for BOTH platform admins and non-admin
@@ -151,7 +152,7 @@ export default function AppShell() {
         )}
 
         <main className="flex-1 pb-8">
-          <Outlet />
+          <LazyBoundary><Outlet /></LazyBoundary>
         </main>
       </div>
     </div>
