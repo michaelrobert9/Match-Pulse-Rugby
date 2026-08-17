@@ -21,6 +21,9 @@ const app = admin.initializeApp()
 // firebase.json's firestore.database.
 const DATABASE_ID = process.env.FIRESTORE_DATABASE_ID || 'rugby'
 const db = getFirestore(app, DATABASE_ID)
+// Shared identity (users/userProfiles) lives in the project's (default)
+// database, not this sport's named DB — read it through the default handle.
+const dbDefault = admin.firestore()
 
 // ── Function naming ───────────────────────────────────────────────────────────
 // Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
@@ -462,7 +465,7 @@ exports.rugbyDailyCareerStatsRecompute = onSchedule(
 async function assertCanAdministerCompetition(db, competitionId, auth) {
   const [compSnap, userSnap] = await Promise.all([
     db.doc(`competitions/${competitionId}`).get(),
-    db.doc(`users/${auth.uid}`).get(),
+    dbDefault.doc(`users/${auth.uid}`).get(),
   ])
   if (!compSnap.exists) throw new HttpsError('not-found', 'Competition not found.')
   const comp = compSnap.data()
@@ -516,7 +519,7 @@ exports.rugbyRebuildAllCareerStats = onCall(
   { region: 'europe-west1', timeoutSeconds: 540, memory: '1GiB' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.')
-    const userSnap = await db.doc(`users/${request.auth.uid}`).get()
+    const userSnap = await dbDefault.doc(`users/${request.auth.uid}`).get()
     if (!(userSnap.exists && userSnap.data().platformAdmin === true)) {
       throw new HttpsError('permission-denied', 'Platform admin only.')
     }
