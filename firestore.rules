@@ -876,6 +876,19 @@ service cloud.firestore {
     // so org/competition admins can look up colleagues by email and load staff
     // display names — without exposing platformAdmin, orgRoles, etc.
 
+    // ── Sport profile (position etc.) ────────────────────────────────────────
+    // Public-readable (positions appear on public player pages); writable only
+    // by the owning user or a platform admin. Nothing billing-related may be
+    // stored here.
+    match /rugbyProfiles/{uid} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && (request.auth.uid == uid || isPlatformAdmin())
+        && !request.resource.data.keys().hasAny(
+             ['entitlement', 'eventCredits', 'entitlementExpiresAt', 'platformAdmin']);
+      allow delete: if isPlatformAdmin();
+    }
+
     match /userProfiles/{uid} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == uid;
