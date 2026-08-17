@@ -1,6 +1,6 @@
 # MatchPulse Rugby
 # NOTE: the production domain is not decided yet. Before launch, set the
-# absolute Sitemap URL below to the deployed origin (see README → Deployment).
+# Absolute sitemap URL on the sport's own origin.
 # Public rugby content (competitions, fixtures, results, teams, players) is
 # open to crawlers. Authenticated / operational areas are disallowed.
 #
@@ -44,4 +44,4 @@ Disallow: /login
 Disallow: /signup
 Disallow: /portal
 
-Sitemap: /sitemap.xml
+Sitemap: https://rugby.matchpulse.co.za/sitemap.xml
