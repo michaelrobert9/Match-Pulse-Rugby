@@ -154,7 +154,7 @@ function parseRoute(pathname) {
 // The public origin is environment-configured (functions/.env → PUBLIC_BASE_URL)
 // because the rugby platform's domain has not been decided yet. Never hardcode
 // a domain here.
-const ORIGIN     = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '')
+const ORIGIN     = (process.env.PUBLIC_BASE_URL || 'https://rugby.matchpulse.co.za').replace(/\/$/, '')
 const SITE_NAME  = 'MatchPulse'
 const OG_DEFAULT = `${ORIGIN}/og-default.png`
 const TITLE_MAX  = 60
