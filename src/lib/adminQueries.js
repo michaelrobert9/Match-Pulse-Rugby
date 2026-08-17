@@ -4,7 +4,7 @@ import {
   serverTimestamp, writeBatch, increment, arrayUnion, deleteField,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { db, auth, functions } from '../firebase'
+import { db, identityDb, auth, functions } from '../firebase'
 import { slugify, matchSlug as buildMatchSlug } from './slugify'
 import { matchPath, competitionMatchPath, dedupeSlug } from './matchPaths'
 import { redirectKey } from './queries'
@@ -26,7 +26,7 @@ function userEmail() { return auth?.currentUser?.email ?? null }
 async function currentAuthState() {
   const userId = uid()
   if (!userId) return { uid: null, isPlatformAdmin: false, orgRoles: {} }
-  const snap = await getDoc(doc(db, 'users', userId))
+  const snap = await getDoc(doc(identityDb, 'users', userId))
   const data = snap.exists() ? snap.data() : {}
   return { uid: userId, isPlatformAdmin: data.platformAdmin === true, orgRoles: data.orgRoles ?? {} }
 }
@@ -132,7 +132,7 @@ export async function selfCreateOrganization(data) {
   })
   // Use a field-path update so the single new entry is merged into the
   // existing orgRoles map without replacing the whole field.
-  batch.update(doc(db, 'users', userId), {
+  batch.update(doc(identityDb, 'users', userId), {
     [`orgRoles.${orgRef.id}`]: { role: 'owner', teamId: null },
   })
   await batch.commit()
@@ -1890,7 +1890,7 @@ export async function revertFixtureOutcome(matchId, { reason = null } = {}) {
 // onto users/{uid}.orgRoles for single-read access checks at sign-in.
 
 export async function findUserByEmail(email) {
-  const snap = await getDocs(query(collection(db, 'userProfiles'), where('email', '==', email.trim().toLowerCase())))
+  const snap = await getDocs(query(collection(identityDb, 'userProfiles'), where('email', '==', email.trim().toLowerCase())))
   return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }
 }
 
@@ -1906,7 +1906,7 @@ export async function setOrgStaff(orgId, userId, role, { teamId = null } = {}) {
   // Mirror the FULL grant (role + scope) so canDo() can resolve team scope
   // without reading the authoritative staff doc on every check. Use a field-path
   // update so this entry is merged into the existing map without replacing it.
-  batch.update(doc(db, 'users', userId), {
+  batch.update(doc(identityDb, 'users', userId), {
     [`orgRoles.${orgId}`]: { role, teamId: teamId || null },
   })
   return batch.commit()
@@ -1916,7 +1916,7 @@ export async function removeOrgStaff(orgId, userId) {
   const batch = writeBatch(db)
   batch.delete(doc(db, 'organizations', orgId, 'staff', userId))
   // Atomically remove just this org's key from the mirrored map.
-  batch.update(doc(db, 'users', userId), {
+  batch.update(doc(identityDb, 'users', userId), {
     [`orgRoles.${orgId}`]: deleteField(),
   })
   return batch.commit()
@@ -1928,7 +1928,7 @@ export async function fetchOrgStaff(orgId) {
   // The staff subcollection only stores role/grant metadata. Join each user's
   // public profile so display names (not raw UIDs) can be shown.
   const profiles = await Promise.all(rows.map(r =>
-    getDoc(doc(db, 'userProfiles', r.id))
+    getDoc(doc(identityDb, 'userProfiles', r.id))
       .then(u => (u.exists() ? u.data() : {}))
       .catch(() => ({}))
   ))
@@ -1946,7 +1946,7 @@ export async function setCompetitionStaff(compId, userId, role = 'admin') {
   batch.set(doc(db, 'competitions', compId, 'staff', userId), {
     role, grantedBy: uid(), grantedAt: serverTimestamp(),
   })
-  batch.update(doc(db, 'users', userId), {
+  batch.update(doc(identityDb, 'users', userId), {
     [`competitionRoles.${compId}`]: { role },
   })
   return batch.commit()
@@ -1955,7 +1955,7 @@ export async function setCompetitionStaff(compId, userId, role = 'admin') {
 export async function removeCompetitionStaff(compId, userId) {
   const batch = writeBatch(db)
   batch.delete(doc(db, 'competitions', compId, 'staff', userId))
-  batch.update(doc(db, 'users', userId), {
+  batch.update(doc(identityDb, 'users', userId), {
     [`competitionRoles.${compId}`]: deleteField(),
   })
   return batch.commit()
@@ -1965,7 +1965,7 @@ export async function fetchCompetitionStaff(compId) {
   const snap = await getDocs(collection(db, 'competitions', compId, 'staff'))
   const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
   const profiles = await Promise.all(rows.map(r =>
-    getDoc(doc(db, 'userProfiles', r.id))
+    getDoc(doc(identityDb, 'userProfiles', r.id))
       .then(u => (u.exists() ? u.data() : {}))
       .catch(() => ({}))
   ))
@@ -1984,13 +1984,13 @@ export async function fetchCompetitionStaff(compId) {
 // else from writing platformAdmin or permissionOverrides.
 
 export async function fetchAllUsers() {
-  const snap = await getDocs(query(collection(db, 'users'), orderBy('email')))
+  const snap = await getDocs(query(collection(identityDb, 'users'), orderBy('email')))
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
 // Grant or revoke Master Admin status (masteradmin.add).
 export async function setMasterAdmin(userId, isMaster) {
-  return updateDoc(doc(db, 'users', userId), {
+  return updateDoc(doc(identityDb, 'users', userId), {
     platformAdmin: isMaster === true,
     updatedAt: serverTimestamp(),
   })
@@ -2000,11 +2000,11 @@ export async function setMasterAdmin(userId, isMaster) {
 // (permission.toggle). value true forces on, false forces off, null clears
 // the override so the natural role's default applies again.
 export async function setUserPermissionOverride(userId, capability, value) {
-  const snap = await getDoc(doc(db, 'users', userId))
+  const snap = await getDoc(doc(identityDb, 'users', userId))
   const overrides = { ...(snap.exists() ? snap.data().permissionOverrides ?? {} : {}) }
   if (value === null || value === undefined) delete overrides[capability]
   else overrides[capability] = value === true
-  return updateDoc(doc(db, 'users', userId), {
+  return updateDoc(doc(identityDb, 'users', userId), {
     permissionOverrides: overrides,
     updatedAt: serverTimestamp(),
   })
@@ -2219,6 +2219,30 @@ export async function adminLinkProfileToUser(personId, email, relationship) {
   else throw new Error('Pick a relationship: player, parent or manager.')
   await updateDoc(ref, { ...patch, updatedBy: uid(), updatedAt: serverTimestamp() })
   return { userId: target.id, email: target.email ?? email }
+}
+
+// "This isn't me" (A4): anyone — signed in or not — can flag a profile. A
+// parent or coach who spots a wrong claim should not have to register to say
+// so. Reports land in profileReports for the master-admin queue.
+export async function reportProfileMismatch(personId, { personName = '', message = '', contact = '' } = {}) {
+  await addDoc(collection(db, 'profileReports'), {
+    personId,
+    personName: (personName ?? '').slice(0, 200),
+    message:    (message ?? '').slice(0, 1000),
+    contact:    (contact ?? '').slice(0, 200),
+    reporterUid: uid(),                      // null when signed out — that's fine
+    status: 'open',
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function fetchProfileReports(personId = null) {
+  const base = collection(db, 'profileReports')
+  const q = personId ? query(base, where('personId', '==', personId)) : base
+  const snap = await getDocs(q)
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0))
 }
 
 // People profiles controlled or managed by the current user (the parent's

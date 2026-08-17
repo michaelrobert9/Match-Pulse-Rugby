@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 function Spinner() {
@@ -11,10 +11,16 @@ function Spinner() {
 
 export default function ProtectedRoute({ children, require: requiredRole = 'admin' }) {
   const { user, isPlatformAdmin, canScore, loading } = useAuth()
+  const location = useLocation()
 
   if (loading) return <Spinner />
 
-  if (!user) return <Navigate to="/login" replace />
+  // Sign-in is local to this origin — send signed-out users to /login and
+  // remember where they were headed so they land back there afterwards.
+  if (!user) {
+    const next = encodeURIComponent(location.pathname + location.search)
+    return <Navigate to={`/login?next=${next}`} replace />
+  }
 
   if (requiredRole === 'any') return children
 

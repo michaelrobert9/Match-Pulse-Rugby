@@ -14,6 +14,7 @@ import { managesPlayerProfile } from '../lib/capabilities'
 import { removeSelfFromFixture, updatePersonBanner, updatePerson, claimPlayerProfile, isProfileClaimed } from '../lib/adminQueries'
 import { uploadImageForEntity, IMAGE_SPECS } from '../lib/imageUpload'
 import { useSeoMeta } from '../lib/useSeoMeta'
+import ReportProfileLink from '../components/ReportProfileLink'
 
 const ROLE_LABELS = {
   player: 'Player',
@@ -457,6 +458,9 @@ export default function PlayerProfile() {
           </>
         )}
       </section>
+
+      {/* "This isn't me" — on every profile page, works without an account (A4) */}
+      <ReportProfileLink person={person} />
 
     </div>
   )

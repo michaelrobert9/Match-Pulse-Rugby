@@ -21,6 +21,9 @@ const app = admin.initializeApp()
 // firebase.json's firestore.database.
 const DATABASE_ID = process.env.FIRESTORE_DATABASE_ID || 'rugby'
 const db = getFirestore(app, DATABASE_ID)
+// Shared identity (users/userProfiles) lives in the project's (default)
+// database, not this sport's named DB — read it through the default handle.
+const dbDefault = admin.firestore()
 
 // ── Function naming ───────────────────────────────────────────────────────────
 // Cloud Function names are GLOBALLY UNIQUE PER PROJECT, and every MatchPulse
@@ -51,9 +54,9 @@ exports.rugbySendInviteEmail = onDocumentCreated(
   // RESEND_API_KEY is read from process.env (functions/.env, see
   // functions/.env.example). It is intentionally NOT declared as a Secret
   // Manager secret so a fresh, pre-launch deploy succeeds before any email
-  // provider is configured — the handler no-ops gracefully when the key is
-  // absent. Provision the key in functions/.env to enable invite emails.
-  { document: 'invites/{inviteId}', database: DATABASE_ID },
+  // The Resend API key is supplied at runtime by the RESEND_API_KEY secret
+  // (Google Cloud Secret Manager), same as the other sport repos.
+  { document: 'invites/{inviteId}', database: DATABASE_ID, secrets: ['RESEND_API_KEY'] },
   async (event) => {
     const snap = event.data
     if (!snap) return
@@ -81,7 +84,7 @@ exports.rugbySendInviteEmail = onDocumentCreated(
     const roleLabel = ROLE_DISPLAY[invite.role] || invite.role || 'member'
     // Sign-up happens LOCALLY on this origin (direct Firebase Auth). Link the
     // invitee to this app's own /signup carrying the invite id.
-    const origin = (process.env.PUBLIC_BASE_URL || `https://${process.env.GCLOUD_PROJECT}.web.app`).replace(/\/$/, '')
+    const origin = (process.env.PUBLIC_BASE_URL || 'https://rugby.matchpulse.co.za').replace(/\/$/, '')
     const signupLink = `${origin}/signup?invite=${inviteId}`
 
     const resend = new Resend(process.env.RESEND_API_KEY)
@@ -119,7 +122,7 @@ exports.rugbySendInviteEmail = onDocumentCreated(
 
     try {
       const { data, error } = await resend.emails.send({
-        from: process.env.EMAIL_FROM || 'MatchPulse Rugby <noreply@example.com>',
+        from: 'MatchPulse <noreply@matchpulse.co.za>',
         to: email,
         subject: 'You have been invited to MatchPulse',
         html,
@@ -154,7 +157,7 @@ exports.rugbySendInviteEmail = onDocumentCreated(
 //     frontend — to enforce the captcha. Keys: dash.cloudflare.com → Turnstile.
 // Environment-configured — set CONTACT_EMAIL in functions/.env for this
 // deployment. Never inherit another product's inbox.
-const CONTACT_TO = process.env.CONTACT_EMAIL || ''
+const CONTACT_TO = 'michael@matchpulse.co.za'
 
 async function verifyTurnstile(token, remoteip) {
   const secret = process.env.TURNSTILE_SECRET_KEY
@@ -174,11 +177,10 @@ async function verifyTurnstile(token, remoteip) {
 }
 
 exports.rugbySubmitContactForm = onCall(
-  // RESEND_API_KEY / TURNSTILE_SECRET_KEY are read from process.env
-  // (functions/.env). Not declared as Secret Manager secrets so a pre-launch
-  // deploy succeeds before those providers are set up — the captcha step is
-  // skipped and the send guards on CONTACT_TO when they are absent.
-  { region: 'europe-west1' },
+  // RESEND_API_KEY / TURNSTILE_SECRET_KEY come from Secret Manager, same as the
+  // other sport repos. The captcha step is skipped while the Turnstile key is
+  // absent so the form works before the keys are provisioned.
+  { region: 'europe-west1', secrets: ['RESEND_API_KEY', 'TURNSTILE_SECRET_KEY'] },
   async (request) => {
     const d = request.data ?? {}
     const name    = String(d.name    ?? '').trim()
@@ -249,7 +251,7 @@ exports.rugbySubmitContactForm = onCall(
 
     try {
       const { data, error } = await resend.emails.send({
-        from: process.env.EMAIL_FROM || 'MatchPulse Rugby <noreply@example.com>',
+        from: 'MatchPulse <noreply@matchpulse.co.za>',
         to: CONTACT_TO,
         replyTo: email,
         subject: `Contact form: ${name}`,
@@ -463,7 +465,7 @@ exports.rugbyDailyCareerStatsRecompute = onSchedule(
 async function assertCanAdministerCompetition(db, competitionId, auth) {
   const [compSnap, userSnap] = await Promise.all([
     db.doc(`competitions/${competitionId}`).get(),
-    db.doc(`users/${auth.uid}`).get(),
+    dbDefault.doc(`users/${auth.uid}`).get(),
   ])
   if (!compSnap.exists) throw new HttpsError('not-found', 'Competition not found.')
   const comp = compSnap.data()
@@ -517,7 +519,7 @@ exports.rugbyRebuildAllCareerStats = onCall(
   { region: 'europe-west1', timeoutSeconds: 540, memory: '1GiB' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.')
-    const userSnap = await db.doc(`users/${request.auth.uid}`).get()
+    const userSnap = await dbDefault.doc(`users/${request.auth.uid}`).get()
     if (!(userSnap.exists && userSnap.data().platformAdmin === true)) {
       throw new HttpsError('permission-denied', 'Platform admin only.')
     }

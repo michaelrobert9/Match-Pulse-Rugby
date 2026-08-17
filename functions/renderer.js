@@ -630,8 +630,8 @@ function injectBody(html, body) {
 //   a) there is zero chance of routing back through the ** rewrite (different domain)
 //   b) the URL is stable even if the custom domain has any transient DNS/TLS issue
 
-const SHELL_URL = process.env.SHELL_URL || `https://${process.env.GCLOUD_PROJECT}.web.app/index.html`
-const SHELL_TTL_MS = 60 * 1000   // re-check the shell at most once a minute
+const SHELL_URL = process.env.SHELL_URL || 'https://match-pulse-4560e-ff0fe.web.app/index.html'
+const SHELL_TTL_MS = 15 * 1000   // re-check the shell within ~15s of a deploy
 let shellCache = null
 let shellCachedAt = 0
 
@@ -670,7 +670,9 @@ async function rendererHandler(req, res) {
   if (!bot) {
     // Human: return the SPA shell unchanged. React router handles the route.
     res.set('Content-Type', 'text/html; charset=utf-8')
-    res.set('Cache-Control', 'public, max-age=60, s-maxage=300')
+    // SPA-shell contract: hashed chunks are purged on deploy, so the HTML must
+    // never be cached — a cached shell references dead chunks -> blank page.
+    res.set('Cache-Control', 'no-store')
     res.status(200).send(shell)
     return
   }

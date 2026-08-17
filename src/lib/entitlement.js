@@ -14,7 +14,7 @@
 //   entitlementExpiresAt : Timestamp | epoch ms         (pro subscription end)
 
 import { doc, getDoc } from 'firebase/firestore'
-import { identityDb } from '../firebase'
+import { db } from '../firebase'
 
 // Shared status resolver — works for any doc carrying the entitlement fields.
 function entitlementStatusOf(data) {
@@ -59,6 +59,6 @@ export function bestEntitlement(statuses) {
 
 // Fetch an org doc and return its entitlement status.
 export async function fetchOrgEntitlement(orgId) {
-  const snap = await getDoc(doc(identityDb, 'organizations', orgId))
+  const snap = await getDoc(doc(db, 'organizations', orgId))
   return orgEntitlementStatus(snap.exists() ? snap.data() : null)
 }

@@ -98,31 +98,32 @@ const SURNAME_PARTICLES = new Set([
   'van', 'von', 'der', 'den', 'de', 'du', 'da', 'ter', 'ten', 'le', 'la', 'el',
 ])
 
-// Title-case one word, preserving McDonald / O'Brien / hyphenated names.
-function titleCaseWord(word) {
-  const lower = word.toLowerCase()
+// Title-case one word, preserving internal capitals (McDonald, O'Brien) when
+// the word already carries mixed case. ALL-CAPS and all-lower words are
+// normalised; Mc/Mac/O' prefixes re-capitalise the letter that follows.
+// Body ported from hockey's src/lib/teamSheet.js titleWord() — keep the
+// casing behaviour identical across all four sports.
+function titleCaseWord(w) {
+  if (!w) return w
+  const lower = w.toLowerCase()
   if (SURNAME_PARTICLES.has(lower)) return lower
-  const capitalise = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
-  // Apostrophes (O'Brien) and hyphens (Smith-Jones) capitalise each part.
-  let out = lower
-    .split('-').map(part =>
-      part.split("'").map(capitalise).join("'")
-    ).join('-')
-  // Mc prefix: McDonald.
+  // Mixed case already (McDonald, O'Brien, du Plessis handled above) — keep.
+  if (w !== w.toUpperCase() && w !== lower) return w
+  let out = lower.charAt(0).toUpperCase() + lower.slice(1)
   out = out.replace(/^Mc(\w)/, (_, c) => 'Mc' + c.toUpperCase())
+  out = out.replace(/^Mac(\w{2,})/, (m, rest) => 'Mac' + rest.charAt(0).toUpperCase() + rest.slice(1))
+  out = out.replace(/^O'(\w)/, (_, c) => "O'" + c.toUpperCase())
+  out = out.replace(/-(\w)/g, (_, c) => '-' + c.toUpperCase())
   return out
 }
 
-// Normalise casing only when the input is shouting (ALL CAPS) or whispering
-// (all lower). Mixed-case input was typed deliberately — leave it alone.
+// Normalise a name to title case word by word, preserving McDonald /
+// van der Merwe / O'Brien / du Plessis. A word already carrying mixed case is
+// someone's deliberate spelling and is left alone; ALL-CAPS and all-lower
+// words are normalised. (Exported name unchanged — rugby files import
+// normaliseNameCase.)
 export function normaliseNameCase(name) {
-  const trimmed = name.trim().replace(/\s+/g, ' ')
-  if (!trimmed) return ''
-  const letters = trimmed.replace(/[^A-Za-z]/g, '')
-  const isAllCaps  = letters.length > 0 && letters === letters.toUpperCase()
-  const isAllLower = letters.length > 0 && letters === letters.toLowerCase()
-  if (!isAllCaps && !isAllLower) return trimmed
-  return trimmed.split(' ').map(titleCaseWord).join(' ')
+  return String(name ?? '').trim().replace(/\s+/g, ' ').split(' ').map(titleCaseWord).join(' ')
 }
 
 // Split a display name into first name(s) + surname. Splits on the last space,
