@@ -12,7 +12,7 @@ import {
   collection, doc, addDoc, getDoc, getDocs, query, where, setDoc, updateDoc, serverTimestamp, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../firebase'
-import { generatePersonSlug, linkPersonToOrg } from './adminQueries'
+import { generatePersonSlug, linkPersonToOrg, seedFixturesFromTeamSheet } from './adminQueries'
 import { positionForNumber, splitName } from './teamSheet'
 import { resolveSideLineup } from './lineupResolve'
 
@@ -191,6 +191,11 @@ export async function saveCompetitionTeamSheet(competitionId, teamId, {
       if (s.playerId) await linkPersonToOrg(s.playerId, orgId, orgName ?? null).catch(() => {})
     }
   }
+
+  // Link every pasted player into the team's actual fixtures (real lineups +
+  // lineupPersonIds), so their profile lists those matches and the merge tool
+  // can move them — the standard behaviour, not the derived-only sheet.
+  await seedFixturesFromTeamSheet(competitionId, teamId, squad).catch(() => {})
 
   return squad
 }
