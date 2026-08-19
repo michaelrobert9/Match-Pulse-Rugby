@@ -376,7 +376,7 @@ export default function MatchDetail() {
           // sheet writes them; the roster join is a legacy fallback only. A
           // pasted captain would not appear if this joined against the roster.
           position:    e.position ?? null,
-          personSlug:  r?.personSlug ?? null,
+          personSlug:  e.personSlug ?? r?.personSlug ?? null,
           isCaptain:   (e.isCaptain ?? r?.isCaptain) === true,
           isStarter:   !!e.isStarter,
         }
