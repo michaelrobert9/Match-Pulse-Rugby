@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   fetchMatch, fetchTeamLineup, subscribeMatch,
   fetchMatchByPath, subscribeMatchByPath,
-  fetchCompetition,
+  fetchCompetition, fetchPerson,
   toDate,
 } from '../lib/queries'
 import { isBulkLineupCompetition, sideIsInherited, resolveSideLineup } from '../lib/lineupResolve'
@@ -265,6 +265,7 @@ export default function MatchDetail() {
   useSeoMeta({ type: 'match', entity: match })
   const [homePlayers, setHomePlayers] = useState([])
   const [awayPlayers, setAwayPlayers] = useState([])
+  const [peopleById,  setPeopleById]  = useState({})   // live person docs for line-up members
   const [inheritedLineups, setInheritedLineups] = useState(null)
   const [loading,     setLoading]     = useState(true)
   const [, setTick]                   = useState(0)
@@ -303,6 +304,24 @@ export default function MatchDetail() {
     Promise.all([fetchTeamLineup(match.homeTeamId), fetchTeamLineup(match.awayTeamId)])
       .then(([h, a]) => { setHomePlayers(h); setAwayPlayers(a) })
   }, [match?.homeTeamId, match?.awayTeamId])
+
+  // Resolve the LIVE person record for every line-up member, so the name (and
+  // profile slug) always reflect the one people/{id} document — an admin name
+  // fix shows here without rewriting the frozen copies on the match/sheet.
+  useEffect(() => {
+    const ids = [...new Set([
+      ...(match?.homeLineup ?? []).map(e => e.personId),
+      ...(match?.awayLineup ?? []).map(e => e.personId),
+      ...(inheritedLineups?.home ?? []).map(e => e.personId),
+      ...(inheritedLineups?.away ?? []).map(e => e.personId),
+    ].filter(Boolean))]
+    if (!ids.length) return
+    Promise.all(ids.map(pid => fetchPerson(pid).catch(() => null))).then(list => {
+      const map = {}
+      list.forEach(p => { if (p) map[p.id] = p })
+      setPeopleById(map)
+    })
+  }, [match?.id, match?.homeLineup, match?.awayLineup, inheritedLineups])
 
   // Derived line-ups (tournaments/festivals, brief §4/§9): before the freeze a
   // fixture's sheet EQUALS the competition squad minus exceptions, so the
@@ -366,17 +385,18 @@ export default function MatchDetail() {
     return (entries ?? [])
       .map(e => {
         const r = e.personId ? byId.get(e.personId) : null
+        const live = e.personId ? peopleById[e.personId] : null   // one people/{id} record
         return {
           id:          e.id,
           personId:    e.personId ?? null,
-          personName:  e.personName ?? r?.personName ?? 'Unknown',
-          photoUrl:    e.photoUrl ?? r?.photoUrl ?? null,
+          personName:  live?.fullName || e.personName || r?.personName || 'Unknown',
+          photoUrl:    live?.photoUrl ?? e.photoUrl ?? r?.photoUrl ?? null,
           shirtNumber: e.shirtNumber ?? r?.shirtNumber ?? null,
           // Captaincy and position read from the LINE-UP ENTRY, where the team
           // sheet writes them; the roster join is a legacy fallback only. A
           // pasted captain would not appear if this joined against the roster.
           position:    e.position ?? null,
-          personSlug:  r?.personSlug ?? null,
+          personSlug:  live?.slug ?? e.personSlug ?? r?.personSlug ?? null,
           isCaptain:   (e.isCaptain ?? r?.isCaptain) === true,
           isStarter:   !!e.isStarter,
         }

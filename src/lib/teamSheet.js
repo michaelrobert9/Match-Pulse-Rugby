@@ -154,6 +154,11 @@ function parseLine(rawLine) {
   let text = raw.trim()
   if (!text) return null
 
+  // Strip a leading bullet / list marker so it never lands in the name and does
+  // not hide a following number ("- 12 John" → name "John", number 12).
+  text = text.replace(/^\s*(?:[•·▪▫◦‣⁃*]+|[-–—])\s+/, '').trim()
+  if (!text) return null
+
   let number = null
   let isCaptain = false
 
