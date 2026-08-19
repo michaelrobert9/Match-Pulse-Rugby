@@ -9,10 +9,10 @@
 // one-at-a-time flow uses. No shadow profiles, no unclaimed state.
 
 import {
-  collection, doc, addDoc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion,
+  collection, doc, addDoc, getDoc, getDocs, query, where, setDoc, updateDoc, serverTimestamp, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../firebase'
-import { generatePersonSlug } from './adminQueries'
+import { generatePersonSlug, linkPersonToOrg } from './adminQueries'
 import { positionForNumber, splitName } from './teamSheet'
 import { resolveSideLineup } from './lineupResolve'
 
@@ -182,7 +182,55 @@ export async function saveCompetitionTeamSheet(competitionId, teamId, {
     updatedBy: uid(),
   }, { merge: true })
 
+  // Give every pasted player a proper linked record right away: a competition
+  // stat slice (so they show on the players list and accrue stats as fixtures
+  // play) and a link to the team's org for the roll-up. Best-effort, idempotent.
+  await ensureCompetitionSquadSlices(competitionId, teamId, squad).catch(() => {})
+  if (orgId) {
+    for (const s of squad) {
+      if (s.playerId) await linkPersonToOrg(s.playerId, orgId, orgName ?? null).catch(() => {})
+    }
+  }
+
   return squad
+}
+
+// Ensure a competition stat slice exists for EVERY player in a team's sheet the
+// moment it is saved — so a pasted player has a proper, linked record on the
+// players list right away, not only once a fixture is played. One slice per
+// (person, team, competition); tallies start at 0 and the stats engine fills
+// them in from played fixtures. Idempotent — existing slices are untouched.
+export async function ensureCompetitionSquadSlices(competitionId, teamId, squad = []) {
+  if (!competitionId || !teamId || !squad.length) return
+  const [existingSnap, teamSnap, compSnap] = await Promise.all([
+    getDocs(query(collection(db, 'players'),
+      where('teamId', '==', teamId), where('competitionId', '==', competitionId))),
+    getDoc(doc(db, 'teams', teamId)),
+    getDoc(doc(db, 'competitions', competitionId)),
+  ])
+  const have = new Set(existingSnap.docs.map(d => d.data().personId).filter(Boolean))
+  const t = teamSnap.exists() ? teamSnap.data() : {}
+  const c = compSnap.exists() ? compSnap.data() : {}
+  for (const s of squad) {
+    const personId = s.playerId ?? s.personId
+    if (!personId || have.has(personId)) continue
+    have.add(personId)
+    await addDoc(collection(db, 'players'), {
+      personId,
+      personName: s.playerName ?? s.personName ?? null,
+      personSlug: s.personSlug ?? null,
+      teamId, competitionId, season: null,
+      organizationId: t.organizationId ?? null,
+      shirtNumber: s.shirtNumber ?? null, position: s.position ?? null, isCaptain: s.isCaptain === true,
+      caps: 0, tries: 0, conversions: 0, penalties: 0, dropGoals: 0, points: 0, cards: { yellow: 0, red: 0 },
+      competitionName: c.name ?? null,
+      competitionSeason: c.season ?? null,
+      competitionStatus: c.status ?? null,
+      teamDisplayName: t.displayName ?? null,
+      teamPrimaryColor: t.primaryColor ?? null,
+      createdBy: uid(), createdAt: serverTimestamp(),
+    }).catch(() => {})
+  }
 }
 
 // Write a whole side's fixture line-up directly from a confirmed grid — leagues
