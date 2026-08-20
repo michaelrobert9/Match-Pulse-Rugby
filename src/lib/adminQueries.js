@@ -2686,12 +2686,25 @@ export async function seedFixturesFromTeamSheet(competitionId, teamId, squad = [
     for (const p of players) await linkPersonToOrg(p.personId, teamOrgId).catch(() => {})
   }
 
+  // Maintain lineupPersonIds — the flat reverse-index that powers a player's
+  // match list, the merge tool, and the stats self-heal — WITHOUT populating the
+  // real homeLineup/awayLineup. The team-sheet renderer/editor treats a side as
+  // "derived" (and editable via the paste-and-review grid) only while its lineup
+  // array is empty, so writing real entries here would disable that editor. We
+  // keep the array empty (reverting any earlier seed that wrongly populated it)
+  // and just index the personIds. Frozen (played) fixtures are never touched.
+  const personIds = players.map(p => p.personId).filter(Boolean)
   const matches = await competitionTeamMatchesForSquad(competitionId, teamId)
   for (const m of matches) {
-    for (const p of players) {
-      await addPersonToMatchLineup(m.id, {
-        personId: p.personId, personName: p.personName, side: m.side, shirtNumber: p.shirtNumber,
-      }).catch(() => {})
+    if (m.lineupMode === 'frozen') continue
+    const field = m.side === 'home' ? 'homeLineup' : 'awayLineup'
+    const patch = {}
+    if ((m[field] ?? []).length) patch[field] = []   // revert to derived
+    const existingIds = m.lineupPersonIds ?? []
+    const nextIds = [...new Set([...existingIds, ...personIds])]
+    if (patch[field] !== undefined || nextIds.length !== existingIds.length) {
+      patch.lineupPersonIds = nextIds
+      await updateDoc(doc(db, 'matches', m.id), patch).catch(() => {})
     }
   }
 }
