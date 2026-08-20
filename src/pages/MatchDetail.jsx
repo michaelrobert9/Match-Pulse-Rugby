@@ -769,16 +769,16 @@ export default function MatchDetail() {
                     // stay aligned; the © renders in the TEAM's colour (slate
                     // fallback), 14px bold — the armband reads at a glance.
                     <div key={p.id}
-                      className={`flex items-center gap-2 ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
+                      className={`flex items-start gap-2 ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
                       style={isPom ? { backgroundColor: pomBgTint(homePom, teamCol) } : undefined}>
                       <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-right shrink-0">{p.shirtNumber ?? '–'}</span>
                       <span className="w-5 shrink-0 text-sm font-bold leading-none text-center"
                         style={{ color: teamCol }}>{p.isCaptain ? '©' : ''}</span>
                       {p.personId
                         ? <Link to={playerUrl({ id: p.personId, slug: p.personSlug })}
-                            className={`text-xs truncate transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
+                            className={`text-xs break-words leading-tight min-w-0 transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</Link>
-                        : <span className={`text-xs truncate ${isPom ? 'font-semibold' : 'text-slate-700'}`}
+                        : <span className={`text-xs break-words leading-tight min-w-0 ${isPom ? 'font-semibold' : 'text-slate-700'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</span>}
                       {p.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{p.position}</span>}
                       <span className="flex-1" />
@@ -805,16 +805,16 @@ export default function MatchDetail() {
                     // Mirror of the home row: name ← captain slot ← number, so
                     // the two columns read outward from the centre line.
                     <div key={p.id}
-                      className={`flex items-center gap-2 justify-end ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
+                      className={`flex items-start gap-2 justify-end ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
                       style={isPom ? { backgroundColor: pomBgTint(awayPom, teamCol) } : undefined}>
                       {isPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: c }}>POTM</span>}
                       <span className="flex-1" />
                       {p.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{p.position}</span>}
                       {p.personId
                         ? <Link to={playerUrl({ id: p.personId, slug: p.personSlug })}
-                            className={`text-xs truncate text-right transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
+                            className={`text-xs break-words leading-tight min-w-0 text-right transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</Link>
-                        : <span className={`text-xs truncate text-right ${isPom ? 'font-semibold' : 'text-slate-700'}`}
+                        : <span className={`text-xs break-words leading-tight min-w-0 text-right ${isPom ? 'font-semibold' : 'text-slate-700'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</span>}
                       <span className="w-5 shrink-0 text-sm font-bold leading-none text-center"
                         style={{ color: teamCol }}>{p.isCaptain ? '©' : ''}</span>
