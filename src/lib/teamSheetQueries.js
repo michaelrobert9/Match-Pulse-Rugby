@@ -32,45 +32,68 @@ const norm = (s) => String(s ?? '')
 // people: the full profile pool (people read is public; the pool is fetched
 // once per paste session). orgId: the team's organisation, used as the
 // confident tiebreak — same name + same school/club is the same player.
+//
+// Bias towards SURFACING a match: a silent duplicate is worse than showing the
+// user a candidate they can dismiss. Every profile is scored by ranked
+// similarity and anything plausible is offered as a candidate to link — the
+// user is never forced to link, but is never left creating a duplicate blind.
+//   100 exact normalised full name
+//    90 same first + same surname (extra middle name etc.)
+//    70 same surname + same first initial
+//    45 same surname
+//    25 same first name (only when the entered name has more than one word)
 export function matchRowsToPeople(rows, people, { orgId = null } = {}) {
-  const pool = (people ?? []).map(p => ({
-    ...p,
-    _norm: norm(p.fullName),
-    _surname: norm(p.fullName).split(' ').pop() ?? '',
-  }))
+  // Pre-normalise the pool once; skip merged tombstones (claimStatus 'merged').
+  const pool = (people ?? [])
+    .filter(p => p && p.claimStatus !== 'merged')
+    .map(p => {
+      const n = norm(p.fullName)
+      const parts = n.split(' ').filter(Boolean)
+      return { p, n, first: parts[0] ?? '', last: parts[parts.length - 1] ?? '' }
+    })
+    .filter(x => x.n)
 
   return rows.map(row => {
     const fullName = `${row.firstName} ${row.lastName}`.trim()
-    const key = norm(fullName)
-    if (!key || row.unreadable) return { ...row, match: { status: 'new' } }
+    const target = norm(fullName)
+    if (!target || row.unreadable) return { ...row, match: { status: 'new' } }
 
-    const exact = pool.filter(p => p._norm === key)
+    const tParts   = target.split(' ').filter(Boolean)
+    const tFirst   = tParts[0]
+    const tLast    = tParts[tParts.length - 1]
+    const tInitial = tFirst?.[0]
+
+    // Score every profile; keep anything plausible as a candidate.
+    const scored = []
+    for (const { p, n, first, last } of pool) {
+      let score = 0
+      if (n === target)                                                        score = 100
+      else if (tLast && last === tLast && tFirst && first === tFirst)          score = 90
+      else if (tLast && last === tLast && tInitial && first?.[0] === tInitial) score = 70
+      else if (tLast && last === tLast)                                        score = 45
+      else if (tFirst && first === tFirst && tParts.length > 1)                score = 25
+      if (score > 0) scored.push({ p, n, score })
+    }
+    scored.sort((a, b) => b.score - a.score || a.n.localeCompare(b.n))
+    const candidates = scored.slice(0, 8).map(s => stripCandidate(s.p))
+    if (candidates.length === 0) return { ...row, match: { status: 'new' } }
+
+    // A single exact-name match links by default (still overridable via the
+    // chooser). If several share the exact name, org membership breaks the tie;
+    // otherwise ask. Any other plausible candidates → ask.
+    const exact = scored.filter(s => s.score === 100).map(s => s.p)
     if (exact.length === 1) {
       const p = exact[0]
-      return { ...row, match: { status: 'linked', personId: p.id, personName: p.fullName, photoUrl: p.photoUrl ?? null } }
+      return { ...row, match: { status: 'linked', personId: p.id, personName: p.fullName, photoUrl: p.photoUrl ?? null, candidates } }
     }
-    if (exact.length > 1) {
-      const withOrg = orgId
-        ? exact.filter(p => (p.representativeOrgIds ?? []).includes(orgId))
-        : []
-      if (withOrg.length === 1) {
-        const p = withOrg[0]
-        return { ...row, match: { status: 'linked', personId: p.id, personName: p.fullName, photoUrl: p.photoUrl ?? null } }
-      }
-      return { ...row, match: { status: 'ambiguous', candidates: exact.map(stripCandidate) } }
-    }
-
-    // Partial: same surname + same first initial → plausible, ask.
-    const surname = norm(row.lastName)
-    const initial = norm(row.firstName)[0] ?? ''
-    if (surname) {
-      const partial = pool.filter(p =>
-        p._surname === surname && (!initial || norm(p.fullName)[0] === initial))
-      if (partial.length > 0) {
-        return { ...row, match: { status: 'ambiguous', candidates: partial.map(stripCandidate) } }
+    if (exact.length > 1 && orgId) {
+      const inOrg = exact.filter(p => (p.representativeOrgIds ?? []).includes(orgId))
+      if (inOrg.length === 1) {
+        const p = inOrg[0]
+        return { ...row, match: { status: 'linked', personId: p.id, personName: p.fullName, photoUrl: p.photoUrl ?? null, candidates } }
       }
     }
-    return { ...row, match: { status: 'new' } }
+    return { ...row, match: { status: 'ambiguous', candidates } }
   })
 }
 

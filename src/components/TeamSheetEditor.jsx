@@ -121,7 +121,10 @@ export default function TeamSheetEditor({
   const dupNums  = useMemo(() => duplicateNumbers(rows), [rows])
   const dupNames = useMemo(() => duplicateNames(rows), [rows])
   const fifteen  = useMemo(() => isFifteenInOrder(rows), [rows])
-  const canConfirm = rows.length > 0 && !saving
+  // A row still showing 'ambiguous' has candidates the user has not picked
+  // between — saving now would silently create a duplicate, so it blocks Add/Save.
+  const unresolved = useMemo(() => rows.filter(r => r.match?.status === 'ambiguous').length, [rows])
+  const canConfirm = rows.length > 0 && !saving && unresolved === 0
 
   // Parse the paste with auto-detected interpretation (rugby default: shirt
   // numbers; a plain contiguous list reads as ordinal). The toggle above the
@@ -176,11 +179,19 @@ export default function TeamSheetEditor({
   }
 
   function choose(key, person) {
-    patch(key, {
-      match: person
-        ? { status: 'linked', personId: person.id, personName: person.fullName, photoUrl: person.photoUrl, chosen: true }
-        : { status: 'new', chosen: true },
-    })
+    setRows(prev => prev.map(r => {
+      if (r.key !== key) return r
+      // Keep the candidate list on the row so the chooser stays reachable — the
+      // user can change their mind (pick a different profile, or flip between an
+      // existing player and "Create new") without re-typing the name.
+      const candidates = r.match?.candidates ?? []
+      return {
+        ...r,
+        match: person
+          ? { status: 'linked', personId: person.id, personName: person.fullName, photoUrl: person.photoUrl ?? null, chosen: true, candidates }
+          : { status: 'new', chosen: true, candidates },
+      }
+    }))
     setChooserKey(null)
   }
 
@@ -200,16 +211,26 @@ export default function TeamSheetEditor({
 
   function rowChips(r) {
     const nameKey = `${r.firstName} ${r.lastName}`.trim().toLowerCase()
+    const status = r.match?.status
+    // Any row with candidates gets the link-or-create chooser — not just
+    // ambiguous ones. A confidently-linked row still shows its candidates so
+    // the link can be corrected; only a genuinely unmatched name reads "New".
+    const hasCandidates = (r.match?.candidates?.length ?? 0) > 0
+    const statusChip = hasCandidates ? (
+      <button type="button" onClick={() => setChooserKey(chooserKey === r.key ? null : r.key)}>
+        {status === 'ambiguous'
+          ? <Chip tone="warn">Choose…</Chip>
+          : status === 'linked'
+            ? <Chip tone="linked">Linked</Chip>
+            : <Chip tone="new">New</Chip>}
+      </button>
+    ) : status === 'linked'
+      ? <Chip tone="linked">Linked</Chip>
+      : <Chip tone="new">New</Chip>
     return (
       <span className="inline-flex gap-1 flex-wrap">
         {r.unreadable && <Chip tone="warn"><AlertTriangle className="w-3 h-3" />Check</Chip>}
-        {r.match?.status === 'linked' && <Chip tone="linked">Linked</Chip>}
-        {r.match?.status === 'ambiguous' && (
-          <button type="button" onClick={() => setChooserKey(chooserKey === r.key ? null : r.key)}>
-            <Chip tone="warn">Choose…</Chip>
-          </button>
-        )}
-        {r.match?.status === 'new' && <Chip tone="new">New</Chip>}
+        {statusChip}
         {r.shirtNumber != null && dupNums.has(r.shirtNumber) && <Chip tone="warn">Duplicate {r.shirtNumber}</Chip>}
         {nameKey && dupNames.has(nameKey) && <Chip tone="warn">Duplicate name</Chip>}
       </span>
@@ -247,19 +268,25 @@ export default function TeamSheetEditor({
   }
 
   function chooser(r) {
-    if (chooserKey !== r.key || r.match?.status !== 'ambiguous') return null
+    const hasCandidates = (r.match?.candidates?.length ?? 0) > 0
+    if (chooserKey !== r.key || !hasCandidates) return null
+    const selectedId = r.match?.status === 'linked' ? r.match?.personId : null
+    const chosenNew  = r.match?.status === 'new' && r.match?.chosen === true
     return (
       <div className="bg-amber-50/60 border border-amber-200 rounded-lg p-3 mt-1 space-y-1">
         <p className="text-[11px] text-slate-500 mb-1.5">Which player is this?</p>
-        {(r.match.candidates ?? []).map(c => (
-          <button key={c.id} type="button" onClick={() => choose(r.key, c)}
-            className="w-full flex items-center gap-2 bg-white border border-slate-200 hover:border-emerald-400 rounded-lg px-3 py-2 text-left min-h-[44px]">
-            <span className="text-sm text-slate-900 font-medium flex-1 truncate">{c.fullName}</span>
-            {c.orgNames?.length > 0 && <span className="text-[11px] text-slate-400 truncate">{c.orgNames.join(', ')}</span>}
-          </button>
-        ))}
+        {(r.match.candidates ?? []).map(c => {
+          const active = c.id === selectedId
+          return (
+            <button key={c.id} type="button" onClick={() => choose(r.key, c)}
+              className={`w-full flex items-center gap-2 bg-white border rounded-lg px-3 py-2 text-left min-h-[44px] ${active ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-slate-200 hover:border-emerald-400'}`}>
+              <span className="text-sm text-slate-900 font-medium flex-1 truncate">{c.fullName}</span>
+              {c.orgNames?.length > 0 && <span className="text-[11px] text-slate-400 truncate">{c.orgNames.join(', ')}</span>}
+            </button>
+          )
+        })}
         <button type="button" onClick={() => choose(r.key, null)}
-          className="w-full bg-white border border-dashed border-slate-300 hover:border-emerald-400 rounded-lg px-3 py-2 text-left text-sm text-slate-500 min-h-[44px]">
+          className={`w-full bg-white border border-dashed rounded-lg px-3 py-2 text-left text-sm min-h-[44px] ${chosenNew ? 'border-emerald-400 text-emerald-700' : 'border-slate-300 text-slate-500 hover:border-emerald-400'}`}>
           Create new player
         </button>
       </div>
@@ -454,6 +481,9 @@ export default function TeamSheetEditor({
             and the live count already sits on the row-count line. ─────────── */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-slate-200 px-4 py-3 z-30">
         <div className="max-w-3xl mx-auto flex items-center justify-end gap-4">
+          {unresolved > 0 && (
+            <span className="text-[11px] text-amber-700 mr-auto">{unresolved} to resolve</span>
+          )}
           <button type="button" onClick={onCancel} disabled={saving}
             className="text-sm font-bold text-slate-500 hover:text-slate-700 min-h-[44px] px-2">
             Cancel
