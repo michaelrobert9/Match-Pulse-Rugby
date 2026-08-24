@@ -13,6 +13,7 @@ import { fetchCompetitionTeamSheet } from '../lib/teamSheetQueries'
 import { deleteMatch, removeFixtureFromCompetition } from '../lib/adminQueries'
 import { configured } from '../firebase'
 import ShareButton from '../components/ShareButton'
+import VenueLabel from '../components/VenueLabel'
 import StatusBadge from '../components/StatusBadge'
 import FixtureBanner from '../components/FixtureBanner'
 import { MatchTeamIdentity, MatchTeamCrest } from '../components/TeamIdentity'
@@ -654,7 +655,8 @@ export default function MatchDetail() {
         {/* Meta — date, venue, share */}
         <div className="border-t border-slate-200 px-5 py-5 flex flex-col items-center gap-2 text-center">
           <div className="text-[15px] text-slate-600 leading-snug">{fmtMatchDate(match.scheduledAt)}</div>
-          {match.pitch && <div className="text-[15px] text-slate-400 leading-snug">{match.pitch}</div>}
+          <VenueLabel pitch={match.pitch} venueId={match.venueId} venueSlug={match.venueSlug}
+            className="block text-[15px] text-slate-400 leading-snug" />
           {typeof match.sevens === 'boolean' && (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-widest text-slate-500">
               {match.sevens ? 'Sevens' : 'Fifteens'}

@@ -28,6 +28,7 @@ import { isLive, isScheduled } from '../../lib/fixtureStatus'
 import { useTeamIdentity } from '../../hooks/useTeamIdentity'
 import { TeamCrest } from '../../components/TeamIdentity'
 import PersonAvatar from '../../components/PersonAvatar'
+import VenuePicker from '../../components/VenuePicker'
 import { slugify, matchUrl } from '../../lib/slugify'
 import { matchPath } from '../../lib/matchPaths'
 
@@ -959,6 +960,8 @@ export default function ScoreMatch() {
     setEditForm({
       scheduledAt:   dt,
       pitch:         match.pitch         || '',
+      venueId:       match.venueId       ?? null,
+      venueSlug:     match.venueSlug     ?? null,
       sevens:        match.sevens === true,
       homeTeamName:  match.homeTeamName  || '',
       awayTeamName:  match.awayTeamName  || '',
@@ -1013,6 +1016,8 @@ export default function ScoreMatch() {
       const patch = {
         ...(editForm.scheduledAt ? { scheduledAt: new Date(editForm.scheduledAt) } : {}),
         pitch:         (editForm.pitch        ?? '').trim(),
+        venueId:       editForm.venueId       ?? null,
+        venueSlug:     editForm.venueSlug     ?? null,
         sevens:        editForm.sevens === true,
         homeTeamName:  (editForm.homeTeamName ?? '').trim(),
         awayTeamName:  (editForm.awayTeamName ?? '').trim(),
@@ -2170,10 +2175,12 @@ export default function ScoreMatch() {
             </div>
             <div>
               <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1.5`}>Pitch / venue</div>
-              <input type="text" value={editForm.pitch}
-                onChange={e => setEditForm(f => ({ ...f, pitch: e.target.value }))}
+              <VenuePicker
+                pitch={editForm.pitch} venueId={editForm.venueId} venueSlug={editForm.venueSlug}
+                hostOrgId={match.homeOrgId ?? null}
                 placeholder="e.g. Field 1"
-                className={`w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors ${t.neutralBtn}`} />
+                inputClassName={`w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors ${t.neutralBtn}`}
+                onChange={v => setEditForm(f => ({ ...f, pitch: v.pitch, venueId: v.venueId, venueSlug: v.venueSlug }))} />
             </div>
             <div>
               <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1.5`}>Game type</div>
