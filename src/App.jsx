@@ -46,6 +46,7 @@ import CompetitionsManageList from './pages/manage/competitions/CompetitionsList
 import CreateCompetition from './pages/manage/competitions/CreateCompetition'
 import OrgManage  from './pages/manage/OrgManage'
 import CreateOrg  from './pages/manage/CreateOrg'
+import MyOrgTypeList from './pages/manage/MyOrgTypeList'
 import NewFixture from './pages/fixtures/NewFixture'
 
 // Admin pages
@@ -212,6 +213,10 @@ export default function App() {
           <Route path="/manage"              element={<ProtectedRoute require="any"><ManageHub /></ProtectedRoute>} />
           <Route path="/manage/new-org"      element={<ProtectedRoute require="any"><CreateOrg /></ProtectedRoute>} />
           <Route path="/manage/orgs/:id"     element={<ProtectedRoute require="any"><OrgManage /></ProtectedRoute>} />
+          {/* Per-type org lists (the "My schools / clubs / associations" nav). */}
+          <Route path="/manage/schools"      element={<ProtectedRoute require="any"><MyOrgTypeList type="school" /></ProtectedRoute>} />
+          <Route path="/manage/clubs"        element={<ProtectedRoute require="any"><MyOrgTypeList type="club" /></ProtectedRoute>} />
+          <Route path="/manage/associations" element={<ProtectedRoute require="any"><MyOrgTypeList type="association" /></ProtectedRoute>} />
           <Route path="/manage/competitions"     element={<ProtectedRoute require="any"><CompetitionsManageList /></ProtectedRoute>} />
           <Route path="/manage/competitions/new" element={<ProtectedRoute require="any"><CreateCompetition /></ProtectedRoute>} />
           <Route path="/manage/competitions/:id" element={<ProtectedRoute require="any"><CompetitionManage /></ProtectedRoute>} />
@@ -225,7 +230,13 @@ export default function App() {
               renders the matched admin child into AppShell's Outlet. */}
           <Route path="/admin" element={<ProtectedRoute require="admin"><Outlet /></ProtectedRoute>}>
             <Route index                              element={<AdminDashboard />} />
-            <Route path="organizations"               element={<OrganizationsList />} />
+            {/* Orgs are split into per-type lists (My schools / clubs /
+                associations). The old combined /admin/organizations list
+                redirects to the schools view. */}
+            <Route path="organizations"               element={<Navigate to="/admin/schools" replace />} />
+            <Route path="schools"                     element={<OrganizationsList type="school" />} />
+            <Route path="clubs"                       element={<OrganizationsList type="club" />} />
+            <Route path="associations"                element={<OrganizationsList type="association" />} />
             <Route path="organizations/new"           element={<NewOrganization />} />
             <Route path="organizations/:id"           element={<EditOrganization />} />
             <Route path="people"                      element={<PeopleList />} />
