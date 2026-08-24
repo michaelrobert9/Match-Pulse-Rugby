@@ -343,14 +343,12 @@ export default function PlayerProfile() {
   // Anyone signed in may claim an UNCLAIMED profile that isn't already theirs.
   const canClaim = !!uid && !claimed && !managesPlayerProfile(person, uid)
 
-  // Career groups from players-collection records, then append any representative
-  // orgs that have no career data yet (so the org header still shows).
-  const careerGroups = groupCareer(career, orgMap)
-  const careerOrgIds = new Set(careerGroups.map(g => g.orgId).filter(Boolean))
-  const extraGroups  = (person.representativeOrgs ?? [])
-    .map(o => o.orgId).filter(id => id && !careerOrgIds.has(id))
-    .map(id => ({ orgId: id, org: orgMap[id] || null, teams: [] }))
-  const allOrgGroups = [...careerGroups, ...extraGroups]
+  // A player represents an organisation ONLY where they actually have records —
+  // i.e. they were put on a team sheet or played a match for it (both create a
+  // career slice). We deliberately do NOT append representativeOrgs that have no
+  // career data: those are stale/erroneous links (e.g. a test fixture later
+  // deleted, or an org that never fielded the player) and must not show.
+  const allOrgGroups = groupCareer(career, orgMap)
 
   const accent = person.primaryColor || '#059669'
 
