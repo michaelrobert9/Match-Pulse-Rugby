@@ -748,87 +748,80 @@ export default function MatchDetail() {
         )
       })()}
 
-      {/* Lineups */}
-      {(homeSelection.length > 0 || awaySelection.length > 0) && (
+      {/* Lineups — the two teams are laid out as PAIRED ROWS (home[i] beside
+          away[i]) in a two-column grid, so a name that wraps to two lines on one
+          side reserves the same row height on the other and the lists stay in
+          step. Within a row: the shirt number sits in a w-5 column under the crest
+          (outer edge), the name lines up under the org name, the captain © is
+          packed tight against the name on the inner side, and the position label
+          trails it. Content packs to the outer edge of each half, leaving white
+          space down the middle. */}
+      {(homeSelection.length > 0 || awaySelection.length > 0) && (() => {
+        const homePom = pomForSide(match, 'home')
+        const awayPom = pomForSide(match, 'away')
+        const homeCol = teamAccent(match.homeTeamColor)
+        const awayCol = teamAccent(match.awayTeamColor)
+        const rowCount = Math.max(homeSelection.length, awaySelection.length)
+        return (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4">Lineups</div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="flex items-start gap-1.5 mb-3">
-                <MatchTeamCrest match={match} side="home" size={20} />
-                <MatchTeamIdentity match={match} side="home" hideIdentifier className="flex-1 min-w-0"
-                  nameClass="text-[10px] font-bold uppercase tracking-widest text-slate-500 break-words leading-tight" />
-              </div>
-              <div className="space-y-2">
-                {homeSelection.map(p => {
-                  const homePom = pomForSide(match, 'home')
-                  const isPom = isLineupEntryPOM(homePom, p)
-                  const teamCol = teamAccent(match.homeTeamColor)
-                  const c = isPom ? pomColor(homePom, teamCol) : null
-                  return (
-                    // Number column aligns under the crest (outer edge,
-                    // left-justified); name lines up under the org name; the
-                    // captain © renders inline right after the name on the inner
-                    // side — not its own column — in the TEAM's colour.
-                    <div key={p.id}
-                      className={`flex items-start gap-1.5 ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
-                      style={isPom ? { backgroundColor: pomBgTint(homePom, teamCol) } : undefined}>
-                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-left shrink-0">{p.shirtNumber ?? '–'}</span>
-                      {p.personId
-                        ? <Link to={playerUrl({ id: p.personId, slug: p.personSlug })}
-                            className={`text-xs break-words leading-tight min-w-0 transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
-                            style={isPom ? { color: c } : undefined}>{p.personName}</Link>
-                        : <span className={`text-xs break-words leading-tight min-w-0 ${isPom ? 'font-semibold' : 'text-slate-700'}`}
-                            style={isPom ? { color: c } : undefined}>{p.personName}</span>}
-                      {p.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: teamCol }}>©</span>}
-                      {p.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{p.position}</span>}
-                      <span className="flex-1" />
-                      {isPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: c }}>POTM</span>}
-                    </div>
-                  )
-                })}
-              </div>
+          {/* Team headers */}
+          <div className="grid grid-cols-2 gap-x-8 mb-5">
+            <div className="flex items-start gap-1.5">
+              <MatchTeamCrest match={match} side="home" size={20} />
+              <MatchTeamIdentity match={match} side="home" hideIdentifier className="flex-1 min-w-0"
+                nameClass="text-xs font-extrabold uppercase tracking-wide text-slate-600 break-words leading-snug" />
             </div>
-
-            <div>
-              <div className="flex items-start gap-1.5 mb-3 justify-end">
-                <MatchTeamIdentity match={match} side="away" hideIdentifier align="right" className="flex-1 min-w-0"
-                  nameClass="text-[10px] font-bold uppercase tracking-widest text-slate-500 break-words leading-tight" />
-                <MatchTeamCrest match={match} side="away" size={20} />
-              </div>
-              <div className="space-y-2">
-                {awaySelection.map(p => {
-                  const awayPom = pomForSide(match, 'away')
-                  const isPom = isLineupEntryPOM(awayPom, p)
-                  const teamCol = teamAccent(match.awayTeamColor)
-                  const c = isPom ? pomColor(awayPom, teamCol) : null
-                  return (
-                    // Mirror of the home row: number column aligns under the
-                    // crest (outer edge, right-justified); name under the org
-                    // name (right-aligned); captain © inline on the inner side,
-                    // immediately before the name.
-                    <div key={p.id}
-                      className={`flex items-start gap-1.5 justify-end ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
-                      style={isPom ? { backgroundColor: pomBgTint(awayPom, teamCol) } : undefined}>
-                      {isPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: c }}>POTM</span>}
-                      <span className="flex-1" />
-                      {p.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{p.position}</span>}
-                      {p.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: teamCol }}>©</span>}
-                      {p.personId
-                        ? <Link to={playerUrl({ id: p.personId, slug: p.personSlug })}
-                            className={`text-xs break-words leading-tight min-w-0 text-right transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
-                            style={isPom ? { color: c } : undefined}>{p.personName}</Link>
-                        : <span className={`text-xs break-words leading-tight min-w-0 text-right ${isPom ? 'font-semibold' : 'text-slate-700'}`}
-                            style={isPom ? { color: c } : undefined}>{p.personName}</span>}
-                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-right shrink-0">{p.shirtNumber ?? '–'}</span>
-                    </div>
-                  )
-                })}
-              </div>
+            <div className="flex items-start gap-1.5 justify-end">
+              <MatchTeamIdentity match={match} side="away" hideIdentifier align="right" className="flex-1 min-w-0"
+                nameClass="text-xs font-extrabold uppercase tracking-wide text-slate-600 break-words leading-snug" />
+              <MatchTeamCrest match={match} side="away" size={20} />
             </div>
           </div>
+          {/* Paired player rows */}
+          <div className="space-y-2">
+            {Array.from({ length: rowCount }).map((_, i) => {
+              const h = homeSelection[i]
+              const a = awaySelection[i]
+              const hPom = h ? isLineupEntryPOM(homePom, h) : false
+              const aPom = a ? isLineupEntryPOM(awayPom, a) : false
+              const hc = hPom ? pomColor(homePom, homeCol) : null
+              const ac = aPom ? pomColor(awayPom, awayCol) : null
+              return (
+                <div key={i} className="grid grid-cols-2 gap-x-8">
+                  {/* Home cell */}
+                  {h ? (
+                    <div className={`flex items-start gap-1.5 ${hPom ? '-mx-2 px-2 py-0.5 rounded' : ''}`}
+                      style={hPom ? { backgroundColor: pomBgTint(homePom, homeCol) } : undefined}>
+                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-left shrink-0">{h.shirtNumber ?? '–'}</span>
+                      {h.personId
+                        ? <Link to={playerUrl({ id: h.personId, slug: h.personSlug })} className={`text-xs break-words leading-tight min-w-0 transition-colors ${hPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`} style={hPom ? { color: hc } : undefined}>{h.personName}</Link>
+                        : <span className={`text-xs break-words leading-tight min-w-0 ${hPom ? 'font-semibold' : 'text-slate-700'}`} style={hPom ? { color: hc } : undefined}>{h.personName}</span>}
+                      {h.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: homeCol }}>©</span>}
+                      {h.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{h.position}</span>}
+                      {hPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: hc }}>POTM</span>}
+                    </div>
+                  ) : <div />}
+                  {/* Away cell */}
+                  {a ? (
+                    <div className={`flex items-start justify-end gap-1.5 ${aPom ? '-mx-2 px-2 py-0.5 rounded' : ''}`}
+                      style={aPom ? { backgroundColor: pomBgTint(awayPom, awayCol) } : undefined}>
+                      {aPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: ac }}>POTM</span>}
+                      {a.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{a.position}</span>}
+                      {a.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: awayCol }}>©</span>}
+                      {a.personId
+                        ? <Link to={playerUrl({ id: a.personId, slug: a.personSlug })} className={`text-xs break-words leading-tight min-w-0 text-right transition-colors ${aPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`} style={aPom ? { color: ac } : undefined}>{a.personName}</Link>
+                        : <span className={`text-xs break-words leading-tight min-w-0 text-right ${aPom ? 'font-semibold' : 'text-slate-700'}`} style={aPom ? { color: ac } : undefined}>{a.personName}</span>}
+                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-right shrink-0">{a.shirtNumber ?? '–'}</span>
+                    </div>
+                  ) : <div />}
+                </div>
+              )
+            })}
+          </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
