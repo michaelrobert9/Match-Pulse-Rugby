@@ -13,6 +13,18 @@ import { MAIN_SITE, SPORT_KEY } from '../firebase'
 // The plans/products page on the main site. Every plan/purchase CTA points here.
 export const PLANS_URL = `${MAIN_SITE}/products`
 
+// The main marketing site home — where a visitor on a sport subdomain goes to
+// learn what MatchPulse is and sign their school/club/association up. Surfaced
+// as an "About MatchPulse" item in the top nav. Tagged with the sport (and an
+// optional ref) so an enquiry can be attributed back to where it started.
+export function aboutUrl({ ref } = {}) {
+  const params = new URLSearchParams()
+  if (SPORT_KEY) params.set('sport', SPORT_KEY)
+  if (ref)       params.set('ref', ref)
+  const qs = params.toString()
+  return qs ? `${MAIN_SITE}/?${qs}` : MAIN_SITE
+}
+
 // Account settings (name, email, password) live on the main site. Sign-in itself
 // is LOCAL to this subdomain (platform brief v2 §1/§2) — we only link out for
 // things that genuinely live centrally.
