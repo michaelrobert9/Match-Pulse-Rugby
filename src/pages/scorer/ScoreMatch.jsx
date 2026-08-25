@@ -532,6 +532,10 @@ export default function ScoreMatch() {
   ].sort((a, b) => (a.matchTimestamp ?? 0) - (b.matchTimestamp ?? 0))
 
   const teamName = side => side === 'home' ? match.homeTeamName : match.awayTeamName
+  // Public-facing label: the org-composed match name (e.g. "Ashton Ballito –
+  // U13A Girls"), falling back to the bare team name. Used everywhere a team is
+  // shown to a human — the timeline, the scoring/card sheets and the action footer.
+  const teamDisplay = side => (side === 'home' ? homeIdentity?.primary : awayIdentity?.primary) ?? teamName(side)
   const teamColor = side => side === 'home' ? match.homeTeamColor : match.awayTeamColor
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -1358,7 +1362,7 @@ export default function ScoreMatch() {
                 )
               }
               const isHome = ev.side === 'home'
-              const name = ev.scorerName || ev.playerName || teamName(ev.side)
+              const name = ev.scorerName || ev.playerName || teamDisplay(ev.side)
               const kindLabel = ev.kind === 'score' ? (SCORE_LABEL[ev.scoreType] ?? 'Score') : cardLabel(ev.cardType, match)
               const points = ev.kind === 'score' ? (ev.points ?? SCORE_POINTS[ev.scoreType] ?? 0) : null
               const cardDur = ev.kind === 'card' ? cardDurationText(ev, match) : null
@@ -1431,7 +1435,7 @@ export default function ScoreMatch() {
                 <div className="flex items-center gap-1.5 mb-2">
                   <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: teamColor(side) }} />
                   <span className={`text-[13px] font-bold uppercase tracking-[0.5px] ${t.muted}`}>
-                    {teamName(side)} ({side === 'home' ? 'Home' : 'Away'})
+                    {teamDisplay(side)} ({side === 'home' ? 'Home' : 'Away'})
                   </span>
                 </div>
                 {/* 50 / 30 / 20 split, 12px gap, 64px min height */}
@@ -1485,7 +1489,7 @@ export default function ScoreMatch() {
 
       {/* Try enrichment — step 1: try or penalty try */}
       {tryEnrich?.step === 'kind' && (
-        <Sheet t={t} title={`Try · ${teamName(tryEnrich.side)}`}
+        <Sheet t={t} title={`Try · ${teamDisplay(tryEnrich.side)}`}
           subtitle={`${gameMinuteLabel(match, tryEnrichEvent?.matchTimestamp ?? 0)} · recorded`}
           color={teamColor(tryEnrich.side)} onClose={() => setTryEnrich(null)}>
           <div className="grid grid-cols-2 gap-2 mb-4">
@@ -1512,7 +1516,7 @@ export default function ScoreMatch() {
 
       {/* Try enrichment — step 2: conversion kicked? */}
       {tryEnrich?.step === 'conversion' && (
-        <Sheet t={t} title={`Conversion? · ${teamName(tryEnrich.side)}`}
+        <Sheet t={t} title={`Conversion? · ${teamDisplay(tryEnrich.side)}`}
           subtitle={`${gameMinuteLabel(match, tryEnrichEvent?.matchTimestamp ?? 0)} · try recorded`}
           color={teamColor(tryEnrich.side)}
           dismissable={false} closable={false}
@@ -1534,7 +1538,7 @@ export default function ScoreMatch() {
       {tryEnrich?.step === 'scorer' && (() => {
         const players = fixtureSidePlayers(tryEnrich.side)
         return (
-          <Sheet t={t} title={`Who scored the try? · ${teamName(tryEnrich.side)}`}
+          <Sheet t={t} title={`Who scored the try? · ${teamDisplay(tryEnrich.side)}`}
             subtitle={`${gameMinuteLabel(match, tryEnrichEvent?.matchTimestamp ?? 0)}`}
             color={teamColor(tryEnrich.side)}
             dismissable={false} closable={false}
@@ -1574,7 +1578,7 @@ export default function ScoreMatch() {
         const players = fixtureSidePlayers(tryEnrich.side)
         const conversion = (match.scores ?? []).find(e => e.id === tryEnrich.conversionId)
         return (
-          <Sheet t={t} title={`Who kicked the conversion? · ${teamName(tryEnrich.side)}`}
+          <Sheet t={t} title={`Who kicked the conversion? · ${teamDisplay(tryEnrich.side)}`}
             subtitle={`${gameMinuteLabel(match, conversion?.matchTimestamp ?? 0)}`}
             color={teamColor(tryEnrich.side)}
             dismissable={false} closable={false}
@@ -1611,7 +1615,7 @@ export default function ScoreMatch() {
 
       {/* Kick — choose penalty / drop goal (the choice IS the points) */}
       {pendingKick && (
-        <Sheet t={t} title={`Kick at goal · ${teamName(pendingKick.side)}`}
+        <Sheet t={t} title={`Kick at goal · ${teamDisplay(pendingKick.side)}`}
           subtitle={`${gameMinuteLabel(match, pendingKick.matchTimestamp)}`}
           color={teamColor(pendingKick.side)} onClose={() => setPendingKick(null)}>
           <div className="space-y-2">
@@ -1631,7 +1635,7 @@ export default function ScoreMatch() {
         const players = fixtureSidePlayers(kickEnrich.side)
         const kickEvent = (match.scores ?? []).find(e => e.id === kickEnrich.eventId)
         return (
-          <Sheet t={t} title={`Who kicked it? · ${teamName(kickEnrich.side)}`}
+          <Sheet t={t} title={`Who kicked it? · ${teamDisplay(kickEnrich.side)}`}
             subtitle={`${SCORE_LABEL[kickEvent?.scoreType] ?? 'Kick'} · ${gameMinuteLabel(match, kickEvent?.matchTimestamp ?? 0)}`}
             color={teamColor(kickEnrich.side)}
             dismissable={false} closable={false}
@@ -1668,7 +1672,7 @@ export default function ScoreMatch() {
 
       {/* Card sheet: optional player + card type (duration fixed by format) */}
       {pendingCard && (
-        <Sheet t={t} title={`Card · ${teamName(pendingCard.side)}`}
+        <Sheet t={t} title={`Card · ${teamDisplay(pendingCard.side)}`}
           subtitle={`${gameMinuteLabel(match, pendingCard.matchTimestamp)}`}
           color={teamColor(pendingCard.side)} onClose={() => setPendingCard(null)}>
 
