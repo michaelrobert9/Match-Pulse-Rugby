@@ -399,6 +399,10 @@ export default function MatchDetail() {
           position:    e.position ?? null,
           personSlug:  live?.slug ?? e.personSlug ?? r?.personSlug ?? null,
           isCaptain:   (e.isCaptain ?? r?.isCaptain) === true,
+          // Goalkeeper is read from the player's PROFILE position (people doc);
+          // rugby has no keeper so this is effectively never set, but the tag is
+          // shared code across the sports. 'GK' or 'goalkeeper' both count.
+          isGoalkeeper: /^(gk|goal)/i.test(String(live?.position ?? r?.position ?? '').trim()),
           isStarter:   !!e.isStarter,
         }
       })
@@ -787,6 +791,10 @@ export default function MatchDetail() {
               const aPom = a ? isLineupEntryPOM(awayPom, a) : false
               const hc = hPom ? pomColor(homePom, homeCol) : null
               const ac = aPom ? pomColor(awayPom, awayCol) : null
+              // (GK) then (C) read as an extension of the name — same styling,
+              // so a goalkeeper-captain shows "Name (GK) (C)".
+              const hSuffix = h ? `${h.isGoalkeeper ? ' (GK)' : ''}${h.isCaptain ? ' (C)' : ''}` : ''
+              const aSuffix = a ? `${a.isGoalkeeper ? ' (GK)' : ''}${a.isCaptain ? ' (C)' : ''}` : ''
               return (
                 <div key={i} className="grid grid-cols-2 gap-x-8">
                   {/* Home cell */}
@@ -795,9 +803,8 @@ export default function MatchDetail() {
                       style={hPom ? { backgroundColor: pomBgTint(homePom, homeCol) } : undefined}>
                       <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-left shrink-0">{h.shirtNumber ?? '–'}</span>
                       {h.personId
-                        ? <Link to={playerUrl({ id: h.personId, slug: h.personSlug })} className={`text-xs break-words leading-tight min-w-0 transition-colors ${hPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`} style={hPom ? { color: hc } : undefined}>{h.personName}</Link>
-                        : <span className={`text-xs break-words leading-tight min-w-0 ${hPom ? 'font-semibold' : 'text-slate-700'}`} style={hPom ? { color: hc } : undefined}>{h.personName}</span>}
-                      {h.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: homeCol }}>©</span>}
+                        ? <Link to={playerUrl({ id: h.personId, slug: h.personSlug })} className={`text-xs break-words leading-tight min-w-0 transition-colors ${hPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`} style={hPom ? { color: hc } : undefined}>{h.personName}{hSuffix}</Link>
+                        : <span className={`text-xs break-words leading-tight min-w-0 ${hPom ? 'font-semibold' : 'text-slate-700'}`} style={hPom ? { color: hc } : undefined}>{h.personName}{hSuffix}</span>}
                       {h.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{h.position}</span>}
                       {hPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: hc }}>POTM</span>}
                     </div>
@@ -809,9 +816,8 @@ export default function MatchDetail() {
                       {aPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: ac }}>POTM</span>}
                       {a.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{a.position}</span>}
                       {a.personId
-                        ? <Link to={playerUrl({ id: a.personId, slug: a.personSlug })} className={`text-xs break-words leading-tight min-w-0 text-right transition-colors ${aPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`} style={aPom ? { color: ac } : undefined}>{a.personName}</Link>
-                        : <span className={`text-xs break-words leading-tight min-w-0 text-right ${aPom ? 'font-semibold' : 'text-slate-700'}`} style={aPom ? { color: ac } : undefined}>{a.personName}</span>}
-                      {a.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: awayCol }}>©</span>}
+                        ? <Link to={playerUrl({ id: a.personId, slug: a.personSlug })} className={`text-xs break-words leading-tight min-w-0 text-right transition-colors ${aPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`} style={aPom ? { color: ac } : undefined}>{a.personName}{aSuffix}</Link>
+                        : <span className={`text-xs break-words leading-tight min-w-0 text-right ${aPom ? 'font-semibold' : 'text-slate-700'}`} style={aPom ? { color: ac } : undefined}>{a.personName}{aSuffix}</span>}
                       <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-right shrink-0">{a.shirtNumber ?? '–'}</span>
                     </div>
                   ) : <div />}
