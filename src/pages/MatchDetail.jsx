@@ -808,10 +808,10 @@ export default function MatchDetail() {
                       style={aPom ? { backgroundColor: pomBgTint(awayPom, awayCol) } : undefined}>
                       {aPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: ac }}>POTM</span>}
                       {a.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{a.position}</span>}
-                      {a.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: awayCol }}>©</span>}
                       {a.personId
                         ? <Link to={playerUrl({ id: a.personId, slug: a.personSlug })} className={`text-xs break-words leading-tight min-w-0 text-right transition-colors ${aPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`} style={aPom ? { color: ac } : undefined}>{a.personName}</Link>
                         : <span className={`text-xs break-words leading-tight min-w-0 text-right ${aPom ? 'font-semibold' : 'text-slate-700'}`} style={aPom ? { color: ac } : undefined}>{a.personName}</span>}
+                      {a.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: awayCol }}>©</span>}
                       <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-right shrink-0">{a.shirtNumber ?? '–'}</span>
                     </div>
                   ) : <div />}
