@@ -766,22 +766,21 @@ export default function MatchDetail() {
                   const teamCol = teamAccent(match.homeTeamColor)
                   const c = isPom ? pomColor(homePom, teamCol) : null
                   return (
-                    // Line-up row order: number slot → captain slot → name (no
-                    // avatar). The © slot is reserved on EVERY row so names
-                    // stay aligned; the © renders in the TEAM's colour (slate
-                    // fallback), 14px bold — the armband reads at a glance.
+                    // Number column aligns under the crest (outer edge,
+                    // left-justified); name lines up under the org name; the
+                    // captain © renders inline right after the name on the inner
+                    // side — not its own column — in the TEAM's colour.
                     <div key={p.id}
-                      className={`flex items-start gap-2 ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
+                      className={`flex items-start gap-1.5 ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
                       style={isPom ? { backgroundColor: pomBgTint(homePom, teamCol) } : undefined}>
-                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-right shrink-0">{p.shirtNumber ?? '–'}</span>
-                      <span className="w-5 shrink-0 text-sm font-bold leading-none text-center"
-                        style={{ color: teamCol }}>{p.isCaptain ? '©' : ''}</span>
+                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-left shrink-0">{p.shirtNumber ?? '–'}</span>
                       {p.personId
                         ? <Link to={playerUrl({ id: p.personId, slug: p.personSlug })}
                             className={`text-xs break-words leading-tight min-w-0 transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</Link>
                         : <span className={`text-xs break-words leading-tight min-w-0 ${isPom ? 'font-semibold' : 'text-slate-700'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</span>}
+                      {p.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: teamCol }}>©</span>}
                       {p.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{p.position}</span>}
                       <span className="flex-1" />
                       {isPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: c }}>POTM</span>}
@@ -804,23 +803,24 @@ export default function MatchDetail() {
                   const teamCol = teamAccent(match.awayTeamColor)
                   const c = isPom ? pomColor(awayPom, teamCol) : null
                   return (
-                    // Mirror of the home row: name ← captain slot ← number, so
-                    // the two columns read outward from the centre line.
+                    // Mirror of the home row: number column aligns under the
+                    // crest (outer edge, right-justified); name under the org
+                    // name (right-aligned); captain © inline on the inner side,
+                    // immediately before the name.
                     <div key={p.id}
-                      className={`flex items-start gap-2 justify-end ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
+                      className={`flex items-start gap-1.5 justify-end ${isPom ? '-mx-2 px-2 py-1 rounded' : ''}`}
                       style={isPom ? { backgroundColor: pomBgTint(awayPom, teamCol) } : undefined}>
                       {isPom && <span className="text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: c }}>POTM</span>}
                       <span className="flex-1" />
                       {p.position && <span className="text-[10px] text-slate-400 truncate shrink-0">{p.position}</span>}
+                      {p.isCaptain && <span className="text-sm font-bold leading-none shrink-0" style={{ color: teamCol }}>©</span>}
                       {p.personId
                         ? <Link to={playerUrl({ id: p.personId, slug: p.personSlug })}
                             className={`text-xs break-words leading-tight min-w-0 text-right transition-colors ${isPom ? 'font-semibold' : 'text-slate-700 hover:text-emerald-600'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</Link>
                         : <span className={`text-xs break-words leading-tight min-w-0 text-right ${isPom ? 'font-semibold' : 'text-slate-700'}`}
                             style={isPom ? { color: c } : undefined}>{p.personName}</span>}
-                      <span className="w-5 shrink-0 text-sm font-bold leading-none text-center"
-                        style={{ color: teamCol }}>{p.isCaptain ? '©' : ''}</span>
-                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 shrink-0">{p.shirtNumber ?? '–'}</span>
+                      <span className="font-mono tabular-nums text-[11px] text-slate-400 w-5 text-right shrink-0">{p.shirtNumber ?? '–'}</span>
                     </div>
                   )
                 })}
