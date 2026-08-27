@@ -12,7 +12,7 @@ import {
   collection, doc, addDoc, getDoc, getDocs, query, where, setDoc, updateDoc, serverTimestamp, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../firebase'
-import { linkPersonToOrg, seedFixturesFromTeamSheet } from './adminQueries'
+import { linkPersonToOrg, seedFixturesFromTeamSheet, generatePersonSlug } from './adminQueries'
 import { positionForNumber, splitName } from './teamSheet'
 import { resolveSideLineup } from './lineupResolve'
 
@@ -127,9 +127,9 @@ export async function createUnclaimedProfile({
   orgId = null, orgName = null, competitionId, teamId,
 }) {
   const fullName = `${firstName} ${lastName}`.trim()
-  // No vanity slug for a team-sheet profile — a pasted name may be wrong (e.g.
-  // surname-first), so the URL is /players/<id> until the player claims it and a
-  // correct slug/username is set. (URL model: see setPlayerUsername in adminQueries.)
+  // Every player gets a slug from their name. If the name is later corrected the
+  // slug follows and a redirect is written (see updatePerson / backfillPlayerUrls).
+  const slug = await generatePersonSlug(fullName)
   return addDoc(collection(db, 'people'), {
     fullName,
     firstName: firstName || splitName(fullName).firstName,
@@ -150,7 +150,7 @@ export async function createUnclaimedProfile({
     createdForTeamId: teamId ?? null,         // audit + create-rule context
     careerCaps: 0, careerTries: 0, careerPoints: 0,
     careerCards: { yellow: 0, red: 0 },
-    slug: null,
+    slug,
     createdAt: serverTimestamp(),
   })
 }
