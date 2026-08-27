@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { isScheduled } from '../lib/fixtureStatus'
 import {
   fetchPersonBySlug, fetchCareerForPerson, fetchOrganization,
-  fetchMatchesForPlayer, toDate,
+  fetchMatchesForPlayer, toDate, fetchRedirect,
 } from '../lib/queries'
 import { matchUrl } from '../lib/slugify'
 import { monogram } from '../lib/names'
@@ -94,9 +94,9 @@ function CompRecord({ record }) {
   const name   = record.competitionName || (isRoster ? 'Friendlies & other matches' : 'Matches')
   const season = record.competitionSeason || record.season || null
   return (
-    <div className="flex items-center gap-2 py-1">
+    <div className="flex items-start gap-2 py-1">
       <div className="flex-1 min-w-0">
-        <span className="text-xs text-slate-600 truncate">{name}</span>
+        <span className="text-xs text-slate-600 break-words leading-tight">{name}</span>
         {season && (
           <span className="text-[10px] text-slate-400 ml-1.5">{season}</span>
         )}
@@ -273,6 +273,7 @@ function FixtureCard({ match, personId, canSelfRemove, onRemoved }) {
 
 export default function PlayerProfile() {
   const { slug }         = useParams()
+  const navigate         = useNavigate()
   const { uid, isPlatformAdmin } = useAuth()
   const [person,         setPerson]        = useState(null)
   useSeoMeta({ type: 'player', entity: person })
@@ -299,7 +300,14 @@ export default function PlayerProfile() {
     fetchPersonBySlug(slug)
       .then(async p => {
         if (!alive) return
-        if (!p) { setNotFound(true); return }
+        if (!p) {
+          // The slug may have changed (name edit / new username / cleared on an
+          // unclaimed profile) — follow the recorded redirect so old links live on.
+          const r = await fetchRedirect(`/player/${slug}`)
+          if (!alive) return
+          if (r?.toPath) { navigate(r.toPath, { replace: true }); return }
+          setNotFound(true); return
+        }
         setPerson(p)
 
         const [c, matches] = await Promise.all([
@@ -472,13 +480,13 @@ function ClaimCard({ person, onClaimed }) {
   const [err,  setErr]  = useState('')
   const [needsVerify, setNeedsVerify] = useState(null)   // holds the chosen relationship
   const [linkSent, setLinkSent] = useState(false)
+  // Two-step in-UI confirm — window.confirm is suppressed in the installed PWA.
+  const [confirmRel, setConfirmRel] = useState(null)
 
   // Ownership is three fields (resolution round Part 1.1): a player claiming
   // sets ownerUid; a parent claiming for an under-18 adds to guardianUids.
   // Never managerUids. The gate is a verified email and nothing more.
   async function claim(relationship) {
-    const label = relationship === 'player' ? 'This is you' : `You are ${person.fullName}'s parent/guardian`
-    if (!window.confirm(`${label}? You'll manage this profile.`)) return
     setBusy(true); setErr('')
     try {
       await claimPlayerProfile(person.id, relationship)
@@ -527,15 +535,33 @@ function ClaimCard({ person, onClaimed }) {
                 </button>
               </div>
             </div>
+          ) : confirmRel ? (
+            <div>
+              <p className="text-[12px] text-slate-700 mb-2.5">
+                {confirmRel === 'player'
+                  ? <>Confirm <span className="font-semibold">this is you</span>? You'll manage this profile.</>
+                  : <>Confirm you are <span className="font-semibold">{person.fullName}'s</span> parent/guardian? You'll manage this profile.</>}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => claim(confirmRel)} disabled={busy}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
+                  {busy ? '…' : 'Confirm claim'}
+                </button>
+                <button onClick={() => setConfirmRel(null)} disabled={busy}
+                  className="bg-white border border-slate-300 hover:border-slate-400 disabled:opacity-50 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => claim('player')} disabled={busy}
+              <button onClick={() => { setErr(''); setConfirmRel('player') }} disabled={busy}
                 className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
-                {busy ? '…' : "I'm the player"}
+                I'm the player
               </button>
-              <button onClick={() => claim('parent')} disabled={busy}
+              <button onClick={() => { setErr(''); setConfirmRel('parent') }} disabled={busy}
                 className="bg-white border border-emerald-300 hover:border-emerald-400 disabled:opacity-50 text-emerald-700 font-bold text-xs uppercase tracking-wider rounded-lg py-2.5 transition-colors">
-                {busy ? '…' : "I'm a parent"}
+                I'm a parent
               </button>
             </div>
           )}
