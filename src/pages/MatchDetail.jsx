@@ -726,8 +726,8 @@ export default function MatchDetail() {
         const c      = pomColor(anchor, anchorTeamCol)
         const label  = (homePom && awayPom) ? 'Players of the Match' : 'Player of the Match'
         const items  = [
-          homePom ? { pom: homePom, teamName: match.homeTeamName } : null,
-          awayPom ? { pom: awayPom, teamName: match.awayTeamName } : null,
+          homePom ? { pom: homePom, teamName: match.homeOrgName ?? match.homeTeamName } : null,
+          awayPom ? { pom: awayPom, teamName: match.awayOrgName ?? match.awayTeamName } : null,
         ].filter(Boolean)
         return (
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">

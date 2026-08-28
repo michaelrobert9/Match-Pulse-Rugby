@@ -1795,7 +1795,7 @@ export default function ScoreMatch() {
               <div className="overflow-y-auto flex-1">
                 {visibleSides.map(side => {
                   const players = side === 'home' ? (match.homeLineup ?? []) : (match.awayLineup ?? [])
-                  const teamName  = side === 'home' ? match.homeTeamName  : match.awayTeamName
+                  const teamName  = teamDisplay(side)
                   const teamColor = side === 'home' ? match.homeTeamColor : match.awayTeamColor
                   if (players.length === 0) return null
                   return (
@@ -2104,7 +2104,7 @@ export default function ScoreMatch() {
         <Sheet t={t} title="Match result" onClose={() => setOutcomeOpen(false)}>
           <ResultSheet
             match={match} t={t} busy={outcomeBusy} error={outcomeError} wkDefault={wkDefault}
-            homeName={match.homeTeamName} awayName={match.awayTeamName}
+            homeName={teamDisplay('home')} awayName={teamDisplay('away')}
             homePlayers={home} awayPlayers={away}
             onEnterResult={(payload) => runOutcome(() => submitFixtureResult(match.id, { ...payload, method: 'submitted' }), { openPotmAfter: true })}
             onNotPlayed={(reason) => runOutcome(() => setFixtureNotPlayed(match.id, { reason }))}
