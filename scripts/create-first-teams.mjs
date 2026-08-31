@@ -23,20 +23,26 @@
 // crest / shortCode denormalised, standings counters zeroed); no new fields are
 // introduced.
 //
-// Usage:
-//   FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" \
-//   node scripts/create-first-teams.mjs
+// Auth — two ways, whichever fits the machine:
+//   • Cloud Shell / any gcloud-authenticated shell (no key file needed):
+//       DRY_RUN=1 node scripts/create-first-teams.mjs      # dry run
+//       node scripts/create-first-teams.mjs                # live
+//     Uses Application Default Credentials for project match-pulse-4560e.
+//     (If ADC is not set up: `gcloud auth application-default login`.)
+//   • Explicit service account:
+//       FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" \
+//         node scripts/create-first-teams.mjs
 //
-// Dry run (reports every planned action, writes nothing):
-//   DRY_RUN=1 FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" \
-//   node scripts/create-first-teams.mjs
+// Requires firebase-admin on the module path — run it from a directory that
+// has it installed (e.g. the main-site functions/ dir), or `npm i firebase-admin`
+// first. Writes to the `rugby` named database (override with FIRESTORE_DATABASE_ID).
 //
 // Idempotent — safe to re-run. Re-running after a clean run reports 104 skips.
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { initializeApp, cert } from 'firebase-admin/app'
+import { initializeApp, cert, applicationDefault } from 'firebase-admin/app'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 
 const TEAM_NAME = '1st team'   // exact string, everywhere — do not vary casing
@@ -46,8 +52,10 @@ const SCHOOLS = JSON.parse(
   readFileSync(join(__dirname, 'data', 'brief1b_schools_for_1st_team.json'), 'utf8')
 ).map(s => s.org_name)   // wp_team_id_reference_only is a WordPress cross-check only; never stored
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-initializeApp({ credential: cert(serviceAccount) })
+// Explicit service account if provided; otherwise Application Default
+// Credentials (Cloud Shell, or `gcloud auth application-default login`).
+const sa = process.env.FIREBASE_SERVICE_ACCOUNT
+initializeApp({ credential: sa ? cert(JSON.parse(sa)) : applicationDefault() })
 const db      = getFirestore(process.env.FIRESTORE_DATABASE_ID || 'rugby')
 const DRY_RUN = !!process.env.DRY_RUN
 
