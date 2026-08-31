@@ -1,0 +1,418 @@
+[
+  {
+    "org_name": "Afrikaanse Hoër Seunskool",
+    "wp_team_id_reference_only": "327"
+  },
+  {
+    "org_name": "Bellville High School",
+    "wp_team_id_reference_only": "565"
+  },
+  {
+    "org_name": "Ben Vorster",
+    "wp_team_id_reference_only": "957"
+  },
+  {
+    "org_name": "Bergsig",
+    "wp_team_id_reference_only": "975"
+  },
+  {
+    "org_name": "Bethlehem Voortrekker Hoerskool",
+    "wp_team_id_reference_only": "740"
+  },
+  {
+    "org_name": "Bishops",
+    "wp_team_id_reference_only": "546"
+  },
+  {
+    "org_name": "Boland Landbou",
+    "wp_team_id_reference_only": "549"
+  },
+  {
+    "org_name": "Brackenfell High School",
+    "wp_team_id_reference_only": "567"
+  },
+  {
+    "org_name": "Charlie Hofmeyr",
+    "wp_team_id_reference_only": "577"
+  },
+  {
+    "org_name": "DF Malan",
+    "wp_team_id_reference_only": "579"
+  },
+  {
+    "org_name": "Dale College",
+    "wp_team_id_reference_only": "771"
+  },
+  {
+    "org_name": "Daniel Pienaar",
+    "wp_team_id_reference_only": "773"
+  },
+  {
+    "org_name": "Die Anker",
+    "wp_team_id_reference_only": "959"
+  },
+  {
+    "org_name": "Dinamika",
+    "wp_team_id_reference_only": "977"
+  },
+  {
+    "org_name": "Drostdy",
+    "wp_team_id_reference_only": "551"
+  },
+  {
+    "org_name": "Durban High School",
+    "wp_team_id_reference_only": "72"
+  },
+  {
+    "org_name": "EG Jansen",
+    "wp_team_id_reference_only": "918"
+  },
+  {
+    "org_name": "Framesby",
+    "wp_team_id_reference_only": "775"
+  },
+  {
+    "org_name": "Garsfontein",
+    "wp_team_id_reference_only": "920"
+  },
+  {
+    "org_name": "Glenwood High School",
+    "wp_team_id_reference_only": "91"
+  },
+  {
+    "org_name": "Goudveld Hoërskool",
+    "wp_team_id_reference_only": "732"
+  },
+  {
+    "org_name": "Graeme College",
+    "wp_team_id_reference_only": "777"
+  },
+  {
+    "org_name": "Grey College",
+    "wp_team_id_reference_only": "502"
+  },
+  {
+    "org_name": "Grey High School",
+    "wp_team_id_reference_only": "779"
+  },
+  {
+    "org_name": "HTS Middelburg",
+    "wp_team_id_reference_only": "939"
+  },
+  {
+    "org_name": "Heidelberg",
+    "wp_team_id_reference_only": "961"
+  },
+  {
+    "org_name": "Helpmekaar",
+    "wp_team_id_reference_only": "922"
+  },
+  {
+    "org_name": "Hermanus High School",
+    "wp_team_id_reference_only": "581"
+  },
+  {
+    "org_name": "Hilton College",
+    "wp_team_id_reference_only": "84"
+  },
+  {
+    "org_name": "Hoer Landbouschool Oakdale",
+    "wp_team_id_reference_only": "555"
+  },
+  {
+    "org_name": "Hoerskool Diamantveld",
+    "wp_team_id_reference_only": "728"
+  },
+  {
+    "org_name": "Hoerskool Durbanville",
+    "wp_team_id_reference_only": "553"
+  },
+  {
+    "org_name": "Hoerskool Jim Fouche",
+    "wp_team_id_reference_only": "734"
+  },
+  {
+    "org_name": "Hoerskool Sentraal",
+    "wp_team_id_reference_only": "736"
+  },
+  {
+    "org_name": "Hoër Landbouskool Marlow",
+    "wp_team_id_reference_only": "785"
+  },
+  {
+    "org_name": "Hoër Volkskool Potchefstroom",
+    "wp_team_id_reference_only": "989"
+  },
+  {
+    "org_name": "Hoërskool Brandwag",
+    "wp_team_id_reference_only": "798"
+  },
+  {
+    "org_name": "Hoërskool Eldoraigne",
+    "wp_team_id_reference_only": "979"
+  },
+  {
+    "org_name": "Hoërskool Ermelo",
+    "wp_team_id_reference_only": "981"
+  },
+  {
+    "org_name": "Hoërskool Fichardtpark",
+    "wp_team_id_reference_only": "730"
+  },
+  {
+    "org_name": "Hoërskool Hugenote",
+    "wp_team_id_reference_only": "983"
+  },
+  {
+    "org_name": "Hoërskool Kempton Park",
+    "wp_team_id_reference_only": "941"
+  },
+  {
+    "org_name": "Hoërskool Menlopark",
+    "wp_team_id_reference_only": "924"
+  },
+  {
+    "org_name": "Hoërskool Monument",
+    "wp_team_id_reference_only": "926"
+  },
+  {
+    "org_name": "Hoërskool Nelspruit",
+    "wp_team_id_reference_only": "928"
+  },
+  {
+    "org_name": "Hoërskool Noordheuwel",
+    "wp_team_id_reference_only": "930"
+  },
+  {
+    "org_name": "Hoërskool Oos-Moot",
+    "wp_team_id_reference_only": "951"
+  },
+  {
+    "org_name": "Hoërskool Outeniqua",
+    "wp_team_id_reference_only": "557"
+  },
+  {
+    "org_name": "Hoërskool Piet Retief",
+    "wp_team_id_reference_only": "969"
+  },
+  {
+    "org_name": "Hoërskool Randburg",
+    "wp_team_id_reference_only": "991"
+  },
+  {
+    "org_name": "Hoërskool Rustenburg",
+    "wp_team_id_reference_only": "932"
+  },
+  {
+    "org_name": "Hoërskool Transvalia",
+    "wp_team_id_reference_only": "935"
+  },
+  {
+    "org_name": "Hoërskool Waterkloof",
+    "wp_team_id_reference_only": "937"
+  },
+  {
+    "org_name": "Hudson Park High School",
+    "wp_team_id_reference_only": "781"
+  },
+  {
+    "org_name": "Jeppe High School For Boys",
+    "wp_team_id_reference_only": "332"
+  },
+  {
+    "org_name": "Jeugland",
+    "wp_team_id_reference_only": "963"
+  },
+  {
+    "org_name": "Kearsney College",
+    "wp_team_id_reference_only": "85"
+  },
+  {
+    "org_name": "King Edward VII School",
+    "wp_team_id_reference_only": "533"
+  },
+  {
+    "org_name": "Kingswood College",
+    "wp_team_id_reference_only": "783"
+  },
+  {
+    "org_name": "Klerksdorp Hoërskool",
+    "wp_team_id_reference_only": "943"
+  },
+  {
+    "org_name": "Lichtenburg",
+    "wp_team_id_reference_only": "965"
+  },
+  {
+    "org_name": "Ligbron",
+    "wp_team_id_reference_only": "945"
+  },
+  {
+    "org_name": "Marais Viljoen",
+    "wp_team_id_reference_only": "947"
+  },
+  {
+    "org_name": "Maritzburg College",
+    "wp_team_id_reference_only": "76"
+  },
+  {
+    "org_name": "Merensky Landbou Akademie",
+    "wp_team_id_reference_only": "985"
+  },
+  {
+    "org_name": "Michaelhouse",
+    "wp_team_id_reference_only": "80"
+  },
+  {
+    "org_name": "Middelburg High School",
+    "wp_team_id_reference_only": "949"
+  },
+  {
+    "org_name": "Milnerton High School",
+    "wp_team_id_reference_only": "569"
+  },
+  {
+    "org_name": "Montana",
+    "wp_team_id_reference_only": "967"
+  },
+  {
+    "org_name": "Muir College",
+    "wp_team_id_reference_only": "787"
+  },
+  {
+    "org_name": "Nico Malan High School",
+    "wp_team_id_reference_only": "789"
+  },
+  {
+    "org_name": "Northwood School",
+    "wp_team_id_reference_only": "95"
+  },
+  {
+    "org_name": "Paarl Boys High",
+    "wp_team_id_reference_only": "498"
+  },
+  {
+    "org_name": "Paarl Gimnasium",
+    "wp_team_id_reference_only": "495"
+  },
+  {
+    "org_name": "Parel Vallei High School",
+    "wp_team_id_reference_only": "571"
+  },
+  {
+    "org_name": "Parktown Boys High School",
+    "wp_team_id_reference_only": "995"
+  },
+  {
+    "org_name": "Paul Roos Gimnasium",
+    "wp_team_id_reference_only": "522"
+  },
+  {
+    "org_name": "Pearson High School",
+    "wp_team_id_reference_only": "791"
+  },
+  {
+    "org_name": "Pietersburg Hoërskool",
+    "wp_team_id_reference_only": "971"
+  },
+  {
+    "org_name": "Potchefstroom Gimnasium",
+    "wp_team_id_reference_only": "987"
+  },
+  {
+    "org_name": "Pretoria Boys High School",
+    "wp_team_id_reference_only": "376"
+  },
+  {
+    "org_name": "Queen's College",
+    "wp_team_id_reference_only": "793"
+  },
+  {
+    "org_name": "Rondebosch Boys High School",
+    "wp_team_id_reference_only": "528"
+  },
+  {
+    "org_name": "SACS",
+    "wp_team_id_reference_only": "559"
+  },
+  {
+    "org_name": "Secunda",
+    "wp_team_id_reference_only": "973"
+  },
+  {
+    "org_name": "Selborne College",
+    "wp_team_id_reference_only": "769"
+  },
+  {
+    "org_name": "St Alban’s College",
+    "wp_team_id_reference_only": "916"
+  },
+  {
+    "org_name": "St Andrew's College",
+    "wp_team_id_reference_only": "795"
+  },
+  {
+    "org_name": "St Benedict’s College",
+    "wp_team_id_reference_only": "997"
+  },
+  {
+    "org_name": "St Charles College",
+    "wp_team_id_reference_only": "438"
+  },
+  {
+    "org_name": "St John’s College",
+    "wp_team_id_reference_only": "993"
+  },
+  {
+    "org_name": "St Stithians College",
+    "wp_team_id_reference_only": "914"
+  },
+  {
+    "org_name": "Stellenberg High School",
+    "wp_team_id_reference_only": "561"
+  },
+  {
+    "org_name": "Strand High School",
+    "wp_team_id_reference_only": "573"
+  },
+  {
+    "org_name": "Swartland High School",
+    "wp_team_id_reference_only": "583"
+  },
+  {
+    "org_name": "Trio High School",
+    "wp_team_id_reference_only": "738"
+  },
+  {
+    "org_name": "Tygerberg High School",
+    "wp_team_id_reference_only": "575"
+  },
+  {
+    "org_name": "Welkom Gimnasium",
+    "wp_team_id_reference_only": "726"
+  },
+  {
+    "org_name": "Westville Boys' High School",
+    "wp_team_id_reference_only": "98"
+  },
+  {
+    "org_name": "Wesvalia",
+    "wp_team_id_reference_only": "953"
+  },
+  {
+    "org_name": "Witteberg Hoerskool",
+    "wp_team_id_reference_only": "742"
+  },
+  {
+    "org_name": "Worcester Gymnasium",
+    "wp_team_id_reference_only": "585"
+  },
+  {
+    "org_name": "Wynberg Boys' High School",
+    "wp_team_id_reference_only": "563"
+  },
+  {
+    "org_name": "Zwartkop",
+    "wp_team_id_reference_only": "955"
+  }
+]
