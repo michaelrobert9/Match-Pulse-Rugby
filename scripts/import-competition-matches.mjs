@@ -168,8 +168,10 @@ async function run() {
     if (norm && !venueByNorm.has(norm)) venueByNorm.set(norm, v)
   }
 
-  // Existing matches in OUR competitions: dedupe keys + per-competition taken slugs.
-  const existingKeys      = new Set()   // `${compId}|${homeTeamId}|${awayTeamId}|${date}`
+  // Existing matches in OUR competitions: dedupe map + per-competition taken slugs.
+  // The map value carries enough of the existing doc to explain a skip (id,
+  // status, score, path) — a leftover that doesn't render is otherwise invisible.
+  const existingByKey     = new Map()   // `${compId}|${homeTeamId}|${awayTeamId}|${date}` → summary
   const takenSlugsByComp  = new Map()   // compId → Set(matchSlug)
   for (const d of matchSnap.docs) {
     const m = d.data()
@@ -180,11 +182,16 @@ async function run() {
     }
     const date = sastDateString(m.scheduledAt) || sastDateString(m.matchDate)
     if (m.homeTeamId && m.awayTeamId && date) {
-      existingKeys.add(`${m.competitionId}|${m.homeTeamId}|${m.awayTeamId}|${date}`)
+      existingByKey.set(`${m.competitionId}|${m.homeTeamId}|${m.awayTeamId}|${date}`, {
+        id: d.id, status: m.status ?? null,
+        homeScore: m.homeScore ?? null, awayScore: m.awayScore ?? null,
+        path: m.path ?? null, venueId: m.venueId ?? null,
+        createdBy: m.createdBy ?? null,
+      })
     }
   }
 
-  const summary = { created: 0, skippedExisting: 0, unresolved: 0 }
+  const summary = { created: 0, skippedExisting: 0, brokenExisting: 0, unresolved: 0 }
   const problems = { competition: [], homeTeam: [], awayTeam: [], venue: [] }
   const seenThisRun = new Set()
   let batch = db.batch()
@@ -215,10 +222,27 @@ async function run() {
     if (!venue) { console.log(`  UNRESOLVED venue — ${where}: "${r.venue}"`); problems.venue.push(`${where}: "${r.venue}"`); summary.unresolved++; continue }
 
     // Duplicate? Same competition, same two teams, same day — existing or already
-    // queued in this run.
+    // queued in this run. Print WHAT it collided with: a leftover that doesn't
+    // render (wrong status, 0–0 score, no path/venue) is otherwise invisible.
     const key = `${comp.id}|${home.team.id}|${away.team.id}|${r.date}`
-    if (existingKeys.has(key) || seenThisRun.has(key)) {
-      console.log(`  skip    ${where}: already exists`)
+    if (seenThisRun.has(key)) {
+      console.log(`  skip    ${where}: duplicate row within this file`)
+      summary.skippedExisting++
+      continue
+    }
+    const hit = existingByKey.get(key)
+    if (hit) {
+      const looksBroken = hit.status !== 'final' || !hit.path || !hit.venueId
+        || Number(hit.homeScore) !== Number(r.home_points) || Number(hit.awayScore) !== Number(r.away_points)
+      console.log(
+        `  skip    ${where}: existing match ${hit.id}` +
+        `  [status=${hit.status} score=${hit.homeScore}-${hit.awayScore}` +
+        ` venueId=${hit.venueId ? 'set' : 'MISSING'} path=${hit.path ? 'set' : 'MISSING'}` +
+        ` createdBy=${hit.createdBy}]` +
+        (looksBroken ? '  <-- LOOKS INCOMPLETE (would not render; expected ' +
+          `final ${r.home_points}-${r.away_points} with venue+path)` : '')
+      )
+      if (looksBroken) summary.brokenExisting++
       summary.skippedExisting++
       continue
     }
@@ -302,6 +326,7 @@ async function run() {
   console.log('\n=== Summary ===')
   console.log(`  created:          ${summary.created}`)
   console.log(`  skipped (exists): ${summary.skippedExisting}`)
+  if (summary.brokenExisting) console.log(`  ^ of those, INCOMPLETE existing docs that would not render: ${summary.brokenExisting}  (see "LOOKS INCOMPLETE" above)`)
   console.log(`  unresolved:       ${summary.unresolved}  (reported below — nothing invented)`)
   console.log(`  rows:             ${ROWS.length}  (expected 482)`)
   const accounted = summary.created + summary.skippedExisting + summary.unresolved
