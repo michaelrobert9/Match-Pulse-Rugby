@@ -1,0 +1,250 @@
+[
+  {
+    "competition_name": "Grey Rugby Festival 2022",
+    "festival_name": "Grey Rugby Festival",
+    "season": "2022",
+    "match_count": 19,
+    "first_match_date": "2022-03-31",
+    "last_match_date": "2022-04-02"
+  },
+  {
+    "competition_name": "Grey Rugby Festival 2023",
+    "festival_name": "Grey Rugby Festival",
+    "season": "2023",
+    "match_count": 17,
+    "first_match_date": "2023-04-27",
+    "last_match_date": "2023-04-29"
+  },
+  {
+    "competition_name": "Grey Rugby Festival 2024",
+    "festival_name": "Grey Rugby Festival",
+    "season": "2024",
+    "match_count": 13,
+    "first_match_date": "2024-05-02",
+    "last_match_date": "2024-05-04"
+  },
+  {
+    "competition_name": "Grey Rugby Festival 2026",
+    "festival_name": "Grey Rugby Festival",
+    "season": "2026",
+    "match_count": 19,
+    "first_match_date": "2026-04-25",
+    "last_match_date": "2026-04-27"
+  },
+  {
+    "competition_name": "KES Easter Rugby Festival 2022",
+    "festival_name": "KES Easter Rugby Festival",
+    "season": "2022",
+    "match_count": 12,
+    "first_match_date": "2022-04-14",
+    "last_match_date": "2022-04-18"
+  },
+  {
+    "competition_name": "KES Easter Rugby Festival 2023",
+    "festival_name": "KES Easter Rugby Festival",
+    "season": "2023",
+    "match_count": 17,
+    "first_match_date": "2023-04-06",
+    "last_match_date": "2023-04-10"
+  },
+  {
+    "competition_name": "KES Easter Rugby Festival 2024",
+    "festival_name": "KES Easter Rugby Festival",
+    "season": "2024",
+    "match_count": 13,
+    "first_match_date": "2024-03-20",
+    "last_match_date": "2024-04-01"
+  },
+  {
+    "competition_name": "KES Easter Rugby Festival 2025",
+    "festival_name": "KES Easter Rugby Festival",
+    "season": "2025",
+    "match_count": 1,
+    "first_match_date": "2025-04-21",
+    "last_match_date": "2025-04-21"
+  },
+  {
+    "competition_name": "KES Easter Rugby Festival 2026",
+    "festival_name": "KES Easter Rugby Festival",
+    "season": "2026",
+    "match_count": 10,
+    "first_match_date": "2026-04-04",
+    "last_match_date": "2026-04-06"
+  },
+  {
+    "competition_name": "Kearsney Easter Rugby Festival 2022",
+    "festival_name": "Kearsney Easter Rugby Festival",
+    "season": "2022",
+    "match_count": 15,
+    "first_match_date": "2022-04-14",
+    "last_match_date": "2022-04-18"
+  },
+  {
+    "competition_name": "Kearsney Easter Rugby Festival 2023",
+    "festival_name": "Kearsney Easter Rugby Festival",
+    "season": "2023",
+    "match_count": 12,
+    "first_match_date": "2023-04-06",
+    "last_match_date": "2023-04-10"
+  },
+  {
+    "competition_name": "Kearsney Easter Rugby Festival 2024",
+    "festival_name": "Kearsney Easter Rugby Festival",
+    "season": "2024",
+    "match_count": 17,
+    "first_match_date": "2024-03-20",
+    "last_match_date": "2024-04-01"
+  },
+  {
+    "competition_name": "Kearsney Easter Rugby Festival 2025",
+    "festival_name": "Kearsney Easter Rugby Festival",
+    "season": "2025",
+    "match_count": 1,
+    "first_match_date": "2025-04-19",
+    "last_match_date": "2025-04-19"
+  },
+  {
+    "competition_name": "Kearsney Easter Rugby Festival 2026",
+    "festival_name": "Kearsney Easter Rugby Festival",
+    "season": "2026",
+    "match_count": 15,
+    "first_match_date": "2026-04-02",
+    "last_match_date": "2026-04-06"
+  },
+  {
+    "competition_name": "Noord-Suid 2022",
+    "festival_name": "Noord-Suid",
+    "season": "2022",
+    "match_count": 19,
+    "first_match_date": "2022-03-25",
+    "last_match_date": "2022-03-29"
+  },
+  {
+    "competition_name": "Noord-Suid 2023",
+    "festival_name": "Noord-Suid",
+    "season": "2023",
+    "match_count": 24,
+    "first_match_date": "2023-03-31",
+    "last_match_date": "2023-04-04"
+  },
+  {
+    "competition_name": "Noord-Suid 2024",
+    "festival_name": "Noord-Suid",
+    "season": "2024",
+    "match_count": 21,
+    "first_match_date": "2024-03-22",
+    "last_match_date": "2024-03-26"
+  },
+  {
+    "competition_name": "Noord-Suid 2026",
+    "festival_name": "Noord-Suid",
+    "season": "2026",
+    "match_count": 40,
+    "first_match_date": "2026-03-27",
+    "last_match_date": "2026-03-31"
+  },
+  {
+    "competition_name": "St John's Easter Rugby Festival 2022",
+    "festival_name": "St John's Easter Rugby Festival",
+    "season": "2022",
+    "match_count": 16,
+    "first_match_date": "2022-04-14",
+    "last_match_date": "2022-04-18"
+  },
+  {
+    "competition_name": "St John's Easter Rugby Festival 2023",
+    "festival_name": "St John's Easter Rugby Festival",
+    "season": "2023",
+    "match_count": 18,
+    "first_match_date": "2023-04-06",
+    "last_match_date": "2023-04-10"
+  },
+  {
+    "competition_name": "St John's Easter Rugby Festival 2024",
+    "festival_name": "St John's Easter Rugby Festival",
+    "season": "2024",
+    "match_count": 12,
+    "first_match_date": "2024-03-28",
+    "last_match_date": "2024-04-01"
+  },
+  {
+    "competition_name": "St John's Easter Rugby Festival 2026",
+    "festival_name": "St John's Easter Rugby Festival",
+    "season": "2026",
+    "match_count": 6,
+    "first_match_date": "2026-04-02",
+    "last_match_date": "2026-04-04"
+  },
+  {
+    "competition_name": "St Stithians Easter Rugby Festival 2022",
+    "festival_name": "St Stithians Easter Rugby Festival",
+    "season": "2022",
+    "match_count": 12,
+    "first_match_date": "2022-04-14",
+    "last_match_date": "2022-04-18"
+  },
+  {
+    "competition_name": "St Stithians Easter Rugby Festival 2023",
+    "festival_name": "St Stithians Easter Rugby Festival",
+    "season": "2023",
+    "match_count": 8,
+    "first_match_date": "2023-04-06",
+    "last_match_date": "2023-04-10"
+  },
+  {
+    "competition_name": "St Stithians Easter Rugby Festival 2024",
+    "festival_name": "St Stithians Easter Rugby Festival",
+    "season": "2024",
+    "match_count": 6,
+    "first_match_date": "2024-03-28",
+    "last_match_date": "2024-03-30"
+  },
+  {
+    "competition_name": "St Stithians Easter Rugby Festival 2026",
+    "festival_name": "St Stithians Easter Rugby Festival",
+    "season": "2026",
+    "match_count": 4,
+    "first_match_date": "2026-04-04",
+    "last_match_date": "2026-04-06"
+  },
+  {
+    "competition_name": "Wildeklawer 2022",
+    "festival_name": "Wildeklawer",
+    "season": "2022",
+    "match_count": 20,
+    "first_match_date": "2022-04-29",
+    "last_match_date": "2022-05-02"
+  },
+  {
+    "competition_name": "Wildeklawer 2023",
+    "festival_name": "Wildeklawer",
+    "season": "2023",
+    "match_count": 20,
+    "first_match_date": "2023-04-28",
+    "last_match_date": "2023-05-01"
+  },
+  {
+    "competition_name": "Wildeklawer 2024",
+    "festival_name": "Wildeklawer",
+    "season": "2024",
+    "match_count": 23,
+    "first_match_date": "2024-03-23",
+    "last_match_date": "2024-05-04"
+  },
+  {
+    "competition_name": "Wildeklawer 2025",
+    "festival_name": "Wildeklawer",
+    "season": "2025",
+    "match_count": 27,
+    "first_match_date": "2025-04-30",
+    "last_match_date": "2025-05-03"
+  },
+  {
+    "competition_name": "Wildeklawer 2026",
+    "festival_name": "Wildeklawer",
+    "season": "2026",
+    "match_count": 25,
+    "first_match_date": "2026-04-24",
+    "last_match_date": "2026-04-27"
+  }
+]
