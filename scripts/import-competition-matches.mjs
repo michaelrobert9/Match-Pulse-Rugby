@@ -61,9 +61,14 @@ const sa = process.env.FIREBASE_SERVICE_ACCOUNT
 const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'match-pulse-4560e'
 initializeApp(sa ? { credential: cert(JSON.parse(sa)) } : { credential: applicationDefault(), projectId })
 // Rugby data lives in the `rugby` named DB; venues in the central (default) DB —
-// two handles on the one app, exactly as the running app splits them.
+// two handles on the one app, exactly as the running app splits them. The
+// default database's handle is getFirestore() with NO argument — the literal
+// id '(default)' is not accepted as an explicit database id by all
+// firebase-admin versions, so only pass IDENTITY_DATABASE_ID when it is a real
+// named database.
 const db         = getFirestore(process.env.FIRESTORE_DATABASE_ID || 'rugby')
-const identityDb = getFirestore(process.env.IDENTITY_DATABASE_ID || '(default)')
+const identityId = process.env.IDENTITY_DATABASE_ID
+const identityDb = identityId ? getFirestore(identityId) : getFirestore()
 const DRY_RUN    = !!process.env.DRY_RUN
 
 // ── App helpers, inlined verbatim so this script is self-contained ──────────────
