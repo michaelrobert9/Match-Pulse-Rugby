@@ -46,7 +46,10 @@ const ROWS = JSON.parse(
 )
 
 const sa = process.env.FIREBASE_SERVICE_ACCOUNT
-initializeApp({ credential: sa ? cert(JSON.parse(sa)) : applicationDefault() })
+// With a service account the project comes from the key; with ADC (Cloud Shell)
+// the project id must be supplied — auto-detection is unreliable there.
+const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'match-pulse-4560e'
+initializeApp(sa ? { credential: cert(JSON.parse(sa)) } : { credential: applicationDefault(), projectId })
 const db      = getFirestore(process.env.FIRESTORE_DATABASE_ID || 'rugby')
 const DRY_RUN = !!process.env.DRY_RUN
 
