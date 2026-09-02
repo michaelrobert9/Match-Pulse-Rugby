@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { isScheduled } from '../lib/fixtureStatus'
 import {
-  fetchPersonBySlug, fetchCareerForPerson, fetchOrganization,
+  fetchPerson, fetchPersonBySlug, fetchCareerForPerson, fetchOrganization,
   fetchMatchesForPlayer, toDate, fetchRedirect,
 } from '../lib/queries'
 import { matchUrl } from '../lib/slugify'
@@ -272,7 +272,7 @@ function FixtureCard({ match, personId, canSelfRemove, onRemoved }) {
 }
 
 export default function PlayerProfile() {
-  const { slug }         = useParams()
+  const { slug, id }         = useParams()
   const navigate         = useNavigate()
   const { uid, isPlatformAdmin } = useAuth()
   const [person,         setPerson]        = useState(null)
@@ -297,7 +297,7 @@ export default function PlayerProfile() {
   useEffect(() => {
     let alive = true
     setLoading(true); setNotFound(false)
-    fetchPersonBySlug(slug)
+    ;(id ? fetchPerson(id) : fetchPersonBySlug(slug))
       .then(async p => {
         if (!alive) return
         if (!p) {
@@ -308,6 +308,9 @@ export default function PlayerProfile() {
           if (r?.toPath) { navigate(r.toPath, { replace: true }); return }
           setNotFound(true); return
         }
+        // id route: canonicalise to the slug URL when one exists so both
+        // links land on the same page + design.
+        if (id && p.slug) { navigate(`/player/${p.slug}`, { replace: true }); return }
         setPerson(p)
 
         const [c, matches] = await Promise.all([
@@ -331,7 +334,7 @@ export default function PlayerProfile() {
       .catch(() => { if (alive) setNotFound(true) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [slug])
+  }, [slug, id])
 
   if (loading) return <Spinner />
 
