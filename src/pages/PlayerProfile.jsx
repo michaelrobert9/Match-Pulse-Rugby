@@ -413,6 +413,26 @@ export default function PlayerProfile() {
             )}
           </div>
         </div>
+
+        {/* Combined career stats — part of the details card */}
+        <div className="grid grid-cols-4 divide-x divide-slate-200 border-t border-slate-200">
+          <div className="flex flex-col items-center py-3">
+            <span className="font-mono font-black text-2xl tabular-nums text-slate-900 leading-none">{person.careerCaps ?? 0}</span>
+            <span className="micro-label mt-0.5">Caps</span>
+          </div>
+          <div className="flex flex-col items-center py-3">
+            <span className="font-mono font-black text-2xl tabular-nums text-emerald-600 leading-none">{person.careerTries ?? 0}</span>
+            <span className="micro-label mt-0.5">Tries</span>
+          </div>
+          <div className="flex flex-col items-center py-3">
+            <span className="font-mono font-black text-2xl tabular-nums text-slate-900 leading-none">{person.careerPoints ?? 0}</span>
+            <span className="micro-label mt-0.5">Points</span>
+          </div>
+          <div className="flex flex-col items-center py-3">
+            <span className="font-mono font-black text-2xl tabular-nums text-slate-900 leading-none">{((person.careerCards?.yellow ?? 0) + (person.careerCards?.red ?? 0)) || 0}</span>
+            <span className="micro-label mt-0.5">Cards</span>
+          </div>
+        </div>
       </div>
 
       {/* Claim: an unclaimed profile can be taken over by the player or a parent */}
