@@ -1,0 +1,52 @@
+[
+  {
+    "season": "2023",
+    "date": "2023-04 (exact date not given; described as 'earlier in the month' before the ~29 Apr 2023 Grey Festival)",
+    "team_a": "King Edward VII School",
+    "team_b": "Jeppe High School For Boys",
+    "score": "23-20",
+    "source_url": "https://schoolboyrugby.co.za/?p=42019",
+    "note": "From 'SSS scoreboard adds to the suspense at The Grey Festival 2023' article, referencing a prior KES home win over Jeppe",
+    "_reason": "no usable date \"2023-04 (exact date not given; described as 'earlier in the month' before the ~29 Apr 2023 Grey Festival)\""
+  },
+  {
+    "season": "2026",
+    "date": "",
+    "team_a": "Secunda",
+    "team_b": "Hoër Volkskool Potchefstroom",
+    "score": "26-45",
+    "source_url": "https://schoolboyrugby.co.za/?p=47553",
+    "note": "From consolidated 'Noordvaal Schoolboy Rugby Fixtures & Results 2026' table, SECUNDA row (H/A/N=H, competition=league) | EXACT DATE UNKNOWN - source gave no specific date for this fixture",
+    "_reason": "no usable date \"\""
+  },
+  {
+    "season": "2026",
+    "date": "",
+    "team_a": "Heidelberg",
+    "team_b": "Potchefstroom Gimnasium",
+    "score": "25-27",
+    "source_url": "https://schoolboyrugby.co.za/?p=47553",
+    "note": "From consolidated 'Noordvaal Schoolboy Rugby Fixtures & Results 2026' table, HEIDELBERG VS row (H/A/N=H, competition=league) | EXACT DATE UNKNOWN - source gave no specific date for this fixture",
+    "_reason": "no usable date \"\""
+  },
+  {
+    "season": "2026",
+    "date": "",
+    "team_a": "Potchefstroom Gimnasium",
+    "team_b": "Hoërskool Hugenote",
+    "score": "27-25",
+    "source_url": "https://schoolboyrugby.co.za/?p=47553",
+    "note": "From consolidated 'Noordvaal Schoolboy Rugby Fixtures & Results 2026' table, POTCH GIM row (H/A/N=A, competition=league) | EXACT DATE UNKNOWN - source gave no specific date for this fixture",
+    "_reason": "no usable date \"\""
+  },
+  {
+    "season": "2026",
+    "date": "",
+    "team_a": "Hoër Volkskool Potchefstroom",
+    "team_b": "Hoërskool Brandwag",
+    "score": "45-26",
+    "source_url": "https://schoolboyrugby.co.za/?p=47553",
+    "note": "From consolidated 'Noordvaal Schoolboy Rugby Fixtures & Results 2026' table, POTCH VOLKSKOOL row (H/A/N=A, competition=league) | EXACT DATE UNKNOWN - source gave no specific date for this fixture",
+    "_reason": "no usable date \"\""
+  }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "team_a": "Michaelhouse",
+  "team_b": "Helpmekaar",
+  "date": "2022-03-12",
+  "score": "20-24",
+  "reason": "Explicitly marked \"Practice Match\" on the source site — per your rule, practice matches must be excluded.",
+  "currently_in": "brief2b_part2_regular_matches.json"
+ },
+ {
+  "team_a": "Hoërskool Menlopark",
+  "team_b": "EG Jansen",
+  "date": "2026-08-01",
+  "score": "36-5",
+  "reason": "Match was abandoned mid-game after a sideline incident (reported stopped at 36-5) — not a completed full match, so the recorded result is not a genuine final score.",
+  "currently_in": "brief2b_part2_regular_matches.json"
+ }
+]
