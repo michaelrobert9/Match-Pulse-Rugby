@@ -45,6 +45,9 @@ const db         = getFirestore(process.env.FIRESTORE_DATABASE_ID || 'rugby')
 const identityId = process.env.IDENTITY_DATABASE_ID
 const identityDb = identityId ? getFirestore(identityId) : getFirestore()
 const DRY_RUN    = !!process.env.DRY_RUN
+// Audit marker on each created doc; override per batch (e.g. brief2b-part2-import)
+// so different import passes stay distinguishable. Dedupe is author-agnostic.
+const IMPORT_TAG = process.env.IMPORT_TAG || 'brief2b-part3-import'
 
 // ── App helpers, inlined verbatim (slugify.js / matchPaths.js / teamNaming.js) ──
 function slugify(str) {
@@ -214,7 +217,7 @@ async function run() {
         importSource: r.source || null,
         ...(r.venue_note && r.venue_note.trim() ? { venueNote: r.venue_note.trim() } : {}),
         ...(r.time_defaulted ? { timeDefaulted: true } : {}),
-        createdBy: 'brief2b-part3-import',
+        createdBy: IMPORT_TAG,
         createdAt: FieldValue.serverTimestamp(),
       })
       if (++pending >= 400) await flush()
