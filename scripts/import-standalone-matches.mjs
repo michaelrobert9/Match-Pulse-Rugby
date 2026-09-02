@@ -91,7 +91,13 @@ async function run() {
   ])
 
   const orgIdByName = new Map()
-  for (const d of orgSnap.docs) orgIdByName.set(d.data().name, d.id)
+  const orgNearMiss = new Map()   // normalised name → stored exact name (for reporting only)
+  for (const d of orgSnap.docs) {
+    const nm = d.data().name
+    orgIdByName.set(nm, d.id)
+    const norm = normaliseVenueText(nm)
+    if (norm && !orgNearMiss.has(norm)) orgNearMiss.set(norm, nm)
+  }
 
   const firstTeamByOrgId = new Map()
   for (const d of teamSnap.docs) {
@@ -136,9 +142,23 @@ async function run() {
   let batch = db.batch(); let pending = 0
   const flush = async () => { if (pending && !DRY_RUN) { await batch.commit(); batch = db.batch(); pending = 0 } }
 
+  // Optional: link via a normalised near-miss (apostrophe/diacritic/spacing only)
+  // when RESOLVE_ORG_NEARMISS=1. Off by default — matching stays exact — so a
+  // near-miss is reported, never silently attached, unless explicitly enabled.
+  const NEARMISS = !!process.env.RESOLVE_ORG_NEARMISS
   const resolveTeam = (orgName) => {
-    const orgId = orgIdByName.get(orgName)
-    if (!orgId) return { err: `no Organisation "${orgName}"` }
+    let orgId = orgIdByName.get(orgName)
+    if (!orgId) {
+      const near = orgNearMiss.get(normaliseVenueText(orgName))
+      if (near && NEARMISS) {
+        orgId = orgIdByName.get(near)
+        console.log(`    near-miss org linked: "${orgName}" -> stored "${near}"`)
+      } else if (near) {
+        return { err: `no exact Organisation "${orgName}"  (near-miss exists: stored as "${near}" — re-run with RESOLVE_ORG_NEARMISS=1 to link)` }
+      } else {
+        return { err: `no Organisation "${orgName}"  (no near-miss — org does not exist)` }
+      }
+    }
     const team = firstTeamByOrgId.get(orgId)
     if (!team) return { err: `Organisation "${orgName}" has no "${TEAM_NAME}"` }
     return { team }
