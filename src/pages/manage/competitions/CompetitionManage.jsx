@@ -714,7 +714,16 @@ function BasicCard({ competition, onSaved }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   async function uploadImage(file, key, path) {
-    if (!file || !storage) return
+    if (!file) return
+    if (!storage) { setUploadError('Uploads are unavailable right now.'); return }
+    // Validate BEFORE upload so a too-big or non-image file gives a clear reason
+    // instead of an opaque storage/unauthorized error. Logos cap at 2 MB, banners 5.
+    const maxMB = path.includes('banners') ? 5 : 2
+    if (!file.type.startsWith('image/')) { setUploadError('Please choose an image file (PNG or JPG).'); return }
+    if (file.size > maxMB * 1024 * 1024) {
+      setUploadError(`Image must be under ${maxMB} MB — this file is ${(file.size / (1024 * 1024)).toFixed(1)} MB.`)
+      return
+    }
     setUploading(true)
     setUploadError('')
     try {
@@ -723,7 +732,9 @@ function BasicCard({ competition, onSaved }) {
       const url = await getDownloadURL(r)
       set(key, url)
     } catch (err) {
-      setUploadError(err.message || 'Upload failed.')
+      setUploadError(err?.code === 'storage/unauthorized'
+        ? 'Upload was blocked — make sure you are still signed in, then try again.'
+        : (err?.message || 'Upload failed. Please try again.'))
     } finally {
       setUploading(false)
     }
@@ -845,7 +856,7 @@ function BasicCard({ competition, onSaved }) {
                   onChange={e => set('logoUrl', e.target.value)}
                   placeholder="…or paste an image URL"
                 />
-                <p className="text-[11px] text-slate-400">Square logo, ideally 512×512px (PNG with a transparent background).</p>
+                <p className="text-[11px] text-slate-400">Square logo, ideally 512×512px (PNG with a transparent background). Max 2 MB.</p>
               </div>
             </div>
           </div>
