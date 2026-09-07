@@ -20,11 +20,23 @@ import SquadManager from '../components/SquadManager'
 // Win/loss/draw + match points for a team across a (optionally season-filtered)
 // set of final matches. Computed from matches rather than the team doc's
 // cumulative counters so a current-season vs all-time split is always available.
+// A match's season: its explicit season field, else the calendar year of its
+// scheduled date. Regular-season matches often carry no season field (only
+// competition-linked matches inherit one from their competition), so without
+// the date fallback they were silently dropped from the season record even
+// though they count toward all-time and appear in recent results. Mirrors the
+// convention deriveSquadFromFrozenLineups already uses in queries.js.
+function matchSeason(m) {
+  if (m.season != null && String(m.season) !== '') return String(m.season)
+  const d = toDate(m.scheduledAt)
+  return d ? String(d.getFullYear()) : null
+}
+
 function computeTeamStats(matches, teamId, season = null) {
   let played = 0, won = 0, lost = 0, drawn = 0, pointsFor = 0, pointsAgainst = 0
   for (const m of matches) {
     if (m.status !== 'final') continue
-    if (season != null && String(m.season ?? '') !== String(season)) continue
+    if (season != null && matchSeason(m) !== String(season)) continue
     const isHome = m.homeTeamId === teamId
     const teamS  = isHome ? (m.homeScore ?? 0) : (m.awayScore ?? 0)
     const oppS   = isHome ? (m.awayScore ?? 0) : (m.homeScore ?? 0)
@@ -224,7 +236,7 @@ export default function TeamDetail() {
     .slice(0, 5)
 
   const seasons = [...new Set(
-    matches.filter(m => m.status === 'final' && m.season != null).map(m => String(m.season))
+    matches.filter(m => m.status === 'final').map(matchSeason).filter(Boolean)
   )].sort().reverse()
   const currentSeason = seasons[0] ?? null
   const allTimeStats  = computeTeamStats(matches, team.id, null)
@@ -237,10 +249,10 @@ export default function TeamDetail() {
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="h-2" style={{ background: `linear-gradient(90deg, ${color}, ${secondary})` }} />
         <div className="p-5 flex items-start gap-4">
-          <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0"
+          <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
             style={{ backgroundColor: color + '20', border: `2px solid ${color}` }}>
             {teamImage
-              ? <img src={teamImage} alt={fullName} className="w-full h-full object-contain" />
+              ? <img src={teamImage} alt={fullName} className="w-full h-full object-cover" />
               : <span className="text-sm font-bold font-mono" style={{ color }}>{monogram(org ? org.name : team.displayName)}</span>}
           </div>
           <div className="flex-1 min-w-0 pt-0.5">
