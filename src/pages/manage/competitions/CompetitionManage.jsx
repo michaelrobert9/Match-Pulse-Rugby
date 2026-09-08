@@ -14,6 +14,7 @@ import {
 import {
   updateCompetition, deleteCompetition,
   addFixtureToCompetition, removeFixtureFromCompetition,
+  resyncCompetitionMatches,
   generateRoundRobinFixtures,
   addTeamToCompetition, removeTeamFromCompetition,
   updateCompetitionMemberName,
@@ -1438,6 +1439,7 @@ function MatchFormatCard({ competition, onSaved }) {
         sevens:        fmt.sevens === true,
       }
       await updateCompetition(competition.id, { matchFormat })
+      await resyncCompetitionMatches(competition.id, matchFormat).catch(() => {})
       onSaved({ ...competition, matchFormat })
       setEditing(false)
     } finally { setSaving(false) }
@@ -1448,7 +1450,7 @@ function MatchFormatCard({ competition, onSaved }) {
 
   return (
     <Card title="Default match format"
-      subtitle="Applied to new matches — still adjustable per match"
+      subtitle="Saving applies this to every match in the competition (except ones already started) and re-links teams"
       action={<EditButton editing={editing} onClick={() => { setFmt(competitionMatchFormat(competition)); setEditing(e => !e) }} />}>
       {!editing ? (
         <div className="text-sm text-slate-700">
