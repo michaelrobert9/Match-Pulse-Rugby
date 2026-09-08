@@ -82,24 +82,6 @@ export default function FormatSelector({ periods, periodMinutes, breakMinutes = 
 
   return (
     <div className="space-y-4">
-      {/* Fifteens / sevens */}
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Game type</p>
-        <div className="flex gap-2">
-          {[{ v: false, label: 'Fifteens (XV)' }, { v: true, label: 'Sevens (7s)' }].map(opt => (
-            <button type="button" key={opt.label}
-              onClick={() => setSevens(opt.v)}
-              className={`flex-1 text-sm font-bold py-2 rounded-lg border transition-colors ${
-                isSevens === opt.v
-                  ? 'bg-emerald-600 border-emerald-600 text-white'
-                  : 'border-slate-200 text-slate-500 hover:border-slate-400'
-              }`}>
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Halves — rugby is played in halves (2 is a full match, 1 for a
           shortened/festival game). */}
       <div>
@@ -151,7 +133,7 @@ export default function FormatSelector({ periods, periodMinutes, breakMinutes = 
       {/* Summary */}
       {numPeriods > 0 && numMins > 0 && (
         <p className="text-[11px] text-slate-500 font-mono">
-          {isSevens ? 'Sevens' : 'Fifteens'} · {numPeriods} × {numMins} min
+          {numPeriods} × {numMins} min
           {normalizedBreaks.length > 0 &&
             ' · breaks: ' + normalizedBreaks.map(b => `${b}m`).join(' / ')
           }

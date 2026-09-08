@@ -1235,6 +1235,23 @@ async function computeMatchRestamp(m, { homeDisplay, awayDisplay, matchDate } = 
   return { patch, redirect }
 }
 
+// Resolve an organisation's FULL registered name from its id (best-effort,
+// cached per call via the optional map). The full org name — never an
+// abbreviation — is what a match URL and its denormalised fields carry, so we
+// resolve it live from the org record rather than trusting a possibly-empty
+// denormalised copy on the team/entrant. Returns null when it can't be found.
+async function resolveOrgName(orgId, cache = null) {
+  if (!orgId) return null
+  if (cache && cache.has(orgId)) return cache.get(orgId)
+  let name = null
+  try {
+    const s = await getDoc(doc(db, 'organizations', orgId))
+    name = s.exists() ? (s.data().name ?? null) : null
+  } catch { /* best-effort — fall back to the caller's stored name */ }
+  if (cache) cache.set(orgId, name)
+  return name
+}
+
 export async function createMatch(competitionId, homeTeam, awayTeam, {
   matchDate, scheduledAt = null, pitch = '', venueId = null, venueSlug = null,
   facilityId = null, facilityName = null,
@@ -1244,8 +1261,14 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
   sevens = false,
 }) {
   const seasonStr = season ? String(season) : null
-  const homeDisplay = composeTeamDisplay(homeTeam.teamName || homeTeam.orgName, homeTeam.displayName)
-  const awayDisplay = composeTeamDisplay(awayTeam.teamName || awayTeam.orgName, awayTeam.displayName)
+  // Always carry the FULL organisation name (matchName is for on-page display
+  // only, resolved live there). Resolve it from the org id when the passed team
+  // didn't carry it, so a URL/display is never a bare team label.
+  const orgCache = new Map()
+  const homeOrgName = homeTeam.orgName || await resolveOrgName(homeTeam.organizationId, orgCache)
+  const awayOrgName = awayTeam.orgName || await resolveOrgName(awayTeam.organizationId, orgCache)
+  const homeDisplay = composeTeamDisplay(homeTeam.teamName || homeOrgName, homeTeam.displayName)
+  const awayDisplay = composeTeamDisplay(awayTeam.teamName || awayOrgName, awayTeam.displayName)
   const baseSlug  = buildMatchSlug(homeDisplay, awayDisplay)
 
   // The canonical URL depends on whether this match belongs to a competition.
@@ -1279,7 +1302,7 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
     homeTeamId:        homeRegistered ? homeTeam.id : null,
     homeTeamName:      homeTeam.displayName,
     homeDisplay,
-    homeOrgName:       homeTeam.orgName       || null,
+    homeOrgName:       homeOrgName            || null,
     homeTeamSlug:      homeTeam.slug          || null,
     homeTeamColor:     homeTeam.primaryColor  || null,
     homeOrgId:         homeTeam.organizationId ?? null,
@@ -1288,7 +1311,7 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
     awayTeamId:        awayRegistered ? awayTeam.id : null,
     awayTeamName:      awayTeam.displayName,
     awayDisplay,
-    awayOrgName:       awayTeam.orgName       || null,
+    awayOrgName:       awayOrgName            || null,
     awayTeamSlug:      awayTeam.slug          || null,
     awayTeamColor:     awayTeam.primaryColor  || null,
     awayOrgId:         awayTeam.organizationId ?? null,
@@ -1382,8 +1405,37 @@ export async function updateMatch(id, data) {
   }
   return updateDoc(doc(db, 'matches', id), { ...patch, updatedBy: uid(), updatedAt: serverTimestamp() })
 }
+// Soft-delete: move a match to the recycle bin. It is hidden from every list
+// and excluded from stats/standings (all match reads filter `deleted !== true`),
+// but the record is kept so it can be restored. Competition fixture-membership
+// is left intact so a restore rejoins the competition cleanly.
 export async function deleteMatch(id) {
-  return deleteDoc(doc(db, 'matches', id))
+  return updateDoc(doc(db, 'matches', id), {
+    deleted: true, deletedAt: serverTimestamp(), deletedBy: uid(),
+  })
+}
+
+// Restore a soft-deleted match back into all listings and stats.
+export async function restoreMatch(id) {
+  return updateDoc(doc(db, 'matches', id), {
+    deleted: false, deletedAt: null, restoredAt: serverTimestamp(), restoredBy: uid(),
+  })
+}
+
+// Permanently remove a match (recycle-bin purge) and clear its competition
+// fixture-membership doc. This cannot be undone.
+export async function purgeMatch(id) {
+  const snap = await getDoc(doc(db, 'matches', id)).catch(() => null)
+  const competitionId = snap && snap.exists() ? (snap.data().competitionId ?? null) : null
+  await deleteDoc(doc(db, 'matches', id))
+  if (competitionId) await removeFixtureFromCompetition(competitionId, id).catch(() => {})
+}
+
+// Every soft-deleted match — the recycle bin, most recently deleted first.
+export async function fetchDeletedMatches() {
+  const snap = await getDocs(query(collection(db, 'matches'), where('deleted', '==', true)))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.deletedAt?.toMillis?.() ?? 0) - (a.deletedAt?.toMillis?.() ?? 0))
 }
 
 // ── Match groups (a "match day" between two schools) ──────────────────────────
@@ -2812,6 +2864,97 @@ export async function fetchCompetitionFixtures(competitionId) {
   return snap.docs.map(d => ({ matchId: d.id, ...d.data() }))
 }
 
+// Apply the competition's current match format to its matches AND re-link each
+// side's organisation from the team record. This is what makes an edit to the
+// competition format actually reach the fixtures, and it repairs matches whose
+// org link is missing. The format is applied only to matches NOT yet started
+// (status 'scheduled' or unset, no startedAt) so a live or finished match is
+// never rewritten; the org re-link is applied to every match, since it only
+// fills in the association the org pages and standings read. Returns how many
+// matches changed. Writes in chunks to stay within Firestore's batch limit.
+export async function resyncCompetitionMatches(competitionId, matchFormat = null) {
+  await assertCompetitionAdmin(competitionId)
+  const snap = await getDocs(query(collection(db, 'matches'), where('competitionId', '==', competitionId)))
+  const matches = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  if (matches.length === 0) return 0
+
+  // Resolve each distinct team's org once: team -> organizationId -> org name.
+  const teamIds = [...new Set(matches.flatMap(m => [m.homeTeamId, m.awayTeamId]).filter(Boolean))]
+  const orgOfTeam = new Map()
+  await Promise.all(teamIds.map(async (tid) => {
+    const t = await getDoc(doc(db, 'teams', tid)).catch(() => null)
+    const orgId = t && t.exists() ? (t.data().organizationId ?? null) : null
+    let orgName = null
+    if (orgId) {
+      const o = await getDoc(doc(db, 'organizations', orgId)).catch(() => null)
+      orgName = o && o.exists() ? (o.data().name ?? null) : null
+    }
+    orgOfTeam.set(tid, { orgId, orgName })
+  }))
+
+  const notStarted = (m) => !m.startedAt && (m.status == null || m.status === 'scheduled')
+
+  let batch = writeBatch(db), ops = 0, changed = 0
+  const flush = async () => { if (ops > 0) { await batch.commit(); batch = writeBatch(db); ops = 0 } }
+  for (const m of matches) {
+    const patch = {}
+    const h = m.homeTeamId ? orgOfTeam.get(m.homeTeamId) : null
+    if (h && h.orgId && (m.homeOrgId !== h.orgId || (h.orgName && m.homeOrgName !== h.orgName))) {
+      patch.homeOrgId = h.orgId; patch.homeRegistered = true
+      if (h.orgName) patch.homeOrgName = h.orgName
+    }
+    const a = m.awayTeamId ? orgOfTeam.get(m.awayTeamId) : null
+    if (a && a.orgId && (m.awayOrgId !== a.orgId || (a.orgName && m.awayOrgName !== a.orgName))) {
+      patch.awayOrgId = a.orgId; patch.awayRegistered = true
+      if (a.orgName) patch.awayOrgName = a.orgName
+    }
+    // Repair the frozen Display name — "Org Name – Team Name" — so matches whose
+    // homeDisplay was never stored (or was saved bare) show the coupled name.
+    const homeOrgFinal = (h && h.orgName) || m.homeOrgName || null
+    const awayOrgFinal = (a && a.orgName) || m.awayOrgName || null
+    const homeDisplayWanted = composeTeamDisplay(homeOrgFinal, m.homeTeamName) || null
+    const awayDisplayWanted = composeTeamDisplay(awayOrgFinal, m.awayTeamName) || null
+    if (homeDisplayWanted && m.homeDisplay !== homeDisplayWanted) patch.homeDisplay = homeDisplayWanted
+    if (awayDisplayWanted && m.awayDisplay !== awayDisplayWanted) patch.awayDisplay = awayDisplayWanted
+    if (matchFormat && notStarted(m)) {
+      patch.periods       = Number(matchFormat.periods) || DEFAULT_PERIODS
+      patch.periodMinutes = Number(matchFormat.periodMinutes) || 0
+      patch.breakMinutes  = Array.isArray(matchFormat.breakMinutes) ? matchFormat.breakMinutes.map(Number) : DEFAULT_BREAK_MINUTES
+      if ('indoor' in matchFormat) patch.indoor = matchFormat.indoor === true
+      if ('sevens' in matchFormat) patch.sevens = matchFormat.sevens === true
+    }
+    if (Object.keys(patch).length > 0) {
+      batch.update(doc(db, 'matches', m.id), patch); ops++; changed++
+      if (ops >= 400) await flush()
+    }
+  }
+  await flush()
+
+  // Regenerate the frozen URL slug/path from the corrected full-org display, so
+  // matches created with a bare "u14a-vs-u14a" URL become identifiable. Done in
+  // a sequential pass (each write commits before the next) so unique-slug
+  // suffixes are assigned correctly. Match-day children and knockout/playoff
+  // fixtures keep their stable round-name URL and are never re-stamped.
+  for (const m of matches) {
+    const stableUrl = m.matchGroupId || m.isPlayoffHolding || m.playoffGameSlug
+    if (stableUrl) continue
+    const h = m.homeTeamId ? orgOfTeam.get(m.homeTeamId) : null
+    const a = m.awayTeamId ? orgOfTeam.get(m.awayTeamId) : null
+    const hd = composeTeamDisplay((h && h.orgName) || m.homeOrgName, m.homeTeamName) || 'home'
+    const ad = composeTeamDisplay((a && a.orgName) || m.awayOrgName, m.awayTeamName) || 'away'
+    if (buildMatchSlug(hd, ad) === m.matchSlug) continue
+    const rs = await computeMatchRestamp(m, { homeDisplay: hd, awayDisplay: ad }).catch(() => null)
+    if (rs?.patch?.matchSlug) {
+      await updateDoc(doc(db, 'matches', m.id), {
+        matchSlug: rs.patch.matchSlug,
+        ...(rs.patch.path ? { path: rs.patch.path } : {}),
+      }).catch(() => {})
+      changed++
+    }
+  }
+  return changed
+}
+
 export async function fetchCompetitionTeams(competitionId) {
   const snap = await getDocs(collection(db, 'competitions', competitionId, 'teams'))
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -3131,10 +3274,17 @@ export async function generateRoundRobinFixtures(competitionId, teams, options =
   const seasonStr  = season ? String(season) : null
   const createdIds = []
 
+  const orgCache   = new Map()
+
   for (const [home, away] of pairs) {
-    const baseSlug  = buildMatchSlug(
-      composeTeamDisplay(home.teamName || home.orgName, home.displayName),
-      composeTeamDisplay(away.teamName || away.orgName, away.displayName))
+    // Always resolve the FULL organisation name (live from the org id when the
+    // entrant didn't carry it) so neither the URL slug nor the stored fields is
+    // ever a bare team label. Frozen composed Display name — "Org Name – Team".
+    const homeOrgName = home.orgName || await resolveOrgName(home.organizationId, orgCache)
+    const awayOrgName = away.orgName || await resolveOrgName(away.organizationId, orgCache)
+    const homeDisplay = composeTeamDisplay(home.teamName || homeOrgName, home.displayName)
+    const awayDisplay = composeTeamDisplay(away.teamName || awayOrgName, away.displayName)
+    const baseSlug  = buildMatchSlug(homeDisplay, awayDisplay)
     const matchSlug = seasonStr
       ? await generateUniqueMatchSlug(seasonStr, baseSlug)
       : await generateUniqueMatchSlugGlobal(baseSlug)
@@ -3144,15 +3294,17 @@ export async function generateRoundRobinFixtures(competitionId, teams, options =
       ownerOrgId:        ownerOrgId ?? null,
       homeTeamId:        home.id,
       homeTeamName:      home.displayName,
+      homeDisplay,
       homeTeamColor:     home.primaryColor  || null,
       homeOrgId:         home.organizationId ?? null,
-      homeOrgName:       home.orgName       || null,
+      homeOrgName:       homeOrgName        || null,
       homeRegistered:    !!home.organizationId,
       awayTeamId:        away.id,
       awayTeamName:      away.displayName,
+      awayDisplay,
       awayTeamColor:     away.primaryColor  || null,
       awayOrgId:         away.organizationId ?? null,
-      awayOrgName:       away.orgName       || null,
+      awayOrgName:       awayOrgName        || null,
       awayRegistered:    !!away.organizationId,
       homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
       periods:       Number(periods)       || DEFAULT_PERIODS,

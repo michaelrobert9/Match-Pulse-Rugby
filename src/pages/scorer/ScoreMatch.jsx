@@ -1156,7 +1156,7 @@ export default function ScoreMatch() {
 
   return (
     <div className="md:flex md:justify-center md:min-h-screen md:bg-slate-950">
-    <div className={`max-w-2xl mx-auto overflow-hidden ${t.root} flex flex-col transition-colors md:border-x md:border-slate-800 md:shadow-2xl`} style={{ height: '100dvh' }}>
+    <div className={`max-w-4xl mx-auto overflow-hidden ${t.root} flex flex-col transition-colors md:border-x md:border-slate-800 md:shadow-2xl`} style={{ height: '100dvh' }}>
       {/* Header — back · title · status on the left; Result on the bar; the rest
           (Restart, Edit, Lineups, theme) collapse into a ⋯ menu so the row never
           overflows or overlaps on a narrow phone. */}
@@ -1716,7 +1716,7 @@ export default function ScoreMatch() {
             <div className="font-mono font-black text-3xl tabular-nums mb-1">
               {match.homeScore ?? 0} — {match.awayScore ?? 0}
             </div>
-            <div className={`text-sm ${t.muted}`}>{match.homeTeamName} vs {match.awayTeamName}</div>
+            <div className={`text-sm ${t.muted}`}>{homeIdentity?.primary ?? match.homeTeamName} vs {awayIdentity?.primary ?? match.awayTeamName}</div>
             <div className={`text-xs ${t.muted} mt-1`}>Duration {formatClock(elapsedMs)} · This will update standings.</div>
           </div>
 
@@ -1733,7 +1733,7 @@ export default function ScoreMatch() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1 truncate`}>
-                      {match.homeTeamName ?? 'Home'}
+                      {homeIdentity?.primary ?? match.homeTeamName ?? 'Home'}
                     </div>
                     <input type="number" min="0" max="99" value={kickCompHome}
                       onChange={e => setKickCompHome(e.target.value)}
@@ -1742,7 +1742,7 @@ export default function ScoreMatch() {
                   </div>
                   <div>
                     <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1 truncate`}>
-                      {match.awayTeamName ?? 'Away'}
+                      {awayIdentity?.primary ?? match.awayTeamName ?? 'Away'}
                     </div>
                     <input type="number" min="0" max="99" value={kickCompAway}
                       onChange={e => setKickCompAway(e.target.value)}
@@ -1860,7 +1860,7 @@ export default function ScoreMatch() {
                 ({match.kickCompHome}–{match.kickCompAway} kicks)
               </div>
             )}
-            <div className={`text-sm ${t.muted} mb-1`}>{match.homeTeamName} vs {match.awayTeamName}</div>
+            <div className={`text-sm ${t.muted} mb-1`}>{homeIdentity?.primary ?? match.homeTeamName} vs {awayIdentity?.primary ?? match.awayTeamName}</div>
             <div className={`text-xs ${t.muted} mb-5`}>Result saved · standings updated</div>
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => {
@@ -1868,8 +1868,8 @@ export default function ScoreMatch() {
                 const as = match.awayScore ?? 0
                 const kc = match.kickCompHome != null && match.kickCompAway != null
                   ? ` (${match.kickCompHome}–${match.kickCompAway} kicks)` : ''
-                const homeDisplay = match.homeOrgName ? `${match.homeOrgName} ${match.homeTeamName}` : (match.homeTeamName ?? "")
-                const awayDisplay = match.awayOrgName ? `${match.awayOrgName} ${match.awayTeamName}` : (match.awayTeamName ?? "")
+                const homeDisplay = homeIdentity?.primary ?? (match.homeTeamName ?? "")
+                const awayDisplay = awayIdentity?.primary ?? (match.awayTeamName ?? "")
                 const text = `Full time ⏱\n${homeDisplay} ${hs}–${as} ${awayDisplay}${kc}`
                 if (navigator.share) {
                   navigator.share({ title: 'Match result', text }).catch(() => {})
@@ -2217,22 +2217,6 @@ export default function ScoreMatch() {
                 placeholder="e.g. Field 1"
                 inputClassName={`w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors ${t.neutralBtn}`}
                 onChange={v => setEditForm(f => ({ ...f, pitch: v.pitch, venueId: v.venueId, venueSlug: v.venueSlug }))} />
-            </div>
-            <div>
-              <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1.5`}>Game type</div>
-              <div className="grid grid-cols-2 gap-2">
-                {[{ v: false, label: 'Fifteens (XV)' }, { v: true, label: 'Sevens (7s)' }].map(opt => (
-                  <button type="button" key={opt.label}
-                    onClick={() => setEditForm(f => ({ ...f, sevens: opt.v }))}
-                    className={`text-sm font-bold py-2.5 rounded-xl border transition-colors ${
-                      (editForm.sevens === true) === opt.v
-                        ? 'bg-emerald-600 border-emerald-600 text-white'
-                        : t.neutralBtn
-                    }`}>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

@@ -14,11 +14,14 @@ import {
 import {
   updateCompetition, deleteCompetition,
   addFixtureToCompetition, removeFixtureFromCompetition,
+  resyncCompetitionMatches,
   generateRoundRobinFixtures,
   addTeamToCompetition, removeTeamFromCompetition,
   updateCompetitionMemberName,
   updateScheduleConfig,
   generateUniqueMatchSlug,
+  createMatch,
+  deleteMatch,
   fetchCompetitionStaff, setCompetitionStaff, removeCompetitionStaff,
   recalculateCompetitionStats,
   submitFixtureResult, postponeFixture, cancelFixture,
@@ -1438,6 +1441,7 @@ function MatchFormatCard({ competition, onSaved }) {
         sevens:        fmt.sevens === true,
       }
       await updateCompetition(competition.id, { matchFormat })
+      await resyncCompetitionMatches(competition.id, matchFormat).catch(() => {})
       onSaved({ ...competition, matchFormat })
       setEditing(false)
     } finally { setSaving(false) }
@@ -1448,7 +1452,7 @@ function MatchFormatCard({ competition, onSaved }) {
 
   return (
     <Card title="Default match format"
-      subtitle="Applied to new matches — still adjustable per match"
+      subtitle="Saving applies this to every match in the competition (except ones already started) and re-links teams"
       action={<EditButton editing={editing} onClick={() => { setFmt(competitionMatchFormat(competition)); setEditing(e => !e) }} />}>
       {!editing ? (
         <div className="text-sm text-slate-700">
@@ -2208,32 +2212,22 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
       const home        = teams.find(t => t.id === newForm.homeTeamId)
       const away        = teams.find(t => t.id === newForm.awayTeamId)
       const scheduledAt = newForm.scheduledAt ? new Date(newForm.scheduledAt) : null
-      const seasonStr   = competition.season ? String(competition.season) : null
-      const baseSlug    = buildMatchSlug(home.displayName, away.displayName)
-      const matchSlug   = seasonStr
-        ? await generateUniqueMatchSlug(seasonStr, baseSlug)
-        : baseSlug
-      const compSlug    = competition.slug || null
-      const ref = await addDoc(collection(db, 'matches'), {
-        competitionId: competition.id,
-        ownerOrgId: competition.ownerOrgId || null,
-        homeTeamId: home.id, homeTeamName: home.displayName, homeTeamColor: home.primaryColor || null,
-        homeOrgId: home.organizationId ?? null, homeOrgName: home.orgName || null, homeRegistered: !!home.organizationId,
-        awayTeamId: away.id, awayTeamName: away.displayName, awayTeamColor: away.primaryColor || null,
-        awayOrgId: away.organizationId ?? null, awayOrgName: away.orgName || null, awayRegistered: !!away.organizationId,
-        homeScore: 0, awayScore: 0, homeTries: 0, awayTries: 0,
-        periods: Number(newForm.periods), periodMinutes: Number(newForm.periodMinutes),
-        breakMinutes: Array.isArray(newForm.breakMinutes) ? newForm.breakMinutes : DEFAULT_BREAK_MINUTES,
-        scores: [], cards: [], controlLog: [],
-        startedAt: null, pausedAt: null, totalPausedMs: 0, nextPeriodIndex: 1,
-        scheduledAt, pitch: composeVenuePitch(newForm.pitch || '', newForm.facilityName),
-        venueId: newForm.venueId || null, venueSlug: newForm.venueSlug || null,
-        facilityId: newForm.facilityId || null, facilityName: newForm.facilityName || null,
-        sevens: !!newForm.sevens, status: 'scheduled', tracked: false,
-        matchSlug,
-        ...(seasonStr ? { season: seasonStr } : {}),
-        ...(compSlug && seasonStr ? { competitionSlug: compSlug, competitionSeason: seasonStr } : {}),
-        createdAt: serverTimestamp(),
+      // Competition match: createMatch builds the competition-scoped, dateless
+      // slug + URL and resolves the FULL organisation name live, so the URL and
+      // the stored fields are never a bare team label.
+      const ref = await createMatch(competition.id, home, away, {
+        scheduledAt,
+        pitch:           newForm.pitch || '',
+        venueId:         newForm.venueId || null,
+        venueSlug:       newForm.venueSlug || null,
+        facilityId:      newForm.facilityId || null,
+        facilityName:    newForm.facilityName || null,
+        season:          competition.season ?? null,
+        competitionSlug: competition.slug || null,
+        periods:         Number(newForm.periods),
+        periodMinutes:   Number(newForm.periodMinutes),
+        breakMinutes:    Array.isArray(newForm.breakMinutes) ? newForm.breakMinutes : DEFAULT_BREAK_MINUTES,
+        sevens:          !!newForm.sevens,
       })
       await addFixtureToCompetition(competition.id,
         { id: ref.id, homeTeamId: home.id, awayTeamId: away.id },
@@ -2241,6 +2235,8 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
       )
       setFixtures(prev => [...prev, {
         id: ref.id, homeTeamName: home.displayName, awayTeamName: away.displayName,
+        homeDisplay: composeTeamDisplay(home.orgName, home.displayName), awayDisplay: composeTeamDisplay(away.orgName, away.displayName),
+        homeOrgName: home.orgName || null, awayOrgName: away.orgName || null,
         homeTeamId: home.id, awayTeamId: away.id,
         scheduledAt, status: 'scheduled', tracked: false, homeScore: 0, awayScore: 0,
       }])
@@ -2275,9 +2271,8 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
   }
 
   async function handleDelete(fixtureId) {
-    if (!confirm('Delete this match?')) return
-    await deleteDoc(doc(db, 'matches', fixtureId))
-    removeFixtureFromCompetition(competition.id, fixtureId).catch(() => {})
+    if (!confirm('Move this match to the recycle bin? You can restore it from admin → Deleted matches.')) return
+    await deleteMatch(fixtureId)
     setFixtures(prev => prev.filter(f => f.id !== fixtureId))
   }
 
@@ -2654,7 +2649,12 @@ function AwaitingResultSection({ competition }) {
 
 // ── Results tab ────────────────────────────────────────────────────────────────
 
-function ResultsTab({ competition, fixtures }) {
+function ResultsTab({ competition, fixtures, teams }) {
+  const resolveName = (teamId, orgName, teamName) => {
+    if (orgName) return `${orgName} ${teamName}`
+    const team = (teams || []).find(t => t.id === teamId)
+    return team?.orgName ? `${team.orgName} ${teamName}` : (teamName ?? '')
+  }
   const played = fixtures
     .filter(f => !isScheduled(f))
     .sort((a, b) => (b.scheduledAt?.toMillis?.() ?? 0) - (a.scheduledAt?.toMillis?.() ?? 0))
@@ -2686,11 +2686,11 @@ function ResultsTab({ competition, fixtures }) {
               className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 hover:border-slate-300 transition-colors">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-slate-900 text-sm font-medium truncate">{fx.homeOrgName ? `${fx.homeOrgName} ${fx.homeTeamName}` : (fx.homeTeamName ?? "")}</span>
+                  <span className="text-slate-900 text-sm font-medium truncate">{resolveName(fx.homeTeamId, fx.homeOrgName, fx.homeTeamName)}</span>
                   <span className="font-mono text-slate-900 text-sm font-bold shrink-0">
                     {fx.homeScore ?? 0}–{fx.awayScore ?? 0}
                   </span>
-                  <span className="text-slate-900 text-sm font-medium text-right truncate">{fx.awayOrgName ? `${fx.awayOrgName} ${fx.awayTeamName}` : (fx.awayTeamName ?? "")}</span>
+                  <span className="text-slate-900 text-sm font-medium text-right truncate">{resolveName(fx.awayTeamId, fx.awayOrgName, fx.awayTeamName)}</span>
                 </div>
                 <div className="micro-label mt-0.5">{formatFixtureDate(fx.scheduledAt)}</div>
               </div>
@@ -2870,7 +2870,7 @@ export default function CompetitionManage() {
         />
       )}
       {validTab === 'results' && (
-        <ResultsTab competition={competition} fixtures={fixtures} />
+        <ResultsTab competition={competition} fixtures={fixtures} teams={teams} />
       )}
       {validTab === 'standings' && competition.type === 'league' && (
         <LeagueStandingsTab competition={competition} />

@@ -53,6 +53,7 @@ import AdminDashboard from './pages/admin/Dashboard'
 import { OrganizationsList, NewOrganization, EditOrganization } from './pages/admin/Organizations'
 import { PeopleList, NewPerson, EditPerson } from './pages/admin/PeopleAdmin'
 import { FixturesList as AdminFixturesList } from './pages/admin/Fixtures'
+import DeletedMatches from './pages/admin/DeletedMatches'
 import ResultQueue from './pages/admin/ResultQueue'
 import TeamGovernance from './pages/admin/TeamGovernance'
 import InstallHelp from './pages/InstallHelp'
@@ -248,6 +249,7 @@ export default function App() {
             <Route path="user-access"                 element={<UserAccess />} />
             <Route path="seo"                         element={<SeoSettings />} />
             <Route path="matches"                     element={<AdminFixturesList />} />
+            <Route path="matches/deleted"             element={<DeletedMatches />} />
             <Route path="result-queue"                element={<ResultQueue />} />
             <Route path="team-governance"             element={<TeamGovernance />} />
             {/* Competitions are one unified, role-scoped list at /manage/competitions
