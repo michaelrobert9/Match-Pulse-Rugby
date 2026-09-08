@@ -62,11 +62,9 @@ function readScores(m, countsAllEvents = false) {
         points: Number(e.points ?? SCORE_POINTS[e.scoreType] ?? 0),
       }))
   }
-  // A touchdown in touch rugby is worth 1 point, not 5.
-  const tryPoints = m.touch === true ? 1 : SCORE_POINTS.try
   return [
-    ...(m.homeScorers ?? []).map(r => ({ name: r.name, side: 'home', personId: null, scoreType: 'try', points: tryPoints })),
-    ...(m.awayScorers ?? []).map(r => ({ name: r.name, side: 'away', personId: null, scoreType: 'try', points: tryPoints })),
+    ...(m.homeScorers ?? []).map(r => ({ name: r.name, side: 'home', personId: null, scoreType: 'try', points: SCORE_POINTS.try })),
+    ...(m.awayScorers ?? []).map(r => ({ name: r.name, side: 'away', personId: null, scoreType: 'try', points: SCORE_POINTS.try })),
   ]
 }
 

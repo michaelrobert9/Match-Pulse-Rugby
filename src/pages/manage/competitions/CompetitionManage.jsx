@@ -1439,7 +1439,6 @@ function MatchFormatCard({ competition, onSaved }) {
         periodMinutes: Number(fmt.periodMinutes) || 0,
         breakMinutes:  Array.isArray(fmt.breakMinutes) ? fmt.breakMinutes.map(Number) : DEFAULT_BREAK_MINUTES,
         sevens:        fmt.sevens === true,
-        touch:         fmt.touch === true,
       }
       await updateCompetition(competition.id, { matchFormat })
       await resyncCompetitionMatches(competition.id, matchFormat).catch(() => {})
@@ -1448,7 +1447,7 @@ function MatchFormatCard({ competition, onSaved }) {
     } finally { setSaving(false) }
   }
 
-  const summary = `${current.touch ? 'Touch' : current.sevens ? 'Sevens' : 'Fifteens'} · ${current.periods} × ${current.periodMinutes} min`
+  const summary = `${current.sevens ? 'Sevens' : 'Fifteens'} · ${current.periods} × ${current.periodMinutes} min`
     + (current.breakMinutes?.length ? ` · breaks ${current.breakMinutes.join(' / ')}m` : '')
 
   return (
@@ -1465,7 +1464,6 @@ function MatchFormatCard({ competition, onSaved }) {
           <FormatSelector
             periods={fmt.periods} periodMinutes={fmt.periodMinutes} breakMinutes={fmt.breakMinutes}
             sevens={fmt.sevens}
-            touch={fmt.touch}
             onChange={(v) => setFmt(v)} />
           <SaveRow saving={saving} onSave={save} />
         </div>
@@ -2163,7 +2161,7 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
   const [newForm, setNewForm]     = useState({
     homeTeamId: '', awayTeamId: '', scheduledAt: '', pitch: '', venueId: null, venueSlug: null, facilityId: null, facilityName: null,
     periods: defaultFmt.periods, periodMinutes: defaultFmt.periodMinutes,
-    breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens, touch: defaultFmt.touch,
+    breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens,
   })
 
   useEffect(() => {
@@ -2230,7 +2228,6 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
         periodMinutes:   Number(newForm.periodMinutes),
         breakMinutes:    Array.isArray(newForm.breakMinutes) ? newForm.breakMinutes : DEFAULT_BREAK_MINUTES,
         sevens:          !!newForm.sevens,
-        touch:           !!newForm.touch,
       })
       await addFixtureToCompetition(competition.id,
         { id: ref.id, homeTeamId: home.id, awayTeamId: away.id },
@@ -2244,7 +2241,7 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
         scheduledAt, status: 'scheduled', tracked: false, homeScore: 0, awayScore: 0,
       }])
       setShowNew(false)
-      setNewForm({ homeTeamId: '', awayTeamId: '', scheduledAt: '', pitch: '', venueId: null, venueSlug: null, facilityId: null, facilityName: null, periods: defaultFmt.periods, periodMinutes: defaultFmt.periodMinutes, breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens, touch: defaultFmt.touch })
+      setNewForm({ homeTeamId: '', awayTeamId: '', scheduledAt: '', pitch: '', venueId: null, venueSlug: null, facilityId: null, facilityName: null, periods: defaultFmt.periods, periodMinutes: defaultFmt.periodMinutes, breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens })
     } finally { setSaving(false) }
   }
 
@@ -2259,7 +2256,6 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
         periodMinutes:    genFmt.periodMinutes,
         breakMinutes:     genFmt.breakMinutes ?? DEFAULT_BREAK_MINUTES,
         sevens:           genFmt.sevens === true,
-        touch:            genFmt.touch === true,
         ownerOrgId:       competition.ownerOrgId || null,
         competitionSlug:  competition.slug || null,
         ...(type === 'tournament' && genPoolId ? { poolId: genPoolId } : {}),
@@ -2419,9 +2415,8 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
               periodMinutes={genFmt.periodMinutes}
               breakMinutes={genFmt.breakMinutes}
               sevens={genFmt.sevens}
-              touch={genFmt.touch}
-              onChange={({ periods, periodMinutes, breakMinutes, sevens, touch }) =>
-                setGenFmt({ periods, periodMinutes, breakMinutes, sevens, touch })
+              onChange={({ periods, periodMinutes, breakMinutes, sevens }) =>
+                setGenFmt({ periods, periodMinutes, breakMinutes, sevens })
               }
             />
           </div>
@@ -2485,9 +2480,8 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
               periodMinutes={newForm.periodMinutes}
               breakMinutes={newForm.breakMinutes}
               sevens={newForm.sevens}
-              touch={newForm.touch}
-              onChange={({ periods, periodMinutes, breakMinutes, sevens, touch }) =>
-                setNewForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens, touch }))
+              onChange={({ periods, periodMinutes, breakMinutes, sevens }) =>
+                setNewForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens }))
               }
             />
           </div>

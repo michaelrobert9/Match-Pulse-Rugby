@@ -511,9 +511,6 @@ export default function ScoreMatch() {
   const isPaused   = status === 'paused'
   const isFinal    = status === 'final'
   const running    = status === 'live'
-  // Touch rugby: a single 1-point touchdown, no kicks — the scorer hides the
-  // kick controls and records the score directly with no conversion step.
-  const isTouch    = match?.touch === true
   const elapsedMs  = getElapsedMs(match)
   // Count-up clock within the half; red once play runs past the hooter into
   // added time (periodRemainingMs goes negative — it also drives the hooter).
@@ -624,15 +621,9 @@ export default function ScoreMatch() {
     const ts = getElapsedMs(match)
     setSaving(true)
     try {
-      if (isTouch) {
-        // Touch: one 1-point touchdown, no kind/conversion enrichment.
-        await addScore(id, side, { matchTimestamp: ts, scoreType: 'try', points: 1 })
-        if (navigator.vibrate) navigator.vibrate(60)
-      } else {
-        const eventId = await addScore(id, side, { matchTimestamp: ts, scoreType: 'try' })
-        if (navigator.vibrate) navigator.vibrate(60)
-        setTryEnrich({ eventId, side, step: 'kind', conversionId: null })
-      }
+      const eventId = await addScore(id, side, { matchTimestamp: ts, scoreType: 'try' })
+      if (navigator.vibrate) navigator.vibrate(60)
+      setTryEnrich({ eventId, side, step: 'kind', conversionId: null })
     } catch (err) {
       setNotice(err?.code === 'permission-denied'
         ? 'Permission denied — your access may have changed.'
@@ -979,7 +970,6 @@ export default function ScoreMatch() {
       venueId:       match.venueId       ?? null,
       venueSlug:     match.venueSlug     ?? null,
       sevens:        match.sevens === true,
-      touch:         match.touch === true,
       homeTeamName:  match.homeTeamName  || '',
       awayTeamName:  match.awayTeamName  || '',
       homeOrgId:     match.homeOrgId     || '',
@@ -1036,7 +1026,6 @@ export default function ScoreMatch() {
         venueId:       editForm.venueId       ?? null,
         venueSlug:     editForm.venueSlug     ?? null,
         sevens:        editForm.sevens === true,
-        touch:         editForm.touch === true,
         homeTeamName:  (editForm.homeTeamName ?? '').trim(),
         awayTeamName:  (editForm.awayTeamName ?? '').trim(),
         periods:       Number(editForm.periods) || 2,
@@ -1374,9 +1363,7 @@ export default function ScoreMatch() {
               }
               const isHome = ev.side === 'home'
               const name = ev.scorerName || ev.playerName || teamDisplay(ev.side)
-              const kindLabel = ev.kind === 'score'
-                ? (isTouch && ev.scoreType === 'try' ? 'Touchdown' : (SCORE_LABEL[ev.scoreType] ?? 'Score'))
-                : cardLabel(ev.cardType, match)
+              const kindLabel = ev.kind === 'score' ? (SCORE_LABEL[ev.scoreType] ?? 'Score') : cardLabel(ev.cardType, match)
               const points = ev.kind === 'score' ? (ev.points ?? SCORE_POINTS[ev.scoreType] ?? 0) : null
               const cardDur = ev.kind === 'card' ? cardDurationText(ev, match) : null
               const minute = <span className={`font-mono text-xs ${t.muted} tabular-nums shrink-0`}>{gameMinuteLabel(match, ev.matchTimestamp)}</span>
@@ -1457,16 +1444,14 @@ export default function ScoreMatch() {
                     className={`flex-[5] text-white font-bold text-base rounded-xl transition-colors landscape:h-14 ${
                       tryAccepted ? 'bg-emerald-600' : 'bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50'
                     }`} style={{ minHeight: 64 }}>
-                    {isTouch ? (tryAccepted ? '✓ TOUCHDOWN' : '+ TOUCHDOWN') : (tryAccepted ? '✓ TRY' : '+ TRY')}
+                    {tryAccepted ? '✓ TRY' : '+ TRY'}
                   </button>
-                  {!isTouch && (
-                    <button onClick={() => handleKickTap(side)} disabled={saving || kickAccepted}
-                      className={`flex-[3] border font-bold text-sm rounded-xl transition-colors landscape:h-14 ${
-                        kickAccepted ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600' : t.neutralBtn
-                      }`} style={{ minHeight: 64 }}>
-                      {kickAccepted ? '✓' : 'KICK'}
-                    </button>
-                  )}
+                  <button onClick={() => handleKickTap(side)} disabled={saving || kickAccepted}
+                    className={`flex-[3] border font-bold text-sm rounded-xl transition-colors landscape:h-14 ${
+                      kickAccepted ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600' : t.neutralBtn
+                    }`} style={{ minHeight: 64 }}>
+                    {kickAccepted ? '✓' : 'KICK'}
+                  </button>
                   <button onClick={() => handleCardTap(side)} disabled={saving || cardAccepted}
                     className={`flex-[2] border font-bold text-sm rounded-xl transition-colors landscape:h-14 ${
                       cardAccepted ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600' : t.neutralBtn
@@ -2232,25 +2217,6 @@ export default function ScoreMatch() {
                 placeholder="e.g. Field 1"
                 inputClassName={`w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors ${t.neutralBtn}`}
                 onChange={v => setEditForm(f => ({ ...f, pitch: v.pitch, venueId: v.venueId, venueSlug: v.venueSlug }))} />
-            </div>
-            <div>
-              <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1.5`}>Game type</div>
-              <div className="grid grid-cols-3 gap-2">
-                {[{ v: 'fifteens', label: 'Fifteens' }, { v: 'sevens', label: 'Sevens' }, { v: 'touch', label: 'Touch' }].map(opt => {
-                  const cur = editForm.touch === true ? 'touch' : editForm.sevens === true ? 'sevens' : 'fifteens'
-                  return (
-                    <button type="button" key={opt.v}
-                      onClick={() => setEditForm(f => ({ ...f, sevens: opt.v === 'sevens', touch: opt.v === 'touch' }))}
-                      className={`text-sm font-bold py-2.5 rounded-xl border transition-colors ${
-                        cur === opt.v
-                          ? 'bg-emerald-600 border-emerald-600 text-white'
-                          : t.neutralBtn
-                      }`}>
-                      {opt.label}
-                    </button>
-                  )
-                })}
-              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

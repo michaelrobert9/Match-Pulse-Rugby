@@ -663,7 +663,7 @@ export default function MatchDetail() {
             className="block text-[15px] text-slate-400 leading-snug" />
           {typeof match.sevens === 'boolean' && (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-              {match.touch ? 'Touch' : match.sevens ? 'Sevens' : 'Fifteens'}
+              {match.sevens ? 'Sevens' : 'Fifteens'}
             </span>
           )}
           <ShareButton shareData={shareData}
