@@ -1716,7 +1716,7 @@ export default function ScoreMatch() {
             <div className="font-mono font-black text-3xl tabular-nums mb-1">
               {match.homeScore ?? 0} — {match.awayScore ?? 0}
             </div>
-            <div className={`text-sm ${t.muted}`}>{match.homeTeamName} vs {match.awayTeamName}</div>
+            <div className={`text-sm ${t.muted}`}>{homeIdentity?.primary ?? match.homeTeamName} vs {awayIdentity?.primary ?? match.awayTeamName}</div>
             <div className={`text-xs ${t.muted} mt-1`}>Duration {formatClock(elapsedMs)} · This will update standings.</div>
           </div>
 
@@ -1733,7 +1733,7 @@ export default function ScoreMatch() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1 truncate`}>
-                      {match.homeTeamName ?? 'Home'}
+                      {homeIdentity?.primary ?? match.homeTeamName ?? 'Home'}
                     </div>
                     <input type="number" min="0" max="99" value={kickCompHome}
                       onChange={e => setKickCompHome(e.target.value)}
@@ -1742,7 +1742,7 @@ export default function ScoreMatch() {
                   </div>
                   <div>
                     <div className={`text-[10px] font-bold uppercase tracking-widest ${t.muted} mb-1 truncate`}>
-                      {match.awayTeamName ?? 'Away'}
+                      {awayIdentity?.primary ?? match.awayTeamName ?? 'Away'}
                     </div>
                     <input type="number" min="0" max="99" value={kickCompAway}
                       onChange={e => setKickCompAway(e.target.value)}
@@ -1860,7 +1860,7 @@ export default function ScoreMatch() {
                 ({match.kickCompHome}–{match.kickCompAway} kicks)
               </div>
             )}
-            <div className={`text-sm ${t.muted} mb-1`}>{match.homeTeamName} vs {match.awayTeamName}</div>
+            <div className={`text-sm ${t.muted} mb-1`}>{homeIdentity?.primary ?? match.homeTeamName} vs {awayIdentity?.primary ?? match.awayTeamName}</div>
             <div className={`text-xs ${t.muted} mb-5`}>Result saved · standings updated</div>
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => {
@@ -1868,8 +1868,8 @@ export default function ScoreMatch() {
                 const as = match.awayScore ?? 0
                 const kc = match.kickCompHome != null && match.kickCompAway != null
                   ? ` (${match.kickCompHome}–${match.kickCompAway} kicks)` : ''
-                const homeDisplay = match.homeOrgName ? `${match.homeOrgName} ${match.homeTeamName}` : (match.homeTeamName ?? "")
-                const awayDisplay = match.awayOrgName ? `${match.awayOrgName} ${match.awayTeamName}` : (match.awayTeamName ?? "")
+                const homeDisplay = homeIdentity?.primary ?? (match.homeTeamName ?? "")
+                const awayDisplay = awayIdentity?.primary ?? (match.awayTeamName ?? "")
                 const text = `Full time ⏱\n${homeDisplay} ${hs}–${as} ${awayDisplay}${kc}`
                 if (navigator.share) {
                   navigator.share({ title: 'Match result', text }).catch(() => {})

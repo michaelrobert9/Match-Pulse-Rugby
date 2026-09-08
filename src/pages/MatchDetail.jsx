@@ -17,6 +17,7 @@ import VenueLabel from '../components/VenueLabel'
 import StatusBadge from '../components/StatusBadge'
 import FixtureBanner from '../components/FixtureBanner'
 import { MatchTeamIdentity, MatchTeamCrest } from '../components/TeamIdentity'
+import { resolveTeamSideSync } from '../lib/teamIdentity'
 import PersonAvatar from '../components/PersonAvatar'
 import { pomForSide, isLineupEntryPOM, pomColor, pomBgTint } from '../lib/pom'
 import { teamAccent } from '../lib/teamAccent'
@@ -421,8 +422,8 @@ export default function MatchDetail() {
   const liveClock = (isLive || isPaused) && match.startedAt && match.currentPeriod !== 'break'
     ? formatClock(periodElapsedMs(match)) : null
 
-  const homeDisplayName = match.homeOrgName ? `${match.homeOrgName} ${match.homeTeamName}` : (match.homeTeamName ?? '')
-  const awayDisplayName = match.awayOrgName ? `${match.awayOrgName} ${match.awayTeamName}` : (match.awayTeamName ?? '')
+  const homeDisplayName = resolveTeamSideSync(match, 'home').primary
+  const awayDisplayName = resolveTeamSideSync(match, 'away').primary
   const shareData = {
     title: hasScore
       ? `${homeDisplayName} ${match.homeScore}–${match.awayScore} ${awayDisplayName}`
@@ -490,7 +491,7 @@ export default function MatchDetail() {
               <div>
                 <h3 className="font-bold text-slate-900 text-base">Delete this match?</h3>
                 <p className="text-sm text-slate-500 mt-1">
-                  {match.homeTeamName || 'Home'} vs {match.awayTeamName || 'Away'} will be permanently
+                  {resolveTeamSideSync(match, 'home').primary} vs {resolveTeamSideSync(match, 'away').primary} will be permanently
                   removed, along with its score and timeline. This cannot be undone.
                 </p>
               </div>
