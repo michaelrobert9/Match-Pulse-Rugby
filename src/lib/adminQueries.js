@@ -1259,6 +1259,7 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
   periods = DEFAULT_PERIODS, periodMinutes = DEFAULT_PERIOD_MINUTES,
   breakMinutes = DEFAULT_BREAK_MINUTES,
   sevens = false,
+  touch = false,
 }) {
   const seasonStr = season ? String(season) : null
   // Always carry the FULL organisation name (matchName is for on-page display
@@ -1333,7 +1334,7 @@ export async function createMatch(competitionId, homeTeam, awayTeam, {
     venueId: venueId || null, venueSlug: venueSlug || null,
     // Optional sport-scoped facility within the venue; both null when unset.
     facilityId: facilityId || null, facilityName: facilityName || null,
-    sevens: !!sevens, status: 'scheduled', tracked: false,
+    sevens: !!sevens, touch: !!touch, status: 'scheduled', tracked: false,
     ...(matchDateField ? { matchDate: matchDateField } : {}),
     matchSlug,
     path,
@@ -1455,7 +1456,7 @@ export async function createMatchGroup({
   facilityId = null, facilityName = null,
   sport = null, ownerOrgId = null,
   periods = DEFAULT_PERIODS, periodMinutes = DEFAULT_PERIOD_MINUTES,
-  breakMinutes = DEFAULT_BREAK_MINUTES, sevens = false,
+  breakMinutes = DEFAULT_BREAK_MINUTES, sevens = false, touch = false,
   rows = [],
 }) {
   if (!matchDate) throw new Error('A date is required to create a match day.')
@@ -1539,6 +1540,7 @@ export async function createMatchGroup({
       // not overwrite an explicit one (P4).
       venueOverride: !!r.venue,
       sevens:      !!sevens,
+      touch:       !!touch,
       status: 'scheduled', tracked: false,
       createdBy: uid(), createdAt: serverTimestamp(),
     })
@@ -1921,8 +1923,10 @@ export async function startPeriod(id, { matchTimestamp = 0, period, index, pause
 // counter (standings read it for bonus points). Attribution follows as
 // enrichment.
 
-export async function addScore(matchId, side, { matchTimestamp = 0, scoreType = 'try', convertedTryId = null } = {}) {
-  const points = SCORE_POINTS[scoreType]
+export async function addScore(matchId, side, { matchTimestamp = 0, scoreType = 'try', convertedTryId = null, points: pointsOverride = null } = {}) {
+  // `points` override lets a caller record a format-specific value (a touch
+  // touchdown is a `try` worth 1, not 5); otherwise use the standard value.
+  const points = pointsOverride != null ? Number(pointsOverride) : SCORE_POINTS[scoreType]
   if (points == null) throw new Error(`Unknown score type: ${scoreType}`)
   const scoreField = side === 'home' ? 'homeScore' : 'awayScore'
   const triesField = side === 'home' ? 'homeTries' : 'awayTries'
@@ -2922,6 +2926,7 @@ export async function resyncCompetitionMatches(competitionId, matchFormat = null
       patch.breakMinutes  = Array.isArray(matchFormat.breakMinutes) ? matchFormat.breakMinutes.map(Number) : DEFAULT_BREAK_MINUTES
       if ('indoor' in matchFormat) patch.indoor = matchFormat.indoor === true
       if ('sevens' in matchFormat) patch.sevens = matchFormat.sevens === true
+      if ('touch' in matchFormat) patch.touch = matchFormat.touch === true
     }
     if (Object.keys(patch).length > 0) {
       batch.update(doc(db, 'matches', m.id), patch); ops++; changed++
@@ -3267,6 +3272,7 @@ export async function generateRoundRobinFixtures(competitionId, teams, options =
     ownerOrgId = null,
     competitionSlug = null,
     sevens = false,
+    touch = false,
   } = options
 
   const pairs = balancedRoundRobinPairs(teams, doubleRoundRobin)
@@ -3313,7 +3319,7 @@ export async function generateRoundRobinFixtures(competitionId, teams, options =
       scores: [], cards: [], controlLog: [],
       startedAt: null, pausedAt: null, totalPausedMs: 0,
       nextPeriodIndex: 1,
-      scheduledAt: null, pitch: '', sevens: !!sevens, status: 'scheduled', tracked: false,
+      scheduledAt: null, pitch: '', sevens: !!sevens, touch: !!touch, status: 'scheduled', tracked: false,
       matchSlug,
       ...(seasonStr ? { season: seasonStr } : {}),
       ...(competitionSlug && seasonStr ? { competitionSlug, competitionSeason: seasonStr } : {}),
@@ -3907,6 +3913,7 @@ export async function generatePoolFixtures(competitionId, poolId, options = {}) 
     ownerOrgId    = null,
     scheduleConfig = null,
     sevens        = false,
+    touch         = false,
   } = options
 
   const competition = await assertCompetitionAdmin(competitionId)
@@ -4016,6 +4023,7 @@ export async function generatePoolFixtures(competitionId, poolId, options = {}) 
       scheduledAt,
       pitch,
       sevens: !!sevens,
+      touch: !!touch,
       status: 'scheduled', tracked: false,
       ...(seasonStr ? { season: seasonStr } : {}),
       createdBy: uid(), createdAt: serverTimestamp(),

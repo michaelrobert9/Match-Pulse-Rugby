@@ -20,6 +20,32 @@ export const SCORE_TYPES = [
 export const SCORE_POINTS = Object.fromEntries(SCORE_TYPES.map(t => [t.key, t.points]))
 export const SCORE_LABEL  = Object.fromEntries(SCORE_TYPES.map(t => [t.key, t.label]))
 
+// Touch rugby scores differently: a touchdown is worth 1 point and there are no
+// conversions, penalties, drop goals or kicks. A touchdown is stored as a `try`
+// event (so try counts / stats still work) but with 1 point, not 5.
+export const TOUCH_SCORE_TYPES = [
+  { key: 'try', label: 'Touchdown', points: 1 },
+]
+export const TOUCH_SCORE_POINTS = Object.fromEntries(TOUCH_SCORE_TYPES.map(t => [t.key, t.points]))
+
+// Is this a touch match? Falls back to non-touch when the flag is absent.
+export function isTouchMatch(match) {
+  return match?.touch === true
+}
+
+// The scoring-event types offered for a match, format-correct: touch matches
+// only score touchdowns; everything else uses the full rugby set.
+export function scoreTypesFor(match) {
+  return isTouchMatch(match) ? TOUCH_SCORE_TYPES : SCORE_TYPES
+}
+
+// Point value for a score type in the CONTEXT of a match (touch = 1-pt tries).
+export function scorePointsForMatch(match, scoreType) {
+  return isTouchMatch(match)
+    ? (TOUCH_SCORE_POINTS[scoreType] ?? 0)
+    : (SCORE_POINTS[scoreType] ?? 0)
+}
+
 // Events that add to the tries tally. A penalty try counts as a try (World
 // Rugby: 7 points, no conversion, counts toward try bonus points).
 const TRY_KINDS = new Set(['try', 'penalty_try'])

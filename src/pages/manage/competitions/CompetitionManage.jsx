@@ -347,7 +347,6 @@ function ConfigTab({ competition, onSaved, onGoToTab }) {
       <BasicCard competition={competition} onSaved={onSaved} />
       <ScoringCard competition={competition} onSaved={onSaved} />
       <MatchFormatCard competition={competition} onSaved={onSaved} />
-      <RepairLinksCard competition={competition} />
       <TieBreakersCard competition={competition} onSaved={onSaved} />
       <EligibilityCard competition={competition} onSaved={onSaved} />
       <POTMCard competition={competition} onSaved={onSaved} />
@@ -1425,38 +1424,6 @@ function FestivalStatsCard({ competition, onSaved }) {
 // Default match format for the competition — applied to every new fixture so
 // the organiser doesn't re-enter periods/timing each time. Still overridable per
 // fixture (e.g. a final played to a different format).
-// Repair match links & names for the whole competition — re-links each team's
-// organisation and rebuilds every match's display name and URL from the CURRENT
-// organisation + team. Use it if a match shows a bare team name or a URL like
-// "u14a-vs-u14a". Reports how many matches it changed. (The same repair also
-// runs when the default match format is saved.)
-function RepairLinksCard({ competition }) {
-  const [busy, setBusy]     = useState(false)
-  const [result, setResult] = useState(null)
-  async function run() {
-    setBusy(true); setResult(null)
-    try {
-      const n = await resyncCompetitionMatches(competition.id)
-      setResult({ ok: true, n })
-    } catch (e) {
-      setResult({ ok: false, msg: e.message || 'Repair failed.' })
-    } finally { setBusy(false) }
-  }
-  return (
-    <Card title="Repair match links"
-      subtitle="Rebuilds every match’s name and URL from the current organisation + team, and re-links any missing organisations. Use this if a match shows a bare team name or a URL like “u14a-vs-u14a”.">
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={run} disabled={busy}
-          className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-          {busy ? 'Repairing…' : 'Repair now'}
-        </button>
-        {result?.ok && <span className="text-sm text-emerald-700">Repaired {result.n} match{result.n === 1 ? '' : 'es'}.</span>}
-        {result && !result.ok && <span className="text-sm text-red-600">{result.msg}</span>}
-      </div>
-    </Card>
-  )
-}
-
 function MatchFormatCard({ competition, onSaved }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving]   = useState(false)
@@ -1472,6 +1439,7 @@ function MatchFormatCard({ competition, onSaved }) {
         periodMinutes: Number(fmt.periodMinutes) || 0,
         breakMinutes:  Array.isArray(fmt.breakMinutes) ? fmt.breakMinutes.map(Number) : DEFAULT_BREAK_MINUTES,
         sevens:        fmt.sevens === true,
+        touch:         fmt.touch === true,
       }
       await updateCompetition(competition.id, { matchFormat })
       await resyncCompetitionMatches(competition.id, matchFormat).catch(() => {})
@@ -1480,7 +1448,7 @@ function MatchFormatCard({ competition, onSaved }) {
     } finally { setSaving(false) }
   }
 
-  const summary = `${current.sevens ? 'Sevens' : 'Fifteens'} · ${current.periods} × ${current.periodMinutes} min`
+  const summary = `${current.touch ? 'Touch' : current.sevens ? 'Sevens' : 'Fifteens'} · ${current.periods} × ${current.periodMinutes} min`
     + (current.breakMinutes?.length ? ` · breaks ${current.breakMinutes.join(' / ')}m` : '')
 
   return (
@@ -1497,6 +1465,7 @@ function MatchFormatCard({ competition, onSaved }) {
           <FormatSelector
             periods={fmt.periods} periodMinutes={fmt.periodMinutes} breakMinutes={fmt.breakMinutes}
             sevens={fmt.sevens}
+            touch={fmt.touch}
             onChange={(v) => setFmt(v)} />
           <SaveRow saving={saving} onSave={save} />
         </div>
@@ -2194,7 +2163,7 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
   const [newForm, setNewForm]     = useState({
     homeTeamId: '', awayTeamId: '', scheduledAt: '', pitch: '', venueId: null, venueSlug: null, facilityId: null, facilityName: null,
     periods: defaultFmt.periods, periodMinutes: defaultFmt.periodMinutes,
-    breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens,
+    breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens, touch: defaultFmt.touch,
   })
 
   useEffect(() => {
@@ -2261,6 +2230,7 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
         periodMinutes:   Number(newForm.periodMinutes),
         breakMinutes:    Array.isArray(newForm.breakMinutes) ? newForm.breakMinutes : DEFAULT_BREAK_MINUTES,
         sevens:          !!newForm.sevens,
+        touch:           !!newForm.touch,
       })
       await addFixtureToCompetition(competition.id,
         { id: ref.id, homeTeamId: home.id, awayTeamId: away.id },
@@ -2274,7 +2244,7 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
         scheduledAt, status: 'scheduled', tracked: false, homeScore: 0, awayScore: 0,
       }])
       setShowNew(false)
-      setNewForm({ homeTeamId: '', awayTeamId: '', scheduledAt: '', pitch: '', venueId: null, venueSlug: null, facilityId: null, facilityName: null, periods: defaultFmt.periods, periodMinutes: defaultFmt.periodMinutes, breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens })
+      setNewForm({ homeTeamId: '', awayTeamId: '', scheduledAt: '', pitch: '', venueId: null, venueSlug: null, facilityId: null, facilityName: null, periods: defaultFmt.periods, periodMinutes: defaultFmt.periodMinutes, breakMinutes: defaultFmt.breakMinutes, sevens: defaultFmt.sevens, touch: defaultFmt.touch })
     } finally { setSaving(false) }
   }
 
@@ -2289,6 +2259,7 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
         periodMinutes:    genFmt.periodMinutes,
         breakMinutes:     genFmt.breakMinutes ?? DEFAULT_BREAK_MINUTES,
         sevens:           genFmt.sevens === true,
+        touch:            genFmt.touch === true,
         ownerOrgId:       competition.ownerOrgId || null,
         competitionSlug:  competition.slug || null,
         ...(type === 'tournament' && genPoolId ? { poolId: genPoolId } : {}),
@@ -2448,8 +2419,9 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
               periodMinutes={genFmt.periodMinutes}
               breakMinutes={genFmt.breakMinutes}
               sevens={genFmt.sevens}
-              onChange={({ periods, periodMinutes, breakMinutes, sevens }) =>
-                setGenFmt({ periods, periodMinutes, breakMinutes, sevens })
+              touch={genFmt.touch}
+              onChange={({ periods, periodMinutes, breakMinutes, sevens, touch }) =>
+                setGenFmt({ periods, periodMinutes, breakMinutes, sevens, touch })
               }
             />
           </div>
@@ -2513,8 +2485,9 @@ function FixturesTab({ competition, teams, fixtures, setFixtures }) {
               periodMinutes={newForm.periodMinutes}
               breakMinutes={newForm.breakMinutes}
               sevens={newForm.sevens}
-              onChange={({ periods, periodMinutes, breakMinutes, sevens }) =>
-                setNewForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens }))
+              touch={newForm.touch}
+              onChange={({ periods, periodMinutes, breakMinutes, sevens, touch }) =>
+                setNewForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens, touch }))
               }
             />
           </div>

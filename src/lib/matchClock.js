@@ -154,6 +154,10 @@ export const DEFAULT_BREAK_MINUTES = [10]
 // Sevens defaults, used when a fixture is flagged sevens.
 export const SEVENS_PERIOD_MINUTES = 7
 export const SEVENS_BREAK_MINUTES = [2]
+// Touch rugby defaults, used when a fixture is flagged touch: two 20-minute
+// halves with a short turnaround.
+export const TOUCH_PERIOD_MINUTES = 20
+export const TOUCH_BREAK_MINUTES = [5]
 
 // The match format new fixtures should default to: the competition's configured
 // `matchFormat` when set, otherwise the platform default. Callers spread this
@@ -167,9 +171,10 @@ export function competitionMatchFormat(competition) {
       periodMinutes: Number(f.periodMinutes ?? DEFAULT_PERIOD_MINUTES),
       breakMinutes:  Array.isArray(f.breakMinutes) ? f.breakMinutes : DEFAULT_BREAK_MINUTES,
       sevens:        f.sevens === true,
+      touch:         f.touch === true,
     }
   }
-  return { periods: DEFAULT_PERIODS, periodMinutes: DEFAULT_PERIOD_MINUTES, breakMinutes: DEFAULT_BREAK_MINUTES, sevens: false }
+  return { periods: DEFAULT_PERIODS, periodMinutes: DEFAULT_PERIOD_MINUTES, breakMinutes: DEFAULT_BREAK_MINUTES, sevens: false, touch: false }
 }
 
 // Rough expected full-time, in epoch ms: kickoff + all half minutes + breaks

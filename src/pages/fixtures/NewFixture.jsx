@@ -162,6 +162,7 @@ function SchoolFixtureForm({ org, canChange, onChangeOrg }) {
     periodMinutes: DEFAULT_PERIOD_MINUTES,
     breakMinutes:  DEFAULT_BREAK_MINUTES,
     sevens:        false,
+    touch:         false,
     competitionId: '',
   })
 
@@ -203,6 +204,7 @@ function SchoolFixtureForm({ org, canChange, onChangeOrg }) {
         periodMinutes: Number(form.periodMinutes),
         breakMinutes:  form.breakMinutes,
         sevens:        form.sevens,
+        touch:         form.touch,
       })
       // A competition fixture is ALWAYS a match + a membership join record —
       // never a bare match.competitionId. The dropdown only lists competitions
@@ -317,7 +319,8 @@ function SchoolFixtureForm({ org, canChange, onChangeOrg }) {
               periodMinutes={form.periodMinutes}
               breakMinutes={form.breakMinutes}
               sevens={form.sevens}
-              onChange={({ periods, periodMinutes, breakMinutes, sevens }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens }))}
+              touch={form.touch}
+              onChange={({ periods, periodMinutes, breakMinutes, sevens, touch }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens, touch }))}
             />
           </div>
 
@@ -367,6 +370,7 @@ function ClubFixtureForm({ org, canChange, onChangeOrg }) {
     periodMinutes: DEFAULT_PERIOD_MINUTES,
     breakMinutes:  DEFAULT_BREAK_MINUTES,
     sevens:        false,
+    touch:         false,
     competitionId: '',
   })
 
@@ -423,6 +427,7 @@ function ClubFixtureForm({ org, canChange, onChangeOrg }) {
         periodMinutes: Number(form.periodMinutes),
         breakMinutes:  form.breakMinutes,
         sevens:        form.sevens,
+        touch:         form.touch,
       })
       if (form.competitionId) {
         await addFixtureToCompetition(form.competitionId, {
@@ -554,7 +559,8 @@ function ClubFixtureForm({ org, canChange, onChangeOrg }) {
             periodMinutes={form.periodMinutes}
             breakMinutes={form.breakMinutes}
             sevens={form.sevens}
-            onChange={({ periods, periodMinutes, breakMinutes, sevens }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens }))}
+            touch={form.touch}
+            onChange={({ periods, periodMinutes, breakMinutes, sevens, touch }) => setForm(f => ({ ...f, periods, periodMinutes, breakMinutes, sevens, touch }))}
           />
         </div>
 
