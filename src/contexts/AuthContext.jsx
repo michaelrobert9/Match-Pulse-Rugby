@@ -114,9 +114,19 @@ export function AuthProvider({ children }) {
           createdAt:   serverTimestamp(),
           updatedAt:   serverTimestamp(),
         }, { merge: true })
-      } else if (!snap.data().displayName && u.displayName) {
-        // Backfill a name captured by Auth (sign-up / Google) but missing here.
-        await setDoc(ref, { displayName: u.displayName, updatedAt: serverTimestamp() }, { merge: true })
+      } else {
+        // Backfill fields captured by Auth (sign-up / Google) or by an earlier
+        // build but missing here: a display name, and a creation date. Older
+        // accounts predate the createdAt stamp, so they showed on the back end
+        // as active with no date — set it once. Merge-safe, best-effort.
+        const existing = snap.data()
+        const patch = {}
+        if (!existing.displayName && u.displayName) patch.displayName = u.displayName
+        if (!existing.createdAt) patch.createdAt = serverTimestamp()
+        if (Object.keys(patch).length) {
+          patch.updatedAt = serverTimestamp()
+          await setDoc(ref, patch, { merge: true })
+        }
       }
       setDoc(doc(identityDb, 'userProfiles', u.uid), {
         email:       (u.email ?? '').toLowerCase(),
