@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   updateProfile as fbUpdateProfile,
   signOut as fbSignOut,
@@ -160,6 +161,10 @@ export function AuthProvider({ children }) {
   async function signUp(email, password, displayName) {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     if (displayName) await fbUpdateProfile(cred.user, { displayName })
+    // Send the email-verification link now, so it is waiting in the inbox
+    // regardless of which sign-up form created the account. Claiming a player
+    // profile requires a verified email, so this must never be skipped.
+    sendEmailVerification(cred.user).catch(() => {})
     // onAuthStateChanged fires and bootstraps the central identity doc; do it
     // here too so the name is present immediately for the redirect that follows.
     await ensureIdentityDoc(cred.user)
