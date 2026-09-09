@@ -351,7 +351,9 @@ export default function PlayerProfile() {
   const initials      = person.fullName.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
   const claimed       = isProfileClaimed(person)
   const canSelfRemove = managesPlayerProfile(person, uid)
-  const canEditBanner = claimed && (isPlatformAdmin || managesPlayerProfile(person, uid))
+  // Banner (like everything else on a player profile) is edited from the admin
+  // back end only — never on the public profile page.
+  const canEditBanner = false
   // Anyone signed in may claim an UNCLAIMED profile that isn't already theirs.
   // Shown to EVERYONE, signed in or not: a signed-out visitor gets a "Sign up
   // to claim it" CTA (handled inside ClaimCard) so an unclaimed profile always

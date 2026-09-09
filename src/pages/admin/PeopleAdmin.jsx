@@ -3,7 +3,8 @@ import { ChevronRight, ChevronLeft, X, Plus } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { collection, getDocs, doc, getDoc, orderBy, query, where } from 'firebase/firestore'
 import { fetchOrganizations, fetchAllPeople } from '../../lib/queries'
-import { db } from '../../firebase'
+import { db, storage } from '../../firebase'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { createPerson, updatePerson, adminLinkProfileToUser, isProfileClaimed, revokeProfileClaim, fetchProfileReports, mergePeople, previewMergePeople } from '../../lib/adminQueries'
 import { uploadImageForEntity } from '../../lib/imageUpload'
 import ImageUpload from '../../components/ImageUpload'
@@ -34,12 +35,43 @@ function Input({ ...props }) {
   )
 }
 
+// Self-contained banner uploader for the admin editor. Uploads straight to
+// storage under player-banners/{id} and hands back the URL, so it doesn't
+// depend on the deferred player-photo pipeline. Only shown for an existing
+// person (an id is needed for the storage path).
+function AdminBannerField({ personId, value, onChange }) {
+  const [busy, setBusy] = useState(false)
+  const [err,  setErr]  = useState('')
+  async function handleUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file || !storage || !personId) return
+    setBusy(true); setErr('')
+    try {
+      const r = storageRef(storage, `player-banners/${personId}`)
+      await uploadBytes(r, file)
+      onChange(await getDownloadURL(r))
+    } catch (e2) { setErr(e2.message || 'Upload failed.') }
+    finally { setBusy(false); e.target.value = '' }
+  }
+  return (
+    <Field label="Profile banner (optional)">
+      {value && <img src={value} alt="" className="w-full aspect-[3/1] object-cover rounded-lg border border-slate-200 mb-2" />}
+      <label className="inline-flex items-center gap-2 cursor-pointer bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 hover:border-slate-300 transition-colors">
+        {busy ? 'Uploading…' : value ? 'Change banner' : '+ Add banner image'}
+        <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={handleUpload} />
+      </label>
+      {err && <p className="text-red-600 text-xs mt-1">{err}</p>}
+      <p className="text-[11px] text-slate-400 mt-1">Wide image, about 1500 × 500 px (3 : 1).</p>
+    </Field>
+  )
+}
+
 // ── Form ───────────────────────────────────────────────────────────────────
 
 function PersonForm({ initial = {}, onSave, onDelete, saving }) {
   const [form, setForm] = useState({
     fullName: '', dateOfBirth: '', nationality: 'South African',
-    position: 'Mid', photoUrl: '', roles: [],
+    position: 'Mid', photoUrl: '', bannerUrl: '', roles: [],
     representativeOrgs: [], ...initial,
   })
   const [allOrgs, setAllOrgs]   = useState([])
@@ -127,6 +159,11 @@ function PersonForm({ initial = {}, onSave, onDelete, saving }) {
         monogram={initials}
         onPick={f => setPhotoFile(f)}
       />
+
+      {initial.id && (
+        <AdminBannerField personId={initial.id} value={form.bannerUrl}
+          onChange={url => set('bannerUrl', url)} />
+      )}
 
       {/* Roles */}
       <Field label="Roles">
