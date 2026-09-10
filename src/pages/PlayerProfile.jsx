@@ -351,9 +351,14 @@ export default function PlayerProfile() {
   const initials      = person.fullName.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
   const claimed       = isProfileClaimed(person)
   const canSelfRemove = managesPlayerProfile(person, uid)
-  const canEditBanner = claimed && (isPlatformAdmin || managesPlayerProfile(person, uid))
+  // Banner (like everything else on a player profile) is edited from the admin
+  // back end only — never on the public profile page.
+  const canEditBanner = false
   // Anyone signed in may claim an UNCLAIMED profile that isn't already theirs.
-  const canClaim = !!uid && !claimed && !managesPlayerProfile(person, uid)
+  // Shown to EVERYONE, signed in or not: a signed-out visitor gets a "Sign up
+  // to claim it" CTA (handled inside ClaimCard) so an unclaimed profile always
+  // invites its owner to take it.
+  const canClaim = !claimed && !managesPlayerProfile(person, uid)
 
   // A player represents an organisation ONLY where they actually have records —
   // i.e. they were put on a team sheet or played a match for it (both create a
@@ -553,6 +558,7 @@ function LinkedAccountsCard({ person }) {
 }
 
 function ClaimCard({ person, onClaimed }) {
+  const { uid } = useAuth()
   const [busy, setBusy] = useState(false)
   const [err,  setErr]  = useState('')
   const [needsVerify, setNeedsVerify] = useState(null)   // holds the chosen relationship
@@ -596,7 +602,12 @@ function ClaimCard({ person, onClaimed }) {
             add a photo and banner. For a player under 18, a parent or guardian claims from their own account.
           </p>
           {err && <p className="text-red-600 text-xs mb-2">{err}</p>}
-          {needsVerify ? (
+          {!uid ? (
+            <Link to="/signup"
+              className="inline-block bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg px-5 py-2.5 transition-colors">
+              Sign up to claim it
+            </Link>
+          ) : needsVerify ? (
             <div className="space-y-2">
               <p className="text-[12px] text-slate-600">
                 First verify your email address — claiming needs a verified email.

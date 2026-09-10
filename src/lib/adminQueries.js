@@ -4,6 +4,7 @@ import {
   serverTimestamp, writeBatch, increment, arrayUnion, deleteField,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
+import { sendEmailVerification } from 'firebase/auth'
 import { db, identityDb, auth, functions, SPORT_KEY } from '../firebase'
 import { slugify, matchSlug as buildMatchSlug } from './slugify'
 import { matchPath, competitionMatchPath, dedupeSlug } from './matchPaths'
@@ -2600,7 +2601,8 @@ export async function claimPlayerProfile(personId, relationship = 'player') {
   if (!user) throw new Error('You must be signed in to claim a profile.')
   await user.reload().catch(() => {})
   if (!user.emailVerified) {
-    const e = new Error('Verify your email address first — we sent you a link. Once verified, try again.')
+    sendEmailVerification(user).catch(() => {})
+    const e = new Error(`Your account isn't verified yet. We've sent a verification link to ${user.email || 'your email'}. Please check your inbox and your spam folder, open the link, then try again.`)
     e.code = 'claim/email-unverified'; throw e
   }
   // The rules read email_verified off the TOKEN — force a refresh so a

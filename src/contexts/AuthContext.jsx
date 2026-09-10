@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   updateProfile as fbUpdateProfile,
   signOut as fbSignOut,
@@ -114,9 +115,19 @@ export function AuthProvider({ children }) {
           createdAt:   serverTimestamp(),
           updatedAt:   serverTimestamp(),
         }, { merge: true })
-      } else if (!snap.data().displayName && u.displayName) {
-        // Backfill a name captured by Auth (sign-up / Google) but missing here.
-        await setDoc(ref, { displayName: u.displayName, updatedAt: serverTimestamp() }, { merge: true })
+      } else {
+        // Backfill fields captured by Auth (sign-up / Google) or by an earlier
+        // build but missing here: a display name, and a creation date. Older
+        // accounts predate the createdAt stamp, so they showed on the back end
+        // as active with no date — set it once. Merge-safe, best-effort.
+        const existing = snap.data()
+        const patch = {}
+        if (!existing.displayName && u.displayName) patch.displayName = u.displayName
+        if (!existing.createdAt) patch.createdAt = serverTimestamp()
+        if (Object.keys(patch).length) {
+          patch.updatedAt = serverTimestamp()
+          await setDoc(ref, patch, { merge: true })
+        }
       }
       setDoc(doc(identityDb, 'userProfiles', u.uid), {
         email:       (u.email ?? '').toLowerCase(),
@@ -150,6 +161,10 @@ export function AuthProvider({ children }) {
   async function signUp(email, password, displayName) {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     if (displayName) await fbUpdateProfile(cred.user, { displayName })
+    // Send the email-verification link now, so it is waiting in the inbox
+    // regardless of which sign-up form created the account. Claiming a player
+    // profile requires a verified email, so this must never be skipped.
+    sendEmailVerification(cred.user).catch(() => {})
     // onAuthStateChanged fires and bootstraps the central identity doc; do it
     // here too so the name is present immediately for the redirect that follows.
     await ensureIdentityDoc(cred.user)
