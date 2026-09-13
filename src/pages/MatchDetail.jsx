@@ -183,11 +183,11 @@ function EventContent({ event, align }) {
       {event.player && (
         <div className={`flex items-center gap-1.5 mt-0.5 ${align === 'right' ? 'justify-end' : ''}`}>
           {align === 'right' && (
-            <span className="text-[10px] text-slate-400 leading-snug truncate">{event.playerLabel}: {event.player}</span>
+            <span className="text-[10px] text-slate-400 leading-snug min-w-0 break-words">{event.playerLabel}: {event.player}</span>
           )}
           <PersonAvatar name={event.player} photoUrl={event.playerPhoto} size={18} />
           {align !== 'right' && (
-            <span className="text-[10px] text-slate-400 leading-snug truncate">{event.playerLabel}: {event.player}</span>
+            <span className="text-[10px] text-slate-400 leading-snug min-w-0 break-words">{event.playerLabel}: {event.player}</span>
           )}
         </div>
       )}
@@ -242,7 +242,7 @@ function TimelineEvent({ event }) {
   // Side = team: home events always left, away events always right.
   const isAway = event.side === 'away'
   return (
-    <div className="grid grid-cols-[1fr_3.5rem_1fr] items-start">
+    <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_minmax(0,1fr)] items-start">
       <div className="flex justify-end pr-2 pt-0.5">
         {!isAway && <EventContent event={event} align="right" />}
       </div>
