@@ -673,6 +673,7 @@ function TeamsSection({ orgId, org, competitions, teams, setTeams, defaultOpen, 
                       value={editImage}
                       monogram={monogram(editName || team.displayName || '')}
                       onChange={url => setEditImage(url)}
+                      orgId={team.organizationId ?? org?.id}
                     />
                     <div>
                       <div className="flex items-center justify-between mb-1">
@@ -1082,6 +1083,7 @@ function SettingsSection({ org, onSaved }) {
             entityId={org.id}
             value={bannerUrl}
             onChange={url => setBannerUrl(url)}
+            orgId={org.id}
           />
 
           {/* Team-level management toggle — sport-local; gates per-team identity
