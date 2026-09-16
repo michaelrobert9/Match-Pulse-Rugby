@@ -22,7 +22,7 @@ import { resolveTeamSideSync } from '../lib/teamIdentity'
 import PersonAvatar from '../components/PersonAvatar'
 import { pomForSide, isLineupEntryPOM, pomColor, pomBgTint } from '../lib/pom'
 import { teamAccent } from '../lib/teamAccent'
-import { playerUrl, matchUrl } from '../lib/slugify'
+import { playerUrl, matchUrl, competitionUrl } from '../lib/slugify'
 import { gameMinuteLabel, periodElapsedMs, formatClock } from '../lib/matchClock'
 import { SCORE_LABEL, SCORE_POINTS, scorerLabel, matchTries, cardLabel, cardDurationText, cardCategory } from '../lib/rugbyScoring'
 import { useSeoMeta } from '../lib/useSeoMeta'
@@ -659,14 +659,17 @@ export default function MatchDetail() {
 
         {/* Meta — date, venue, share */}
         <div className="border-t border-slate-200 px-5 py-5 flex flex-col items-center gap-2 text-center">
+          {match.competitionId && (match.competitionName || match.competitionSlug) && (
+            <Link
+              to={competitionUrl({ slug: match.competitionSlug, season: match.competitionSeason, competitionPath: match.competitionPath, id: match.competitionId })}
+              className="text-sm font-semibold text-emerald-600 hover:text-emerald-500 leading-snug"
+            >
+              {match.competitionName || match.competitionSlug}
+            </Link>
+          )}
           <div className="text-[15px] text-slate-600 leading-snug">{fmtMatchDate(match.scheduledAt)}</div>
           <VenueLabel pitch={match.pitch} venueId={match.venueId} venueSlug={match.venueSlug}
             className="block text-[15px] text-slate-400 leading-snug" />
-          {typeof match.sevens === 'boolean' && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-              {match.sevens ? 'Sevens' : 'Fifteens'}
-            </span>
-          )}
           <ShareButton shareData={shareData}
             className="mt-1 min-h-[44px] px-6 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors shadow-sm" />
         </div>
