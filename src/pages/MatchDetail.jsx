@@ -22,7 +22,7 @@ import { resolveTeamSideSync } from '../lib/teamIdentity'
 import PersonAvatar from '../components/PersonAvatar'
 import { pomForSide, isLineupEntryPOM, pomColor, pomBgTint } from '../lib/pom'
 import { teamAccent } from '../lib/teamAccent'
-import { playerUrl, matchUrl, competitionUrl } from '../lib/slugify'
+import { playerUrl, matchUrl, competitionUrl, titleFromSlug } from '../lib/slugify'
 import { gameMinuteLabel, periodElapsedMs, formatClock } from '../lib/matchClock'
 import { SCORE_LABEL, SCORE_POINTS, scorerLabel, matchTries, cardLabel, cardDurationText, cardCategory } from '../lib/rugbyScoring'
 import { useSeoMeta } from '../lib/useSeoMeta'
@@ -271,7 +271,21 @@ export default function MatchDetail() {
   const [peopleById,  setPeopleById]  = useState({})   // live person docs for line-up members
   const [inheritedLineups, setInheritedLineups] = useState(null)
   const [loading,     setLoading]     = useState(true)
+  const [compName,    setCompName]    = useState(null)   // live competition name
   const [, setTick]                   = useState(0)
+
+  // Resolve the competition's real name for the match card. The denormalised
+  // copy on the match (competitionName) is preferred; when it is missing (older
+  // or imported matches) read the competition so the card shows the proper
+  // Title-Case name rather than its hyphenated URL slug.
+  useEffect(() => {
+    setCompName(null)
+    const id = match?.competitionId
+    if (!id || match?.competitionName) return
+    let alive = true
+    fetchCompetition(id).then(c => { if (alive && c?.name) setCompName(c.name) }).catch(() => {})
+    return () => { alive = false }
+  }, [match?.competitionId, match?.competitionName])
   const lineupsLoaded = useRef(false)
 
   // Tick the live clock once a second. The clock value itself is derived from
@@ -659,12 +673,12 @@ export default function MatchDetail() {
 
         {/* Meta — date, venue, share */}
         <div className="border-t border-slate-200 px-5 py-5 flex flex-col items-center gap-2 text-center">
-          {match.competitionId && (match.competitionName || match.competitionSlug) && (
+          {match.competitionId && (match.competitionName || compName || match.competitionSlug) && (
             <Link
               to={competitionUrl({ slug: match.competitionSlug, season: match.competitionSeason, competitionPath: match.competitionPath, id: match.competitionId })}
               className="text-sm font-semibold text-emerald-600 hover:text-emerald-500 leading-snug"
             >
-              {match.competitionName || match.competitionSlug}
+              {match.competitionName || compName || titleFromSlug(match.competitionSlug)}
             </Link>
           )}
           <div className="text-[15px] text-slate-600 leading-snug">{fmtMatchDate(match.scheduledAt)}</div>
