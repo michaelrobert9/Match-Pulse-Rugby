@@ -166,6 +166,10 @@ export const DEFAULT_TIE_BREAKERS = [
   { key: 'manualDecision',      label: 'Manual administrator decision', direction: null,   scope: 'all_fixtures' },
 ]
 
+// The governing body whose recommended standings order the defaults above follow.
+// Surfaced in the tie-breaker editor's "reset to recommended order" action.
+export const GOVERNING_BODY = 'World Rugby'
+
 // A walkover awards the opposing team a default scoreline; the conceding team
 // records a loss. 28–0 is the World Rugby standard walkover score. Values are
 // configurable per competition.
